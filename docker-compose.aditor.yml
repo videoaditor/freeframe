@@ -1,0 +1,17 @@
+# Aditor overrides for aditor-platform (Hetzner FSN, Falkenstein DE).
+#
+# nginx already owns :80 and :443 on this box for ~16 other vhosts, so the
+# upstream Traefik service cannot bind and is disabled via an unactivated
+# profile. Ingress is instead: Cloudflare tunnel -> nginx -> these localhost
+# ports. nginx does the /api prefix strip that Traefik's middleware did.
+services:
+  traefik:
+    profiles: ["disabled-nginx-owns-80-443"]
+
+  web:
+    ports:
+      - "127.0.0.1:3090:3000"
+
+  api:
+    ports:
+      - "127.0.0.1:3091:8000"
