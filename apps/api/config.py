@@ -93,6 +93,14 @@ class Settings(BaseSettings):
     # this off, which hides the password UI *and* closes /auth/login and
     # /auth/set-password — hiding the form alone would leave the method live.
     password_login_enabled: bool = True
+
+    # Machine access. A caller presenting SERVICE_API_KEY in X-API-Key is treated
+    # as the user named by SERVICE_API_KEY_EMAIL, so every existing per-project
+    # permission check still applies - the key is an alternative credential for a
+    # real account, not a bypass. Restricted to GET, so it can never write.
+    # Unset (the default) disables the mechanism entirely.
+    service_api_key: str | None = None
+    service_api_key_email: str | None = None
     
     # AWS SES settings
     aws_mail_access_key_id: str | None = None
