@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     mail_provider: str = "ses"  # "ses" or "smtp"
     mail_from_address: str = "noreply@example.com"
     mail_from_name: str = "FreeFrame"
+
+    # Product name shown inside email subjects and bodies. Self-hosters put their
+    # own brand in front of clients, who never need to know what runs underneath.
+    brand_name: str = "FreeFrame"
     
     # AWS SES settings
     aws_mail_access_key_id: str | None = None

@@ -11,6 +11,8 @@ from typing import Optional
 from celery import shared_task
 from jinja2 import Environment, FileSystemLoader
 
+from ..config import settings
+
 # Setup Jinja2 template environment
 TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
 jinja_env = Environment(
@@ -22,6 +24,7 @@ jinja_env = Environment(
 def render_template(template_name: str, **context) -> str:
     """Render an email template with context."""
     context.setdefault("year", datetime.now().year)
+    context.setdefault("brand_name", settings.brand_name)
     template = jinja_env.get_template(template_name)
     return template.render(**context)
 
@@ -41,14 +44,14 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: Optional
 def send_magic_code_email(self, to_email: str, code: str, expiry_minutes: int = 10):
     """Send magic code email - high priority, immediate delivery."""
     try:
-        subject = f"Your FreeFrame login code: {code}"
+        subject = f"Your {settings.brand_name} login code: {code}"
         html_body = render_template(
             "email/magic_code.html",
             subject=subject,
             code=code,
             expiry_minutes=expiry_minutes,
         )
-        text_body = f"Your FreeFrame login code is: {code}. This code expires in {expiry_minutes} minutes."
+        text_body = f"Your {settings.brand_name} login code is: {code}. This code expires in {expiry_minutes} minutes."
         
         success = _send_email(to_email, subject, html_body, text_body)
         if not success:
@@ -70,7 +73,7 @@ def send_invite_email(
 ):
     """Send organization/team invite email - high priority."""
     try:
-        subject = f"You've been invited to join {org_name} on FreeFrame"
+        subject = f"You've been invited to join {org_name} on {settings.brand_name}"
         html_body = render_template(
             "email/invite.html",
             subject=subject,
@@ -80,7 +83,7 @@ def send_invite_email(
             invite_link=invite_link,
             expiry_days=expiry_days,
         )
-        text_body = f"{inviter_name} has invited you to join {org_name} on FreeFrame. Accept here: {invite_link}"
+        text_body = f"{inviter_name} has invited you to join {org_name} on {settings.brand_name}. Accept here: {invite_link}"
         
         success = _send_email(to_email, subject, html_body, text_body)
         if not success:
