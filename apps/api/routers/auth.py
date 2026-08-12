@@ -26,6 +26,7 @@ from ..tasks.celery_app import send_task_safe
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..middleware.rate_limit import rate_limit
+from ..config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -99,7 +100,7 @@ def verify_magic_code(body: VerifyMagicCodeRequest, db: Session = Depends(get_db
     db.commit()
     
     # Check if user needs to set password
-    needs_password = user.password_hash is None
+    needs_password = settings.password_login_enabled and user.password_hash is None
     
     return TokenResponse(
         access_token=create_access_token(str(user.id), token_version=user.token_version),
@@ -173,6 +174,8 @@ def accept_invite(body: AcceptInviteRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse, dependencies=[Depends(rate_limit("login", 10, 600))])
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     """Login with email + password."""
+    if not settings.password_login_enabled:
+        raise HTTPException(status_code=404, detail="Not found")
     user = get_user_by_email(db, body.email)
     if (
         not user

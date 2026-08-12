@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # Product name shown inside email subjects and bodies. Self-hosters put their
     # own brand in front of clients, who never need to know what runs underneath.
     brand_name: str = "FreeFrame"
+
+    # Password sign-in. Instances that authenticate purely by magic code turn
+    # this off, which hides the password UI *and* closes /auth/login and
+    # /auth/set-password — hiding the form alone would leave the method live.
+    password_login_enabled: bool = True
     
     # AWS SES settings
     aws_mail_access_key_id: str | None = None

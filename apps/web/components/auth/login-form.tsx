@@ -12,9 +12,13 @@ import type { VerifyCodeResponse, AuthTokens } from '@/types'
 
 type Step = 'email' | 'code' | 'password' | 'classic'
 
+// Build-time flag: NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=false removes the password
+// path from the UI entirely. Defaults to enabled so upstream behaviour is unchanged.
+const PASSWORD_LOGIN_ENABLED = process.env.NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED !== 'false'
+
 export function LoginForm() {
   const router = useRouter()
-  const [step, setStep] = useState<Step>('classic')
+  const [step, setStep] = useState<Step>(PASSWORD_LOGIN_ENABLED ? 'classic' : 'email')
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState('')
   const [code, setCode] = useState(['', '', '', '', '', ''])
@@ -418,15 +422,17 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <div className="mt-6 text-center">
-        <button
-          type="button"
-          onClick={() => { setStep('classic'); setGeneralError('') }}
-          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
-        >
-          Sign in with password instead
-        </button>
-      </div>
+      {PASSWORD_LOGIN_ENABLED && (
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => { setStep('classic'); setGeneralError('') }}
+            className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+          >
+            Sign in with password instead
+          </button>
+        </div>
+      )}
     </div>
   )
 }
