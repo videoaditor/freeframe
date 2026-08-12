@@ -9,6 +9,12 @@ services:
     profiles: ["disabled-nginx-owns-80-443"]
 
   web:
+    # Aditor authenticates editors purely by emailed magic code, so the password
+    # path is compiled out of the UI. The API side is closed by
+    # PASSWORD_LOGIN_ENABLED=false in .env.prod.
+    build:
+      args:
+        NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
     ports:
       - "127.0.0.1:3090:3000"
 
