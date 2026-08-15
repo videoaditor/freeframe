@@ -339,9 +339,15 @@ export function LoginForm() {
       <div className="animate-slide-up">
         <div className="mb-8">
           <h1 className="text-xl font-semibold text-text-primary mb-1">Check your email</h1>
+          {/* The API answers identically for registered and unregistered addresses so
+              that it can't be used to enumerate accounts. Promising a code we may not
+              have sent is what that costs, and it strands anyone without an account
+              waiting on mail that will never arrive. Phrase it conditionally and say
+              what to do instead, which gives the same guarantee away for nothing. */}
           <p className="text-sm text-text-secondary">
-            We sent a 6-digit code to{' '}
+            If{' '}
             <span className="text-text-primary font-medium">{email}</span>
+            {' '}is registered, a 6-digit code is on its way.
           </p>
         </div>
 
@@ -386,6 +392,11 @@ export function LoginForm() {
             Use a different email
           </button>
         </div>
+
+        <p className="mt-6 rounded-md border border-border bg-bg-secondary p-3 text-xs leading-relaxed text-text-tertiary">
+          No code arriving? Check your spam folder first. If it is not there, your
+          address is not registered yet - ask an admin to add you, then try again.
+        </p>
       </div>
     )
   }
