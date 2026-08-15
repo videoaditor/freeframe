@@ -101,7 +101,26 @@ class Settings(BaseSettings):
     # Unset (the default) disables the mechanism entirely.
     service_api_key: str | None = None
     service_api_key_email: str | None = None
-    
+
+    # Directory-backed sign-in. With DIRECTORY_LOOKUP_URL set, /auth/send-magic-code
+    # checks the address against an external roster: someone listed there gets an
+    # account provisioned on first sign-in, and someone the roster no longer lists
+    # as active is refused. Instances whose people already live in another system
+    # stop keeping a second copy of them, and nobody is invited by hand.
+    #
+    # The URL carries an {email} placeholder (URL-encoded on substitution) and must
+    # answer with a JSON record, or a list whose first entry is one. Addresses the
+    # directory says nothing about are left entirely alone, so operator and service
+    # accounts are unaffected by it.
+    #
+    # Unset (the default) disables the lookup and changes no behaviour.
+    directory_lookup_url: str | None = None
+    directory_token: str | None = None
+    directory_name_field: str = "name"
+    directory_status_field: str = "status"
+    directory_active_value: str = "active"
+    directory_timeout_seconds: float = 5.0
+
     # AWS SES settings
     aws_mail_access_key_id: str | None = None
     aws_mail_secret_access_key: str | None = None

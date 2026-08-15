@@ -173,7 +173,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "celery -A apps.api.tasks.celery_app worker -Q transcoding -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning"
+    # `default` belongs here too: beat schedules the maintenance tasks (stale-upload
+    # reaping, due-date reminders, soft-delete cleanup, orphan sweeps) onto it, and
+    # with no worker consuming that queue they pile up in Redis forever, silently.
+    # They ride with transcoding rather than with email so that a long sweep can
+    # never sit in front of somebody's login code.
+    command: sh -c "celery -A apps.api.tasks.celery_app worker -Q transcoding,default -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning"
     restart: unless-stopped
 
   email_worker:

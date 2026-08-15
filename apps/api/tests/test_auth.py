@@ -28,6 +28,7 @@ def _mock_user(
     u.name = "Test User"
     u.password_hash = password_hash
     u.status = UserStatus.active
+    u.is_superadmin = False
     u.avatar_url = None
     u.token_version = 1
     u.created_at = datetime.now(timezone.utc)
@@ -327,3 +328,138 @@ def test_delete_user_rejects_self(client, auth_headers, test_user):
     test_user.is_superadmin = True
     resp = client.delete(f"/users/{test_user.id}", headers=auth_headers)
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Directory-backed provisioning (DIRECTORY_LOOKUP_URL)
+# ---------------------------------------------------------------------------
+#
+# The endpoint auto-creating accounts is exactly what GHSA-9m78-fww2-p89h was
+# about, so the tests below pin down that it only ever happens for an address an
+# operator-configured directory actively vouches for, and never otherwise.
+
+_DIR = "apps.api.routers.auth.directory_service"
+
+
+def _directory(record=None, unavailable=False):
+    """Patch the directory as configured, answering with `record`."""
+    import contextlib
+
+    from apps.api.services.directory_service import DirectoryUnavailable
+
+    @contextlib.contextmanager
+    def _ctx():
+        with patch(f"{_DIR}.is_configured", return_value=True), \
+             patch(f"{_DIR}.find_person",
+                   side_effect=DirectoryUnavailable("boom") if unavailable else None,
+                   return_value=record):
+            yield
+
+    return _ctx()
+
+
+def test_send_magic_code_provisions_person_the_directory_vouches_for(client, mock_db):
+    """An unknown address listed as active in the directory gets an account and a code."""
+    mock_db.first.return_value = None
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         _directory({"full_name": "Saskia Ramsauer", "status": "active"}), \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "listed@example.com"})
+
+    assert resp.status_code == 200
+    mock_db.add.assert_called_once()
+    created = mock_db.add.call_args[0][0]
+    assert created.email == "listed@example.com"
+    assert created.status == UserStatus.active
+    assert created.password_hash is None  # provisioned accounts sign in by code only
+    mock_store.assert_called_once()
+    mock_send.assert_called_once()
+
+
+def test_send_magic_code_refuses_person_the_directory_no_longer_lists_as_active(client, mock_db):
+    """A listed but inactive person gets no code, and their account is left untouched."""
+    user = _mock_user("paused@example.com")
+    mock_db.first.return_value = user
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         _directory({"full_name": "Paused Person", "status": "paused"}), \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "paused@example.com"})
+
+    assert resp.status_code == 200  # same generic answer as every other outcome
+    mock_store.assert_not_called()
+    mock_send.assert_not_called()
+    assert user.status == UserStatus.active  # refusal is stateless, nothing is mutated
+    mock_db.commit.assert_not_called()
+
+
+def test_send_magic_code_leaves_addresses_the_directory_does_not_know_alone(client, mock_db):
+    """Operator and service accounts appear on no roster, so omission must not lock them out."""
+    user = _mock_user("superadmin@example.com")
+    mock_db.first.return_value = user
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         _directory(None), \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "superadmin@example.com"})
+
+    assert resp.status_code == 200
+    mock_store.assert_called_once()
+    mock_send.assert_called_once()
+
+
+def test_send_magic_code_survives_a_directory_outage_for_existing_users(client, mock_db):
+    """A directory that can't be reached must not lock out people who can already sign in."""
+    user = _mock_user("existing@example.com")
+    mock_db.first.return_value = user
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         _directory(unavailable=True), \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "existing@example.com"})
+
+    assert resp.status_code == 200
+    mock_store.assert_called_once()
+    mock_send.assert_called_once()
+
+
+def test_send_magic_code_does_not_provision_during_a_directory_outage(client, mock_db):
+    """An unreachable directory vouches for nobody, so no account may be created on its word."""
+    mock_db.first.return_value = None
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         _directory(unavailable=True), \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "unknown@example.com"})
+
+    assert resp.status_code == 200
+    mock_db.add.assert_not_called()
+    mock_store.assert_not_called()
+    mock_send.assert_not_called()
+
+
+def test_send_magic_code_never_gates_a_superadmin_on_the_directory(client, mock_db):
+    """The operator must stay reachable even when the roster lists them as inactive.
+
+    Not hypothetical: the roster this was built against carries the instance owner
+    with a non-active status, because it describes editors rather than operators.
+    """
+    user = _mock_user("owner@example.com")
+    user.is_superadmin = True
+    mock_db.first.return_value = user
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         _directory({"full_name": "Owner", "status": "paused"}) as _, \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "owner@example.com"})
+
+    assert resp.status_code == 200
+    mock_store.assert_called_once()
+    mock_send.assert_called_once()

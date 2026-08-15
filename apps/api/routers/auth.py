@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+import logging
 import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -17,6 +19,7 @@ from ..services.auth_service import (
     create_access_token, create_refresh_token, decode_token,
     get_user_by_email, get_user_by_id,
 )
+from ..services import directory_service
 from ..services.redis_service import (
     generate_magic_code, store_magic_code, verify_magic_code as redis_verify_magic_code,
     MAGIC_CODE_EXPIRY_SECONDS,
@@ -28,6 +31,8 @@ from ..middleware.auth import get_current_user
 from ..middleware.rate_limit import rate_limit
 from ..config import settings
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 MAGIC_CODE_EXPIRY_MINUTES = MAGIC_CODE_EXPIRY_SECONDS // 60
@@ -38,17 +43,80 @@ def _generate_invite_token() -> str:
     return secrets.token_urlsafe(48)
 
 
+def _resolve_against_directory(db: Session, email: str, user: User | None) -> User | None:
+    """Reconcile one sign-in address against the external people directory.
+
+    Returns the user allowed to receive a magic code, or None for "no code".
+
+    The directory is consulted on every request rather than only for unknown
+    addresses, so access follows the roster continuously instead of being decided
+    once, at whatever moment an account happened to be created.
+
+    Four deliberate rules:
+
+    - Superadmins are never gated on the directory. An operator must not be
+      lockable out of their own instance by a roster that is maintained
+      elsewhere, describes a different population, or simply has them listed
+      under some other status.
+    - An address the directory says nothing about is left exactly as it was, so
+      service accounts and anyone invited by hand keep working.
+    - Someone listed but no longer active is refused, and their account is left
+      untouched. Refusal is stateless, so reinstating a person in the directory
+      restores their access with nothing to undo here.
+    - If the directory can't be reached, existing accounts keep working and
+      unknown addresses stay unknown. An outage must never lock out the people
+      who can already sign in, nor provision anyone it couldn't vouch for.
+    """
+    if user is not None and user.is_superadmin:
+        return user
+
+    try:
+        record = directory_service.find_person(email)
+    except directory_service.DirectoryUnavailable:
+        return user
+
+    if record is None:
+        return user
+
+    if not directory_service.is_active(record):
+        return None
+
+    if user is not None:
+        return user
+
+    user = User(
+        email=email,
+        name=directory_service.display_name(record, email),
+        status=UserStatus.active,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two sign-in attempts raced; the other one created the account.
+        db.rollback()
+        return get_user_by_email(db, email)
+    db.refresh(user)
+    logger.info("Provisioned user %s from the people directory", user.id)
+    return user
+
+
 @router.post("/send-magic-code", response_model=SendMagicCodeResponse, dependencies=[Depends(rate_limit("send_magic_code", 5, 600))])
 def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
     """
     Send magic code to an existing user's email, for login.
 
-    Does not create accounts: only an admin invite (/users/invite) or
-    /setup/create-superadmin may provision a new user. An unrecognized email
-    gets the same response as a known one, so this endpoint can't be used to
+    Accounts come from an admin invite (/users/invite), /setup/create-superadmin,
+    or - when the instance is configured with one - an external people directory
+    that vouches for the address (see _resolve_against_directory).
+
+    Every outcome returns the same response, so this endpoint can't be used to
     enumerate registered emails.
     """
     user = get_user_by_email(db, body.email)
+
+    if directory_service.is_configured():
+        user = _resolve_against_directory(db, body.email, user)
 
     if not user:
         return SendMagicCodeResponse(
