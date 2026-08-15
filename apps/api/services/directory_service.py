@@ -79,13 +79,27 @@ def find_person(email: str) -> dict | None:
     return record
 
 
-def is_active(record: dict) -> bool:
-    """Whether a directory record describes someone currently allowed to sign in."""
+def allowed_statuses() -> set[str]:
+    return {
+        s.strip().lower()
+        for s in (settings.directory_allowed_statuses or "").split(",")
+        if s.strip()
+    }
+
+
+def is_allowed(record: dict) -> bool:
+    """Whether a directory record describes someone currently allowed to sign in.
+
+    Deliberately a set rather than an equality check. Rosters tend to carry more
+    than one working state - between assignments, onboarding, on leave - and only
+    the states that mean *gone* should cost someone their access.
+    """
     field = settings.directory_status_field
-    if not field:
+    allowed = allowed_statuses()
+    if not field or not allowed:
         # A directory with no notion of status vouches for everyone it lists.
         return True
-    return str(record.get(field, "")).lower() == settings.directory_active_value.lower()
+    return str(record.get(field, "")).lower() in allowed
 
 
 def display_name(record: dict, fallback: str) -> str:

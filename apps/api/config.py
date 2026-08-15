@@ -114,11 +114,15 @@ class Settings(BaseSettings):
     # accounts are unaffected by it.
     #
     # Unset (the default) disables the lookup and changes no behaviour.
+    # DIRECTORY_ALLOWED_STATUSES is a comma-separated set, not a single value: a
+    # roster usually distinguishes "not working right now" from "gone", and only
+    # the second should cost someone their sign-in. Getting this wrong locks out
+    # people who are merely between assignments.
     directory_lookup_url: str | None = None
     directory_token: str | None = None
     directory_name_field: str = "name"
     directory_status_field: str = "status"
-    directory_active_value: str = "active"
+    directory_allowed_statuses: str = "active"
     directory_timeout_seconds: float = 5.0
 
     # AWS SES settings
