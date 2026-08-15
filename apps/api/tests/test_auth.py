@@ -378,16 +378,16 @@ def test_send_magic_code_provisions_person_the_directory_vouches_for(client, moc
     mock_send.assert_called_once()
 
 
-def test_send_magic_code_refuses_person_the_directory_no_longer_lists_as_active(client, mock_db):
-    """A listed but inactive person gets no code, and their account is left untouched."""
-    user = _mock_user("paused@example.com")
+def test_send_magic_code_refuses_person_whose_status_is_not_allowed(client, mock_db):
+    """A listed person outside the allowed statuses gets no code, and their account is untouched."""
+    user = _mock_user("gone@example.com")
     mock_db.first.return_value = user
 
     with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
-         _directory({"full_name": "Paused Person", "status": "paused"}), \
+         _directory({"full_name": "Archived Person", "status": "archived"}), \
          patch("apps.api.routers.auth.store_magic_code") as mock_store, \
          patch("apps.api.routers.auth.send_task_safe") as mock_send:
-        resp = client.post("/auth/send-magic-code", json={"email": "paused@example.com"})
+        resp = client.post("/auth/send-magic-code", json={"email": "gone@example.com"})
 
     assert resp.status_code == 200  # same generic answer as every other outcome
     mock_store.assert_not_called()
@@ -463,3 +463,43 @@ def test_send_magic_code_never_gates_a_superadmin_on_the_directory(client, mock_
     assert resp.status_code == 200
     mock_store.assert_called_once()
     mock_send.assert_called_once()
+
+
+def test_send_magic_code_allows_a_status_in_the_configured_set(client, mock_db):
+    """A roster's "not working right now" state must not cost someone their sign-in.
+
+    Regression test for shipping DIRECTORY_ALLOWED_STATUSES=active against a roster
+    where `paused` means "between assignments", which locked out 29 of 76 people who
+    were still very much employed.
+    """
+    mock_db.first.return_value = None
+
+    with patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0)), \
+         patch("apps.api.services.directory_service.settings.directory_allowed_statuses",
+               "active,paused,onboarding"), \
+         patch(f"{_DIR}.is_configured", return_value=True), \
+         patch(f"{_DIR}.find_person", return_value={"full_name": "Between Jobs", "status": "paused"}), \
+         patch("apps.api.routers.auth.store_magic_code") as mock_store, \
+         patch("apps.api.routers.auth.send_task_safe") as mock_send:
+        resp = client.post("/auth/send-magic-code", json={"email": "paused@example.com"})
+
+    assert resp.status_code == 200
+    mock_db.add.assert_called_once()
+    mock_store.assert_called_once()
+    mock_send.assert_called_once()
+
+
+def test_directory_allowed_statuses_parsing():
+    """The setting is a set, parsed case- and whitespace-insensitively."""
+    from apps.api.services import directory_service as ds
+
+    with patch.object(ds.settings, "directory_allowed_statuses", " Active , paused ,, ONBOARDING "):
+        assert ds.allowed_statuses() == {"active", "paused", "onboarding"}
+        assert ds.is_allowed({"status": "Paused"}) is True
+        assert ds.is_allowed({"status": "archived"}) is False
+        assert ds.is_allowed({}) is False
+
+    # An empty set means the directory has no notion of status and vouches for
+    # everyone it lists, rather than silently refusing everyone.
+    with patch.object(ds.settings, "directory_allowed_statuses", ""):
+        assert ds.is_allowed({"status": "anything"}) is True

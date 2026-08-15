@@ -60,9 +60,10 @@ def _resolve_against_directory(db: Session, email: str, user: User | None) -> Us
       under some other status.
     - An address the directory says nothing about is left exactly as it was, so
       service accounts and anyone invited by hand keep working.
-    - Someone listed but no longer active is refused, and their account is left
-      untouched. Refusal is stateless, so reinstating a person in the directory
-      restores their access with nothing to undo here.
+    - Someone listed under a status outside DIRECTORY_ALLOWED_STATUSES is
+      refused, and their account is left untouched. Refusal is stateless, so
+      reinstating a person in the directory restores their access with nothing
+      to undo here.
     - If the directory can't be reached, existing accounts keep working and
       unknown addresses stay unknown. An outage must never lock out the people
       who can already sign in, nor provision anyone it couldn't vouch for.
@@ -78,7 +79,7 @@ def _resolve_against_directory(db: Session, email: str, user: User | None) -> Us
     if record is None:
         return user
 
-    if not directory_service.is_active(record):
+    if not directory_service.is_allowed(record):
         return None
 
     if user is not None:
