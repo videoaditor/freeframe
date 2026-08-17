@@ -6,7 +6,17 @@ from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset
 from ..models.folder import Folder
 from ..models.share import AssetShare, ShareLink, ShareLinkItem, SharePermission
+from ..config import settings
 from ..services.redis_service import verify_share_session
+
+
+# Role hierarchy (descending): owner > editor > reviewer > viewer
+ROLE_RANK = {
+    ProjectRole.owner: 4,
+    ProjectRole.editor: 3,
+    ProjectRole.reviewer: 2,
+    ProjectRole.viewer: 1,
+}
 
 
 # ── Project-level ──────────────────────────────────────────────────────────────
@@ -19,31 +29,71 @@ def get_project_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -
     ).first()
 
 
+def implicit_project_role(user: User) -> ProjectRole | None:
+    """The role an account holds on EVERY project, regardless of membership.
+
+    FreeFrame has no tier above `projects`, so a team where everybody works on
+    everything can only express that as membership rows: one per person per
+    project, maintained forever, and silently wrong the first time somebody
+    creates a project outside whatever keeps them in step.
+    INSTANCE_WIDE_PROJECT_ACCESS states it once instead. Every account gets
+    `editor` everywhere, and superadmins get `owner` so that projects their
+    colleagues created stay administrable - without that, a project belongs
+    solely to whoever ran create_project and nobody else can so much as list its
+    members.
+
+    This deliberately keys on holding an account at all. People who arrive
+    through a share link are GuestUser rows, never User rows, and never reach
+    this function, so their access stays exactly as narrow as the link that
+    granted it. That makes "an account means staff" the boundary this setting
+    rests on: an instance that hands accounts to outsiders must leave it off.
+
+    Off (the default) returns None for everyone and changes no behaviour.
+    """
+    if not settings.instance_wide_project_access:
+        return None
+    return ProjectRole.owner if user.is_superadmin else ProjectRole.editor
+
+
+def higher_role(a: ProjectRole | None, b: ProjectRole | None) -> ProjectRole | None:
+    """Whichever of two roles grants more, ignoring None. None if both are None."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a if ROLE_RANK[a] >= ROLE_RANK[b] else b
+
+
+def effective_project_role(db: Session, project_id: uuid.UUID, user: User) -> ProjectRole | None:
+    """The role `user` actually holds here: their membership row, the
+    instance-wide floor, or whichever of the two is higher. None means neither.
+
+    The higher of the two wins on purpose. A floor is a floor: being listed
+    explicitly must never leave somebody with less than not being listed at all.
+    """
+    member = get_project_member(db, project_id, user.id)
+    return higher_role(member.role if member else None, implicit_project_role(user))
+
+
 def require_project_role(
     db: Session,
     project_id: uuid.UUID,
     user: User,
     minimum_role: ProjectRole,
-) -> ProjectMember:
+) -> ProjectRole:
     """Require the user to have at least `minimum_role` on the project.
 
     Role hierarchy (descending): owner > editor > reviewer > viewer
     """
-    ROLE_RANK = {
-        ProjectRole.owner: 4,
-        ProjectRole.editor: 3,
-        ProjectRole.reviewer: 2,
-        ProjectRole.viewer: 1,
-    }
-    member = get_project_member(db, project_id, user.id)
-    if not member:
+    role = effective_project_role(db, project_id, user)
+    if role is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
-    if ROLE_RANK[member.role] < ROLE_RANK[minimum_role]:
+    if ROLE_RANK[role] < ROLE_RANK[minimum_role]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Requires {minimum_role.value} role or higher",
         )
-    return member
+    return role
 
 
 # ── Asset-level ────────────────────────────────────────────────────────────────
@@ -63,8 +113,8 @@ def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     if asset.created_by == user.id:
         return True
 
-    # 2. Project member
-    if get_project_member(db, asset.project_id, user.id):
+    # 2. Project member, or an instance-wide role that covers every project
+    if effective_project_role(db, asset.project_id, user):
         return True
 
     # 3. Direct AssetShare with user

@@ -36,7 +36,7 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
-import type { Project, AssetResponse, ProjectMember, FolderTreeNode } from '@/types'
+import type { Project, AssetResponse, ProjectMember, ProjectRole, FolderTreeNode } from '@/types'
 
 const acceptByType: Record<string, string> = {
   video: 'video/*',
@@ -112,7 +112,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     () => api.get<ProjectMember[]>(`/projects/${projectId}/members`),
   )
   const currentMember = members?.find((m) => m.user_id === user?.id)
-  const currentRole = currentMember?.role ?? 'viewer'
+  // The server is the authority on what the caller may do here: a role can come
+  // from an instance-wide rule with no membership row behind it, and /members is
+  // unreadable to anyone who holds no role at all. Fall back to the member list
+  // only for the shape of response that predates project.role being populated.
+  const currentRole = (project?.role as ProjectRole | null | undefined) ?? currentMember?.role ?? 'viewer'
   const canComment = currentRole !== 'viewer'
 
   // Fetch all assets for navigation (1 of N)

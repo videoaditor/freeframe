@@ -19,5 +19,17 @@ services:
       - "127.0.0.1:3090:3000"
 
   api:
+    # Aditor is one team working across every brand, so per-project membership is
+    # bookkeeping rather than a boundary: every editor is meant to reach every
+    # project, and a superadmin has to be able to administer projects a colleague
+    # created. Set here rather than in .env.prod so the behaviour ships with the
+    # code that implements it and cannot drift from what this repo says is true.
+    #
+    # Safe only while every account belongs to staff. Clients reach FreeFrame
+    # through share links as guests and hold no role, so this does not widen what
+    # they see - but giving a client a real account would. Sign-in provisions
+    # accounts from the people directory, which is what keeps that true.
+    environment:
+      - INSTANCE_WIDE_PROJECT_ACCESS=true
     ports:
       - "127.0.0.1:3091:8000"
