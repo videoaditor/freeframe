@@ -280,7 +280,10 @@ interface ConfigurePhaseProps {
 
 function ConfigurePhase({ defaultTitle, onBack, onCreate, creating }: ConfigurePhaseProps) {
   const [title, setTitle] = React.useState(defaultTitle)
-  const [allowComments, setAllowComments] = React.useState(false)
+  // Default ON: a share link exists to collect review feedback. Defaulting it off
+  // produced links that silently swallowed every reviewer's comment intent: the
+  // panel still said "leave a comment below" with no box below it.
+  const [allowComments, setAllowComments] = React.useState(true)
   const [allowDownloads, setAllowDownloads] = React.useState(false)
   const [passphrase, setPassphrase] = React.useState(false)
   const [passphraseValue, setPassphraseValue] = React.useState('')
