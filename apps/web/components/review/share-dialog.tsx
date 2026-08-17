@@ -144,7 +144,10 @@ interface LinkTabProps {
 }
 
 function LinkTab({ assetId }: LinkTabProps) {
-  const [permission, setPermission] = React.useState<SharePermission>("view");
+  // Default to "comment" for the same reason the folder/project share dialog does:
+  // a review link that cannot take comments is not a review link.
+  const [permission, setPermission] =
+    React.useState<SharePermission>("comment");
   const [password, setPassword] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [allowDownload, setAllowDownload] = React.useState(false);

@@ -360,6 +360,7 @@ export function CompareOverlay({ asset, versions, rightVersion, onClose, canComm
               <CommentPanel
                 comments={sideA.comments}
                 currentUserId={user?.id}
+                canComment={canComment}
                 onResolve={async (id) => { await sideA.resolveComment(id) }}
                 onDelete={async (id) => { await sideA.deleteComment(id) }}
                 onAddReaction={async (id, e) => { await sideA.addReaction(id, e) }}
@@ -569,6 +570,7 @@ export function CompareOverlay({ asset, versions, rightVersion, onClose, canComm
               <CommentPanel
                 comments={sideB.comments}
                 currentUserId={user?.id}
+                canComment={canComment}
                 onResolve={async (id) => { await sideB.resolveComment(id) }}
                 onDelete={async (id) => { await sideB.deleteComment(id) }}
                 onAddReaction={async (id, e) => { await sideB.addReaction(id, e) }}

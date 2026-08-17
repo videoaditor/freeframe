@@ -498,6 +498,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                   <CommentPanel
                     comments={comments as any}
                     currentUserId={user?.id}
+                    canComment={canComment}
                     onResolve={resolveComment}
                     onDelete={deleteComment}
                     onAddReaction={addReaction}
@@ -505,7 +506,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                     onReply={() => {}}
                     onSubmitReply={handleSubmitReply}
                   />
-                  {canComment && (
+                  {canComment ? (
                     <CommentInput
                       assetId={asset.id}
                       projectId={asset.project_id}
@@ -513,6 +514,12 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                       onSubmit={handleSubmitComment}
                       annotationData={annotationData}
                     />
+                  ) : (
+                    <div className="px-4 py-3 border-t border-border shrink-0">
+                      <p className="text-xs text-text-tertiary text-center">
+                        View-only access. Comments are disabled.
+                      </p>
+                    </div>
                   )}
                 </>
               ) : (

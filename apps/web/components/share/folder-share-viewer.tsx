@@ -935,6 +935,7 @@ function ShareReviewInner({
               <>
                 <CommentPanel
                   comments={comments}
+                  canComment={canComment}
                   onResolve={() => {}}
                   onDelete={() => {}}
                   onAddReaction={() => {}}
@@ -958,6 +959,13 @@ function ShareReviewInner({
                       await submitComment(body, timecodeStart, timecodeEnd, annotationData)
                     }}
                   />
+                )}
+                {!canComment && (
+                  <div className="px-4 py-3 border-t border-border shrink-0">
+                    <p className="text-xs text-text-tertiary text-center">
+                      View-only access. Comments are disabled.
+                    </p>
+                  </div>
                 )}
               </>
             )}

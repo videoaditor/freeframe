@@ -56,6 +56,12 @@ interface CommentPanelProps {
   onShowAnnotation?: (drawingData: Record<string, unknown> | null) => void;
   /** Compare mode: export this pane's version instead of the store's currentVersion. */
   exportVersionId?: string;
+  /**
+   * Whether the viewer may actually post a comment. The empty state tells people to
+   * "leave a comment below", which is a lie when the caller renders no composer:
+   * a view-only share link, or a project member with the `viewer` role.
+   */
+  canComment?: boolean;
   className?: string;
 }
 
@@ -780,6 +786,7 @@ export function CommentPanel({
   onSeekToTimecode,
   onShowAnnotation,
   exportVersionId,
+  canComment = true,
   className,
 }: CommentPanelProps) {
   const focusedCommentId = useReviewStore((s) => s.focusedCommentId);
@@ -1281,9 +1288,11 @@ export function CommentPanel({
             <p className="text-sm text-text-secondary font-medium">
               No comments yet
             </p>
-            <p className="text-xs text-text-tertiary mt-1">
-              Leave a comment below to start the review
-            </p>
+            {canComment && (
+              <p className="text-xs text-text-tertiary mt-1">
+                Leave a comment below to start the review
+              </p>
+            )}
           </div>
         )}
 
