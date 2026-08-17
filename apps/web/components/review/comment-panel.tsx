@@ -417,6 +417,11 @@ function CommentItem({
 
   const authorName =
     comment.author?.name ?? comment.guest_author?.name ?? "Unknown";
+  // Exactly one of the two author columns is ever set: `author_id` for someone
+  // with an account, `guest_author_id` for someone who came in through a share
+  // link. Keyed on the id rather than the expanded object so a response that
+  // omits the join still classifies correctly.
+  const isGuestAuthor = !comment.author_id && !!comment.guest_author_id;
   const isOwn = !!(currentUserId && comment.author_id === currentUserId);
   const avatarColor = getAvatarColor(authorName);
   const isReplyingHere = replyingTo === comment.id && depth === 0;
@@ -502,6 +507,18 @@ function CommentItem({
             <span className="text-[13px] font-semibold text-text-primary leading-none">
               {authorName}
             </span>
+            {isGuestAuthor && (
+              // A guest author reached this asset through a share link and has no
+              // account here. The name beside it is whatever they typed into the
+              // comment prompt, so it is not evidence of who they are - this badge
+              // is the only thing on the row that is.
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium leading-none bg-amber-400/15 text-amber-300 shrink-0"
+                title="Left through a share link, not a team account"
+              >
+                Client
+              </span>
+            )}
             <span className="text-[11px] text-text-tertiary leading-none">
               {formatRelativeTime(comment.created_at)}
             </span>

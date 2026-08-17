@@ -51,6 +51,13 @@ interface CommentInputProps {
   /** Compare mode: hide drawing tools and never attach annotation payloads. */
   disableAnnotations?: boolean;
   /**
+   * Whether this caller can post team-only comments. False on a share link: the
+   * guest endpoint has no `visibility` field, so an internal comment chosen there
+   * is silently posted public. Offering the control anyway both advertises that an
+   * internal channel exists and shows a client a choice that was never honoured.
+   */
+  allowInternal?: boolean;
+  /**
    * Compare mode: this input's drawing state, controlled by the parent (which
    * pane is the single active drawing side). When provided it REPLACES the
    * global store `isDrawingMode` for every drawing-UI decision in this input,
@@ -201,6 +208,7 @@ export function CommentInput({
   disableAnnotations,
   annotationActive,
   onToggleAnnotation,
+  allowInternal = true,
   className,
 }: CommentInputProps) {
   const {
@@ -408,7 +416,7 @@ export function CommentInput({
         undefined,
         finalAnnotation,
         replyToId ?? undefined,
-        commentVisibility,
+        allowInternal ? commentVisibility : "public",
         mentionUserIds.length > 0 ? mentionUserIds : undefined,
       );
 
@@ -634,6 +642,7 @@ export function CommentInput({
 
             <div className="flex items-center gap-2">
               {/* Visibility dropdown */}
+              {allowInternal && (
               <div className="relative" ref={visRef}>
                 <button
                   onClick={() => setVisDropdownOpen((p) => !p)}
@@ -687,6 +696,7 @@ export function CommentInput({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Submit */}
               <button
