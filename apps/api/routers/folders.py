@@ -20,7 +20,7 @@ from ..schemas.folder import (
     FolderTreeNode,
     FolderUpdate,
 )
-from ..services.permissions import require_project_role, get_project_member, is_public_project
+from ..services.permissions import require_project_role, effective_project_role, is_public_project
 
 router = APIRouter(tags=["folders"])
 
@@ -176,9 +176,9 @@ def list_folders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Allow access if user is a project member OR the project is public
-    member = get_project_member(db, project_id, current_user.id)
-    if not member and not is_public_project(db, project_id):
+    # Allow access if user holds a role on the project OR the project is public
+    role = effective_project_role(db, project_id, current_user)
+    if not role and not is_public_project(db, project_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
 
     query = db.query(Folder).filter(
@@ -201,9 +201,9 @@ def get_folder_tree(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Allow access if user is a project member OR the project is public
-    member = get_project_member(db, project_id, current_user.id)
-    if not member and not is_public_project(db, project_id):
+    # Allow access if user holds a role on the project OR the project is public
+    role = effective_project_role(db, project_id, current_user)
+    if not role and not is_public_project(db, project_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
 
     all_folders = (

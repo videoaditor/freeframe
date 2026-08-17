@@ -94,6 +94,20 @@ class Settings(BaseSettings):
     # /auth/set-password — hiding the form alone would leave the method live.
     password_login_enabled: bool = True
 
+    # Instance-wide project access. On, every account holds `editor` on every
+    # project and superadmins hold `owner`, without a membership row existing.
+    # It is for the single-team instance where everyone is expected to work on
+    # everything and per-project membership is bookkeeping rather than a boundary;
+    # it also gives superadmins a way to administer projects a colleague created,
+    # which project ownership otherwise makes impossible.
+    #
+    # Guests who arrive through a share link are unaffected - they are GuestUser
+    # rows and never carry a role - so this widens what account holders see and
+    # nothing else. Leave it off on any instance where outsiders hold accounts.
+    #
+    # Off (the default) changes no behaviour.
+    instance_wide_project_access: bool = False
+
     # Machine access. A caller presenting SERVICE_API_KEY in X-API-Key is treated
     # as the user named by SERVICE_API_KEY_EMAIL, so every existing per-project
     # permission check still applies - the key is an alternative credential for a

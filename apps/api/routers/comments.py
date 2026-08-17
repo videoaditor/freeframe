@@ -577,11 +577,11 @@ def delete_attachment(
 
     # Must be comment author OR project owner/editor
     from ..models.project import ProjectRole
-    from ..services.permissions import get_project_member
+    from ..services.permissions import effective_project_role
     is_comment_author = comment.author_id == current_user.id
     if not is_comment_author:
-        pm = get_project_member(db, asset.project_id, current_user.id)
-        if not pm or pm.role not in (ProjectRole.owner, ProjectRole.editor):
+        role = effective_project_role(db, asset.project_id, current_user)
+        if role not in (ProjectRole.owner, ProjectRole.editor):
             raise HTTPException(status_code=403, detail="Not authorized to delete this attachment")
 
     # Delete from S3

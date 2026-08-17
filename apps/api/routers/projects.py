@@ -13,6 +13,7 @@ from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
 from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
 from ..services.storage import project_storage_used_bytes
+from ..services.permissions import effective_project_role, implicit_project_role, higher_role
 from ..config import settings
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -28,15 +29,10 @@ def _resolve_poster_url(project: Project) -> str | None:
         return generate_presigned_get_url(project.poster_s3_key)
     return None
 
-def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> ProjectMember:
-    member = db.query(ProjectMember).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == user.id,
-        ProjectMember.deleted_at.is_(None),
-    ).first()
-    if not member or member.role != ProjectRole.owner:
+def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> ProjectRole:
+    if effective_project_role(db, project_id, user) != ProjectRole.owner:
         raise HTTPException(status_code=403, detail="Project owner access required")
-    return member
+    return ProjectRole.owner
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -66,14 +62,19 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
     membership_map = {m.project_id: m.role for m in memberships}
     member_project_ids = list(membership_map.keys())
 
-    # Get projects: user's memberships + all public projects
-    projects = db.query(Project).filter(
-        Project.deleted_at.is_(None),
-        or_(
-            Project.id.in_(member_project_ids) if member_project_ids else False,
-            Project.is_public == True,
-        ),
-    ).all()
+    # An instance-wide role covers every project, so there is nothing to filter by.
+    implicit_role = implicit_project_role(current_user)
+    if implicit_role:
+        projects = db.query(Project).filter(Project.deleted_at.is_(None)).all()
+    else:
+        # Get projects: user's memberships + all public projects
+        projects = db.query(Project).filter(
+            Project.deleted_at.is_(None),
+            or_(
+                Project.id.in_(member_project_ids) if member_project_ids else False,
+                Project.is_public == True,
+            ),
+        ).all()
 
     all_project_ids = [p.id for p in projects]
     if not all_project_ids:
@@ -118,7 +119,7 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
         resp.asset_count = asset_counts.get(p.id, 0)
         resp.storage_bytes = storage_map.get(p.id, 0)
         resp.member_count = member_counts.get(p.id, 0)
-        resp.role = membership_map.get(p.id)
+        resp.role = higher_role(membership_map.get(p.id), implicit_role)
         result.append(resp)
 
     return result
@@ -126,17 +127,14 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _get_project(db, project_id)
-    member = db.query(ProjectMember).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == current_user.id,
-        ProjectMember.deleted_at.is_(None),
-    ).first()
-    if not member and not project.is_public:
+    role = effective_project_role(db, project_id, current_user)
+    if not role and not project.is_public:
         raise HTTPException(status_code=403, detail="Not a project member")
     resp = ProjectResponse.model_validate(project)
     resp.poster_url = _resolve_poster_url(project)
-    if member:
-        resp.role = member.role
+    # The client reads this to decide what to offer; a membership row is no longer
+    # the only way to hold a role, so it must not be derived from the member list.
+    resp.role = role
     # Calculate storage, asset count, member count
     resp.asset_count = db.query(func.count(Asset.id)).filter(
         Asset.project_id == project_id, Asset.deleted_at.is_(None),
@@ -173,15 +171,10 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current
 @router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])
 def list_project_members(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _get_project(db, project_id)
-    # Verify user is a member
-    member = db.query(ProjectMember).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == current_user.id,
-        ProjectMember.deleted_at.is_(None),
-    ).first()
-    if not member:
+    # Verify the caller holds a role here at all
+    if not effective_project_role(db, project_id, current_user):
         raise HTTPException(status_code=403, detail="Not a project member")
-    
+
     members = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.deleted_at.is_(None),

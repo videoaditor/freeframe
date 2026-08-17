@@ -55,6 +55,7 @@ import type {
   Project,
   AssetResponse,
   ProjectMember,
+  ProjectRole,
   User,
   Folder,
   ShareLink,
@@ -286,7 +287,12 @@ export default function ProjectDetailPage() {
 
   // ─── Role-based permissions ───────────────────────────────────────────────
   const currentMember = members?.find((m) => m.user_id === user?.id);
-  const currentRole = currentMember?.role ?? "viewer";
+  // The server is the authority on what the caller may do here: a role can come
+  // from an instance-wide rule with no membership row behind it, and /members is
+  // unreadable to anyone who holds no role at all. Fall back to the member list
+  // only for the shape of response that predates project.role being populated.
+  const currentRole =
+    (project?.role as ProjectRole | null | undefined) ?? currentMember?.role ?? "viewer";
   // owner → Full Access, editor → Edit & Share, reviewer → Comment Only, viewer → View Only
   const canUpload = currentRole === "owner" || currentRole === "editor";
   const canCreateFolder = currentRole === "owner" || currentRole === "editor";

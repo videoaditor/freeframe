@@ -8,7 +8,7 @@ from ..middleware.auth import get_current_user, get_optional_user
 from ..services.auth_service import decode_token, get_user_by_id
 from ..models.user import User, UserStatus
 from ..services.event_service import event_stream
-from ..services.permissions import get_project_member, is_public_project
+from ..services.permissions import effective_project_role, is_public_project
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -30,7 +30,7 @@ async def stream_events(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
 
     # Verify user has access to this project
-    if not get_project_member(db, project_id, user.id) and not is_public_project(db, project_id):
+    if not effective_project_role(db, project_id, user) and not is_public_project(db, project_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
 
     return StreamingResponse(
