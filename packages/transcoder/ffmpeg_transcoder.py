@@ -11,6 +11,20 @@ from botocore.config import Config
 from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
 
 
+# Upper bound on the thread pool ffmpeg may build, per encoder and for the
+# filter graph. Left unset, x264 sizes a frame-thread pool to the whole machine
+# and builds one per rendition, so a single 3-rendition job floods the run
+# queue. On aditor-platform (8 cores, shared with n8n, Teable, Postgres and ~16
+# other vhosts) one 10-file upload batch pushed the 5-minute load average to
+# 7.68 on 2026-08-16 while the box was still 57-64% idle and context switches
+# ran 12x baseline: the queue was full of x264 threads descheduling each other,
+# not of work. Actual throughput measured ~3.4 cores, so a small pool keeps the
+# encode as fast as it ever was and stops the load average from tracking
+# scheduler churn instead of CPU. Raise FFMPEG_THREADS on a dedicated encoder
+# box, where starving the pool would cost real throughput.
+FFMPEG_THREADS = max(1, int(os.getenv("FFMPEG_THREADS", "2")))
+
+
 def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
     """Parse ffprobe JSON (-show_streams -show_format) into VideoMetadata.
 
@@ -166,8 +180,12 @@ class FFmpegTranscoder(BaseTranscoder):
             )
 
             ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", input_url,
+                "ffmpeg", "-y",
+                # Applies to the next file specified, i.e. the input decoder.
+                "-threads", str(FFMPEG_THREADS),
+                "-i", input_url,
                 "-filter_complex", filter_complex,
+                "-filter_complex_threads", str(FFMPEG_THREADS),
             ]
 
             for i, quality in enumerate(qualities):
@@ -177,6 +195,7 @@ class FFmpegTranscoder(BaseTranscoder):
                     ffmpeg_cmd += ["-map", "a:0"]
                 ffmpeg_cmd += [
                     f"-c:v:{i}", "libx264", f"-crf", str(crf), "-preset", "fast",
+                    f"-threads:v:{i}", str(FFMPEG_THREADS),
                     "-force_key_frames", "expr:gte(t,n_forced*2)",
                 ]
 

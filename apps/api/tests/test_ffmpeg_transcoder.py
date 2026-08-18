@@ -328,3 +328,83 @@ def test_transcode_returns_probe_metadata():
     assert result.fps == 25.0
     assert result.width == 1920
     assert result.duration_seconds == 8.0
+
+
+# ─── thread budget ────────────────────────────────────────────────────────────
+
+def _transcode_and_get_cmd(qualities, width=1920, height=1080):
+    """Run a transcode against mocked subprocess/filesystem and return the
+    ffmpeg command that was built."""
+    with patch("subprocess.run", side_effect=_mock_probe_side_effect(width, height)) as mock_run:
+        s3_mock = MagicMock()
+        s3_mock.generate_presigned_url.return_value = "https://s3.example.com/uploads/video.mp4"
+        s3_mock.upload_file = MagicMock()
+
+        with patch("builtins.open", MagicMock()), \
+             patch("pathlib.Path.glob", return_value=[]), \
+             patch("pathlib.Path.rglob", return_value=[]), \
+             patch("pathlib.Path.mkdir"), \
+             patch("shutil.rmtree"):
+            transcoder = FFmpegTranscoder(s3_mock, "test-bucket")
+            result = asyncio.run(transcoder.transcode(_make_job(qualities)))
+
+        assert result.success is True
+        return _get_ffmpeg_cmd(mock_run)
+
+
+def test_every_video_encoder_gets_a_thread_cap():
+    """Each rendition's encoder must carry an explicit -threads:v:<i>. Without
+    it x264 sizes a frame-thread pool to the whole machine per rendition, which
+    is what drove the 5-min load average to 7.68 on 2026-08-16."""
+    from packages.transcoder.ffmpeg_transcoder import FFMPEG_THREADS
+
+    cmd = _transcode_and_get_cmd(["1080p", "720p", "360p"])
+
+    encoders = [a for a in cmd if a.startswith("-c:v:")]
+    assert len(encoders) == 3, f"expected 3 renditions, got {encoders}"
+
+    for i in range(len(encoders)):
+        flag = f"-threads:v:{i}"
+        assert flag in cmd, f"{flag} missing; encoder {i} would size its pool to the host"
+        assert cmd[cmd.index(flag) + 1] == str(FFMPEG_THREADS)
+
+
+def test_decoder_and_filter_graph_are_capped():
+    """The input decoder and the filter graph build their own pools, so
+    capping only the encoders would still leave two unbounded pools."""
+    from packages.transcoder.ffmpeg_transcoder import FFMPEG_THREADS
+
+    cmd = _transcode_and_get_cmd(["1080p", "720p", "360p"])
+
+    # -threads before -i applies to the input decoder.
+    dec = cmd.index("-threads")
+    assert dec < cmd.index("-i"), "-threads must precede -i to bind to the decoder"
+    assert cmd[dec + 1] == str(FFMPEG_THREADS)
+
+    assert "-filter_complex_threads" in cmd
+    assert cmd[cmd.index("-filter_complex_threads") + 1] == str(FFMPEG_THREADS)
+
+
+def test_thread_cap_holds_when_ladder_is_trimmed():
+    """A source smaller than the ladder drops renditions; the surviving one
+    must still be capped (the loop index must not drift off the encoder list)."""
+    from packages.transcoder.ffmpeg_transcoder import FFMPEG_THREADS
+
+    cmd = _transcode_and_get_cmd(["1080p", "720p", "360p"], width=640, height=360)
+
+    encoders = [a for a in cmd if a.startswith("-c:v:")]
+    assert encoders == ["-c:v:0"], f"expected only the 360p rendition, got {encoders}"
+    assert cmd[cmd.index("-threads:v:0") + 1] == str(FFMPEG_THREADS)
+    assert "-threads:v:1" not in cmd
+
+
+def test_thread_cap_is_at_least_one():
+    """FFMPEG_THREADS=0 would hand ffmpeg 'auto' and silently restore the
+    unbounded pool, so the floor is clamped rather than passed through."""
+    import importlib
+    import packages.transcoder.ffmpeg_transcoder as mod
+
+    with patch.dict("os.environ", {"FFMPEG_THREADS": "0"}):
+        reloaded = importlib.reload(mod)
+        assert reloaded.FFMPEG_THREADS == 1
+    importlib.reload(mod)
