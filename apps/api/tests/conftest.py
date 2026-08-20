@@ -151,3 +151,47 @@ def real_db():
         session.close()
         trans.rollback()
         conn.close()
+
+
+# Files whose tests need a live Postgres via the `real_db` fixture above. In a
+# clean clone/sandbox with no test database, they must skip cleanly instead of
+# erroring, while still running unchanged wherever Postgres is reachable.
+_REAL_DB_ONLY_FILES = {
+    "test_backfill_media_metadata.py",
+    "test_cleanup_soft_deleted.py",
+    "test_orphan_sweep.py",
+    "test_reap_stale_uploads.py",
+    "test_share_link_expiry.py",
+    "test_storage_usage_integration.py",
+}
+
+_test_db_available_cache = None
+
+
+def _test_db_available() -> bool:
+    """Probe the same DSN `real_db` connects to; cached so it only probes once per run."""
+    global _test_db_available_cache
+    if _test_db_available_cache is None:
+        try:
+            from sqlalchemy import create_engine
+            from apps.api.config import settings
+
+            probe_engine = create_engine(settings.database_url, connect_args={"connect_timeout": 2})
+            try:
+                probe_engine.connect().close()
+                _test_db_available_cache = True
+            finally:
+                probe_engine.dispose()
+        except Exception:
+            _test_db_available_cache = False
+    return _test_db_available_cache
+
+
+def pytest_collection_modifyitems(items):
+    """Skip the real-Postgres-only suites when no test database is reachable."""
+    if _test_db_available():
+        return
+    skip_no_db = pytest.mark.skip(reason="test database unavailable")
+    for item in items:
+        if os.path.basename(str(item.fspath)) in _REAL_DB_ONLY_FILES:
+            item.add_marker(skip_no_db)
