@@ -31,6 +31,7 @@ interface AssetCardProps {
   duration?: number | null
   selected?: boolean
   onSelect?: (e: React.MouseEvent) => void
+  onOpen?: () => void
   onDragStart?: (e: React.DragEvent) => void
   onShare?: () => void
   onDownload?: () => void
@@ -69,6 +70,7 @@ export function AssetCard({
   duration,
   selected = false,
   onSelect,
+  onOpen,
   onDragStart,
   onShare,
   onDownload,
@@ -128,6 +130,7 @@ export function AssetCard({
         {onSelect && (
           <button
             onClick={(e) => { e.stopPropagation(); onSelect(e) }}
+            aria-label={selected ? 'Deselect asset' : 'Select asset'}
             className={cn(
               'absolute top-2 left-2 h-5 w-5 rounded flex items-center justify-center transition-all',
               selected
@@ -160,7 +163,10 @@ export function AssetCard({
         <div className="flex flex-col gap-1 px-2 pt-2 pb-1.5">
           {/* Title + context menu */}
           <div className="flex items-start justify-between gap-1">
-            <p className={cn('text-sm font-medium text-text-primary leading-tight', lineClamp)}>
+            <p
+              className={cn('text-sm font-medium text-text-primary leading-tight hover:underline', lineClamp)}
+              onClick={onOpen ? (e) => { e.stopPropagation(); onOpen() } : undefined}
+            >
               {asset.name}
             </p>
             <DropdownMenu.Root>

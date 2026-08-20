@@ -169,6 +169,18 @@ export function AssetGrid({
     })
   }
 
+  // Frame.io-style card click: plain click replaces the selection with just
+  // this asset, shift/cmd/ctrl reuse the existing range/toggle logic above.
+  const handleAssetClick = (asset: Asset, e?: React.MouseEvent) => {
+    if (e?.shiftKey || e?.metaKey || e?.ctrlKey) {
+      toggleAssetSelect(asset.id, e)
+      return
+    }
+    setSelectionAnchorId(asset.id)
+    setSelectedAssetIds(new Set([asset.id]))
+    onAssetSelect?.(asset, e)
+  }
+
   const toggleFolderSelect = (folderId: string) => {
     setSelectedFolderIds((prev) => {
       const next = new Set(prev)
@@ -348,11 +360,12 @@ export function AssetGrid({
           {filtered.map((asset) => (
             <div
               key={asset.id}
+              data-testid={`asset-card-${asset.id}`}
               className={cn(
                 'rounded-lg transition-all cursor-pointer',
                 selectedAssetId === asset.id && 'ring-2 ring-accent ring-offset-1 ring-offset-bg-primary',
               )}
-              onClick={(e) => onAssetSelect?.(asset, e)}
+              onClick={(e) => handleAssetClick(asset, e)}
               onDoubleClick={() => onAssetOpen?.(asset)}
             >
               <AssetCard
@@ -365,6 +378,7 @@ export function AssetGrid({
                 fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
                 onSelect={(e) => toggleAssetSelect(asset.id, e)}
+                onOpen={onAssetOpen ? () => onAssetOpen(asset) : undefined}
                 showInfo={showCardInfo}
                 showFileSize={showFileSize}
                 showUploader={showUploader}
@@ -524,7 +538,7 @@ export function AssetGrid({
             return (
               <div
                 key={asset.id}
-                onClick={(e) => onAssetSelect?.(asset, e)}
+                onClick={(e) => handleAssetClick(asset, e)}
                 onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
                   'group flex items-center gap-4 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
@@ -559,7 +573,12 @@ export function AssetGrid({
                 </div>
                 {/* Name + status */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
+                  <p
+                    className="text-sm font-medium text-text-primary truncate leading-snug hover:underline"
+                    onClick={onAssetOpen ? (e) => { e.stopPropagation(); onAssetOpen(asset) } : undefined}
+                  >
+                    {asset.name}
+                  </p>
                 </div>
                 {/* Uploader */}
                 {showUploader && (
