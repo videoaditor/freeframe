@@ -47,8 +47,17 @@ class Settings(BaseSettings):
     s3_public_endpoint: str | None = None  # External URL for presigned URLs (e.g. http://localhost:9000 when S3_ENDPOINT is http://minio:9000)
     jwt_secret: str
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    # Two different questions. The access token is the credential on the wire:
+    # it rides in Authorization headers and, for EventSource, in a query string
+    # that lands in the reverse proxy's access log, so its lifetime is how long
+    # a leaked copy keeps working. `token_version` is only checked when
+    # refreshing, so this is also the whole revocation window for a live
+    # session. Keep it short. The refresh token is the session: it goes to one
+    # endpoint, rotates on every use, and is version-checked, so it can be long
+    # without the same exposure. Editors staying signed in for a quarter is a
+    # question for the second number, never the first.
+    access_token_expire_minutes: int = 60
+    refresh_token_expire_days: int = 90
     frontend_url: str = "http://localhost:3000"
     # Extra browser origins allowed by CORS, comma-separated (in addition to the
     # frontend + localhost defaults). Set to "*" to allow any origin — handy for

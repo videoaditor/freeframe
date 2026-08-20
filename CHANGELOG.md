@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Signed-in staff can comment on share links again** - a share link asks an anonymous viewer for a name and email, but skips that when somebody is already signed in. It decided "signed in" from the presence of an access token in `localStorage`, not from whether that token was still valid. Access tokens lived 15 minutes and nothing on the share path refreshes them (the refresh-and-retry logic sits in `lib/api.ts`, which the share components don't use), so a staff member who signed in more than 15 minutes earlier was never asked who they were, and the request carried neither a usable session nor a guest identity. The share endpoints treat an unusable bearer as anonymous instead of answering 401, so this surfaced as a flat `400` on every attempt. Anything on a share link that asks "is somebody signed in" now reads the token's `exp`, and falls back to the guest prompt when the session has lapsed. Guests were never affected.
+- **A failed share comment now says why** - the share path threw a hardcoded "Failed to post comment" and discarded the API's explanation, which is the reason the above took a log dig to identify. It now shows the server's `detail`.
+
 ### Changed
 - **Pinned `starlette` and `botocore` so self-hosted Docker builds are reproducible** — both were floating transitives, so rebuilding the same commit on a different day could silently install different versions with no diff and no PR. FastAPI declares `starlette>=0.46.0` with no upper bound, meaning builds were free to cross a Starlette major (the ASGI layer under the SSE endpoint and the middleware stack); `botocore` is where S3 request signing lives, and unreviewed moves there have broken S3 compatibility before. Both are pinned to the versions already resolving, so no installed version changes.
 - **Share-create dialog now shows the copyable share link immediately after creation** — clicking "Create" used to close the dialog, leaving the reporter to go find the new link in a separate panel. It now stays open and switches to the existing "link created" screen with the full URL and a Copy button.
+- **Access tokens now last 60 minutes and sessions 90 days** (were 15 minutes and 7 days) - two dials that are easy to confuse. The access token is the credential on the wire: it rides in `Authorization` headers and, for `EventSource`, in a query string the reverse proxy writes to its access log, and because `token_version` is only checked when refreshing, its lifetime is also the whole revocation window for a live session. The refresh token is the session: one endpoint, rotated on use, version-checked. Keeping people signed in for months is a question for the second number, so that is the one that moved furthest; the first moved only enough to cut refresh chatter.
 
 ## [1.7.5] - 2026-07-23
 

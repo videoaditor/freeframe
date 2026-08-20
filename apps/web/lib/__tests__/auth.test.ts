@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setTokens, getAccessToken, getRefreshToken, clearTokens } from '../auth'
+import {
+  setTokens,
+  getAccessToken,
+  getRefreshToken,
+  clearTokens,
+  getLiveAccessToken,
+  hasLiveSession,
+} from '../auth'
 
 describe('Token management', () => {
   beforeEach(() => {
@@ -58,5 +65,70 @@ describe('Token management', () => {
     clearTokens()
 
     expect(window.location.href).toBe('/login')
+  })
+})
+
+// `exp` is seconds since the epoch, and JWT encodes the payload as base64url.
+function tokenExpiringIn(seconds: number): string {
+  const payload = JSON.stringify({ sub: 'u1', type: 'access', exp: Math.floor(Date.now() / 1000) + seconds })
+  const b64url = btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return `header.${b64url}.signature`
+}
+
+describe('getLiveAccessToken', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('returns the token while it is still valid', () => {
+    const token = tokenExpiringIn(600)
+    localStorage.setItem('ff_access_token', token)
+    expect(getLiveAccessToken()).toBe(token)
+  })
+
+  it('returns null for an expired token rather than the token', () => {
+    // The bug this guards: an expired token is still *present*, and the public
+    // share endpoints answer a dead bearer as "anonymous" instead of 401. A
+    // caller that trusts presence then sends neither a session nor a guest
+    // identity, and the comment is rejected with no way to tell why.
+    localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
+    expect(getLiveAccessToken()).toBeNull()
+  })
+
+  it('treats a token expiring within the leeway as already dead', () => {
+    localStorage.setItem('ff_access_token', tokenExpiringIn(5))
+    expect(getLiveAccessToken()).toBeNull()
+  })
+
+  it('returns null when nothing is stored', () => {
+    expect(getLiveAccessToken()).toBeNull()
+  })
+
+  it('returns null for a token that is not a JWT', () => {
+    localStorage.setItem('ff_access_token', 'not-a-jwt')
+    expect(getLiveAccessToken()).toBeNull()
+  })
+
+  it('returns null for a JWT carrying no exp claim', () => {
+    const b64url = btoa(JSON.stringify({ sub: 'u1' })).replace(/=+$/, '')
+    localStorage.setItem('ff_access_token', `header.${b64url}.signature`)
+    expect(getLiveAccessToken()).toBeNull()
+  })
+
+  it('decodes base64url payloads that use - and _', () => {
+    // A padding-free payload containing bytes that differ between base64 and
+    // base64url; plain atob would throw on these.
+    const payload = JSON.stringify({ sub: '??>>???', exp: Math.floor(Date.now() / 1000) + 600 })
+    const b64url = btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    expect(b64url).toMatch(/[-_]/)
+    localStorage.setItem('ff_access_token', `header.${b64url}.signature`)
+    expect(getLiveAccessToken()).not.toBeNull()
+  })
+
+  it('hasLiveSession follows the token, not its mere presence', () => {
+    localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
+    expect(hasLiveSession()).toBe(false)
+    localStorage.setItem('ff_access_token', tokenExpiringIn(600))
+    expect(hasLiveSession()).toBe(true)
   })
 })

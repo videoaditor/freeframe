@@ -10,6 +10,7 @@ import React, {
   useState,
 } from "react";
 import { api } from "@/lib/api";
+import { getLiveAccessToken } from "@/lib/auth";
 import { useReviewStore } from "@/stores/review-store";
 import type { AssetResponse, AssetVersion, Comment } from "@/types";
 
@@ -97,10 +98,8 @@ export function ReviewProvider({
         const API_URL =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const headers: Record<string, string> = {};
-        try {
-          const t = localStorage.getItem("ff_access_token");
-          if (t) headers["Authorization"] = `Bearer ${t}`;
-        } catch {}
+        const t = getLiveAccessToken();
+        if (t) headers["Authorization"] = `Bearer ${t}`;
         const streamRes = await fetch(
           `${API_URL}/share/${shareToken}/stream/${assetId}?_=1${shareSessionParam}`,
           { headers },
@@ -171,10 +170,8 @@ export function ReviewProvider({
         const API_URL =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const headers: Record<string, string> = {};
-        try {
-          const t = localStorage.getItem("ff_access_token");
-          if (t) headers["Authorization"] = `Bearer ${t}`;
-        } catch {}
+        const t = getLiveAccessToken();
+        if (t) headers["Authorization"] = `Bearer ${t}`;
         try {
           const vres = await fetch(
             `${API_URL}/share/${shareToken}/assets/${assetId}/versions?_=1${shareSessionParam}`,
@@ -281,10 +278,8 @@ export function ReviewProvider({
     let cancelled = false;
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     const headers: Record<string, string> = {};
-    try {
-      const t = localStorage.getItem("ff_access_token");
-      if (t) headers["Authorization"] = `Bearer ${t}`;
-    } catch {}
+    const t = getLiveAccessToken();
+    if (t) headers["Authorization"] = `Bearer ${t}`;
     fetch(
       `${API_URL}/share/${shareToken}/stream/${assetId}?version_id=${currentVersionId}${shareSessionParam}`,
       { headers },
@@ -312,10 +307,8 @@ export function ReviewProvider({
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
-        try {
-          const t = localStorage.getItem("ff_access_token");
-          if (t) headers["Authorization"] = `Bearer ${t}`;
-        } catch {}
+        const t = getLiveAccessToken();
+        if (t) headers["Authorization"] = `Bearer ${t}`;
         // Include guest identity if available (for non-authenticated users)
         const guestFields: Record<string, string> = {};
         try {
@@ -331,7 +324,13 @@ export function ReviewProvider({
           headers,
           body: JSON.stringify({ ...payload, ...guestFields, asset_id: assetId }),
         });
-        if (!res.ok) throw new Error("Failed to post comment");
+        if (!res.ok) {
+          const detail = await res
+            .json()
+            .then((d) => (typeof d?.detail === "string" ? d.detail : null))
+            .catch(() => null);
+          throw new Error(detail ?? "Failed to post comment");
+        }
         comment = await res.json();
       } else {
         comment = await api.post<Comment>(

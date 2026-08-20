@@ -13,6 +13,54 @@ export function getRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
+// A token that expired an hour ago still looks like a session to
+// `localStorage.getItem(...)`. Most of the app gets away with that because the
+// authenticated API answers a dead bearer with 401 and `api.ts` refreshes and
+// retries. The public share endpoints do not: they treat an unusable bearer as
+// "anonymous" and carry on, so a caller that trusts mere presence there sends
+// neither a session nor a guest identity and gets rejected. Anything deciding
+// "is somebody signed in" must therefore ask whether the token is still live,
+// not whether one is stored.
+
+/** Seconds of headroom, so a token that dies mid-flight is treated as dead. */
+const EXPIRY_LEEWAY_SECONDS = 30
+
+/**
+ * Read the `exp` claim without verifying the signature - verification is the
+ * server's job; the client only needs to know whether sending this is futile.
+ * Returns null for anything unparseable, which callers treat as expired.
+ */
+function readExpiry(token: string): number | null {
+  const payload = token.split('.')[1]
+  if (!payload) return null
+  try {
+    // JWT uses base64url; atob wants base64.
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    const exp = (JSON.parse(json) as { exp?: unknown }).exp
+    return typeof exp === 'number' ? exp : null
+  } catch {
+    return null
+  }
+}
+
+/** True while the stored access token is present and not past its `exp`. */
+export function hasLiveSession(): boolean {
+  return getLiveAccessToken() !== null
+}
+
+/**
+ * The access token, but only while it is still usable. Prefer this over
+ * `getAccessToken` on any request that cannot refresh - a share link, an
+ * EventSource URL - where sending a dead token is worse than sending none.
+ */
+export function getLiveAccessToken(): string | null {
+  const token = getAccessToken()
+  if (!token) return null
+  const exp = readExpiry(token)
+  if (exp === null) return null
+  return exp - EXPIRY_LEEWAY_SECONDS > Date.now() / 1000 ? token : null
+}
+
 export function setTokens(access: string, refresh: string): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(ACCESS_TOKEN_KEY, access)
