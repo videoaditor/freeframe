@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { getAccessToken } from '@/lib/auth'
+import { getUsableAccessToken } from '@/lib/auth'
 
 // ─── Event payload types ──────────────────────────────────────────────────────
 
@@ -77,6 +77,10 @@ export interface UseSSEReturn {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const BACKOFF_STEPS = [1000, 2000, 4000, 8000, 16000, 30000]
 
+// How many times to retry when the session cannot be renewed before concluding
+// there is no session left, rather than a network having a bad minute.
+const MAX_RENEWAL_FAILURES = 3
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useSSE(projectId: string | null | undefined, options: UseSSEOptions = {}): UseSSEReturn {
@@ -121,19 +125,44 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
     let retryIndex = 0
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     let destroyed = false
+    let renewalFailures = 0
 
-    function connect() {
+    function scheduleRetry() {
+      const delay = BACKOFF_STEPS[Math.min(retryIndex, BACKOFF_STEPS.length - 1)]
+      retryIndex++
+      retryTimer = setTimeout(() => { void connect() }, delay)
+    }
+
+    async function connect() {
       if (destroyed) return
 
-      const token = getAccessToken()
+      // EventSource cannot send an Authorization header, so the token rides in
+      // the query string - and the endpoint answers an expired one with 403.
+      // Nothing here used to renew it, so a lapsed session became an open-ended
+      // 403 retry: production logs showed hours of reconnects all carrying a
+      // token that had died that morning. Renew before every attempt instead.
+      const token = await getUsableAccessToken()
+      if (destroyed) return
+
+      if (!token) {
+        // Either the network is having a bad minute or the session is gone, and
+        // from here those look identical. Retry a few times for the first, then
+        // stop: reconnecting forever with nothing to authenticate is pure noise,
+        // and it is the app's own API calls, not this stream, that are meant to
+        // decide somebody has been logged out.
+        setIsConnected(false)
+        renewalFailures++
+        if (renewalFailures < MAX_RENEWAL_FAILURES) scheduleRetry()
+        return
+      }
+      renewalFailures = 0
+
       // Use window.location.origin as a base so deployments behind a reverse
       // proxy can set NEXT_PUBLIC_API_URL to a relative path like "/api"
       // without crashing the URL constructor.
       const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
       const url = new URL(`${API_URL}/events/${projectId}`, base)
-      if (token) {
-        url.searchParams.set('token', token)
-      }
+      url.searchParams.set('token', token)
 
       es = new EventSource(url.toString())
 
@@ -150,9 +179,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
         es = null
 
         // Exponential backoff reconnect
-        const delay = BACKOFF_STEPS[Math.min(retryIndex, BACKOFF_STEPS.length - 1)]
-        retryIndex++
-        retryTimer = setTimeout(connect, delay)
+        scheduleRetry()
       }
 
       // ── transcode_progress ──
@@ -234,7 +261,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
       })
     }
 
-    connect()
+    void connect()
 
     return () => {
       destroyed = true
