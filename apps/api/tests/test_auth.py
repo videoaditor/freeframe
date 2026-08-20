@@ -503,3 +503,21 @@ def test_directory_allowed_statuses_parsing():
     # everyone it lists, rather than silently refusing everyone.
     with patch.object(ds.settings, "directory_allowed_statuses", ""):
         assert ds.is_allowed({"status": "anything"}) is True
+
+
+def test_access_token_stays_short_lived():
+    """Session length and credential length are different dials.
+
+    `token_version` is only checked when refreshing (see `refresh_token`), so a
+    live access token cannot be revoked - its lifetime *is* the revocation
+    window. It also travels in the EventSource query string, which the reverse
+    proxy writes to its access log, so a long-lived one turns every log line and
+    every log backup into a working credential. Keeping people signed in is the
+    refresh token's job; it goes to a single endpoint, rotates on use, and is
+    version-checked. If someone reaches for the first number to stop editors
+    re-authenticating, this test is here to send them to the second one.
+    """
+    from apps.api.config import settings
+
+    assert settings.access_token_expire_minutes <= 120
+    assert settings.refresh_token_expire_days >= 1

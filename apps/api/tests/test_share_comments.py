@@ -1,6 +1,10 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+from jose import jwt
+
+from apps.api.config import settings
 from apps.api.models.share import SharePermission
 
 
@@ -187,3 +191,51 @@ def test_guest_comment_rejects_asset_outside_shared_project(client, mock_db):
         )
 
     assert response.status_code == 403
+
+
+@patch("apps.api.routers.comments.validate_asset_in_share")
+@patch("apps.api.routers.comments.validate_share_link_with_session")
+def test_expired_bearer_is_anonymous_rather_than_rejected(
+    mock_validate, mock_validate_asset, client, mock_db
+):
+    """A share link is reachable without an account, so an unusable bearer is not
+    an error here - the request simply arrives as a guest. That is deliberate,
+    and it is also the trap: the caller is never told its session died, so a UI
+    that mistakes a stored token for a live one omits the guest identity and
+    lands on this 400 with nothing pointing at the real cause. The share client
+    must therefore decide "signed in" from the token's expiry, not its presence.
+    """
+    asset_id = uuid.uuid4()
+    link = MagicMock()
+    link.permission = SharePermission.comment
+    link.asset_id = asset_id
+    mock_validate.return_value = link
+    asset = MagicMock()
+    asset.id = asset_id
+    mock_db.first.return_value = asset  # _get_asset lookup
+
+    expired = jwt.encode(
+        {
+            "sub": str(uuid.uuid4()),
+            "type": "access",
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+            "ver": 1,
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    response = client.post(
+        "/share/some-token/comment",
+        json={
+            "body": "Test",
+            "asset_id": str(asset_id),
+            "version_id": str(uuid.uuid4()),
+        },
+        headers={"Authorization": f"Bearer {expired}"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "guest_email and guest_name required for anonymous comments"
+    )
