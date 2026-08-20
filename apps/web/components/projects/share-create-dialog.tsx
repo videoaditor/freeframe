@@ -997,9 +997,16 @@ export function ShareCreateDialog({
     return 'Shared Project'
   }
 
-  // Reset state when dialog opens/closes
+  // Reset state on the closed->open transition only. Re-running this on every
+  // `assets`/`preselectedItem(s)` change while the dialog stays open would wipe
+  // `createdResult` back to the configure/selection phase as soon as
+  // `onShareCreated()` causes the parent to refetch and pass down a new `assets`
+  // reference (e.g. SWR revalidation) mid-session.
+  const wasOpenRef = React.useRef(false)
   React.useEffect(() => {
-    if (open) {
+    const justOpened = open && !wasOpenRef.current
+    wasOpenRef.current = open
+    if (justOpened) {
       const initial = new Map<string, SelectedItem>()
       if (preselectedItem) {
         const key = `${preselectedItem.type}:${preselectedItem.id}`
@@ -1129,8 +1136,19 @@ export function ShareCreateDialog({
         await api.patch(`/share/${shareLink.token}`, patches)
       }
 
+      const result: CreatedShareResult = {
+        token: shareLink.token,
+        title: shareLink.title,
+        itemType,
+        thumbnailUrl: thumbUrl,
+        assetId: shareLink.asset_id,
+        folderId: shareLink.folder_id,
+        projectId: shareLink.project_id,
+      }
+      setCreatedResult(result)
+      setAllCreatedResults([result])
+      setPhase('result')
       onShareCreated()
-      onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create share link')
     } finally {
