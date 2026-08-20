@@ -10,7 +10,7 @@ import React, {
   useState,
 } from "react";
 import { api } from "@/lib/api";
-import { getLiveAccessToken } from "@/lib/auth";
+import { getLiveAccessToken, getUsableAccessToken } from "@/lib/auth";
 import { useReviewStore } from "@/stores/review-store";
 import type { AssetResponse, AssetVersion, Comment } from "@/types";
 
@@ -307,7 +307,7 @@ export function ReviewProvider({
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
-        const t = getLiveAccessToken();
+        const t = await getUsableAccessToken();
         if (t) headers["Authorization"] = `Bearer ${t}`;
         // Include guest identity if available (for non-authenticated users)
         const guestFields: Record<string, string> = {};

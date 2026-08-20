@@ -5,7 +5,9 @@ import {
   getRefreshToken,
   clearTokens,
   getLiveAccessToken,
-  hasLiveSession,
+  getUsableAccessToken,
+  refreshAccessToken,
+  refreshAccessTokenQuietly,
 } from '../auth'
 
 describe('Token management', () => {
@@ -124,11 +126,86 @@ describe('getLiveAccessToken', () => {
     localStorage.setItem('ff_access_token', `header.${b64url}.signature`)
     expect(getLiveAccessToken()).not.toBeNull()
   })
+})
 
-  it('hasLiveSession follows the token, not its mere presence', () => {
+describe('renewing a lapsed session', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.unstubAllGlobals()
+    // Navigation is how the loud path reports failure, so every test here has
+    // to be able to see whether it happened.
+    Object.defineProperty(window, 'location', { value: { href: '' }, writable: true })
+  })
+
+  function stubRefreshEndpoint(response: { ok: boolean; body?: unknown }) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: response.ok,
+      json: async () => response.body ?? {},
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('returns a live token without going to the network', async () => {
+    const token = tokenExpiringIn(600)
+    localStorage.setItem('ff_access_token', token)
+    localStorage.setItem('ff_refresh_token', 'refresh-1')
+    const fetchMock = stubRefreshEndpoint({ ok: true })
+
+    expect(await getUsableAccessToken()).toBe(token)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('renews a lapsed token and returns the new one', async () => {
+    const renewed = tokenExpiringIn(3600)
     localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
-    expect(hasLiveSession()).toBe(false)
-    localStorage.setItem('ff_access_token', tokenExpiringIn(600))
-    expect(hasLiveSession()).toBe(true)
+    localStorage.setItem('ff_refresh_token', 'refresh-1')
+    stubRefreshEndpoint({ ok: true, body: { access_token: renewed, refresh_token: 'refresh-2' } })
+
+    expect(await getUsableAccessToken()).toBe(renewed)
+    expect(localStorage.getItem('ff_access_token')).toBe(renewed)
+    expect(localStorage.getItem('ff_refresh_token')).toBe('refresh-2')
+  })
+
+  it('gives up silently when there is nothing to renew', async () => {
+    localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
+    const fetchMock = stubRefreshEndpoint({ ok: true })
+
+    expect(await getUsableAccessToken()).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+    // The caller is a public share link. Somebody with no account is an
+    // ordinary visitor there, not an error to redirect away.
+    expect(window.location.href).toBe('')
+  })
+
+  it('leaves a viewer on the page when the refresh itself is refused', async () => {
+    localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
+    localStorage.setItem('ff_refresh_token', 'expired-refresh')
+    stubRefreshEndpoint({ ok: false })
+
+    expect(await refreshAccessTokenQuietly()).toBeNull()
+    expect(window.location.href).toBe('')
+  })
+
+  it('still sends the dashboard to /login when its refresh is refused', async () => {
+    localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
+    localStorage.setItem('ff_refresh_token', 'expired-refresh')
+    stubRefreshEndpoint({ ok: false })
+
+    expect(await refreshAccessToken()).toBeNull()
+    expect(localStorage.getItem('ff_refresh_token')).toBeNull()
+    expect(window.location.href).toBe('/login')
+  })
+
+  it('runs one refresh for concurrent callers', async () => {
+    const renewed = tokenExpiringIn(3600)
+    localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
+    localStorage.setItem('ff_refresh_token', 'refresh-1')
+    const fetchMock = stubRefreshEndpoint({ ok: true, body: { access_token: renewed } })
+
+    const results = await Promise.all([getUsableAccessToken(), getUsableAccessToken()])
+
+    expect(results).toEqual([renewed, renewed])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

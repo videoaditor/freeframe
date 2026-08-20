@@ -19,7 +19,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { hasLiveSession } from '@/lib/auth'
+import { getUsableAccessToken } from '@/lib/auth'
 import { useReview, type CreateCommentPayload } from '@/components/review/review-provider'
 import { useReviewStore } from '@/stores/review-store'
 import type {
@@ -851,7 +851,7 @@ function ShareReviewInner({
                     assetType={asset.asset_type}
                     allowInternal={false}
                     onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
-                      const hasAuth = hasLiveSession()
+                      const hasAuth = (await getUsableAccessToken()) !== null
                       const hasGuest = !!localStorage.getItem('ff_guest_identity')
                       if (!hasAuth && !hasGuest) {
                         pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
