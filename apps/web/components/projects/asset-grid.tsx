@@ -13,6 +13,7 @@ import { AppearancePopover } from './appearance-popover'
 import { SortPopover } from './sort-popover'
 import { MoveToDialog } from './move-to-dialog'
 import { useViewStore } from '@/stores/view-store'
+import { getRangeSelection } from '@/lib/selection-range'
 import type { Asset, AssetStatus, User, Folder, FolderTreeNode } from '@/types'
 
 const assetTypeIcons: Record<string, React.ElementType> = {
@@ -118,6 +119,7 @@ export function AssetGrid({
 }: AssetGridProps) {
   const [selectedAssetIds, setSelectedAssetIds] = React.useState<Set<string>>(new Set())
   const [selectedFolderIds, setSelectedFolderIds] = React.useState<Set<string>>(new Set())
+  const [selectionAnchorId, setSelectionAnchorId] = React.useState<string | null>(null)
   const [moveDialogOpen, setMoveDialogOpen] = React.useState(false)
 
   // Legacy alias
@@ -128,6 +130,7 @@ export function AssetGrid({
     if (!shareMode) return
     setSelectedAssetIds(new Set())
     setSelectedFolderIds(new Set())
+    setSelectionAnchorId(null)
   }, [shareMode])
 
   const {
@@ -144,7 +147,20 @@ export function AssetGrid({
     sortDirection,
   } = useViewStore()
 
-  const toggleAssetSelect = (assetId: string) => {
+  const toggleAssetSelect = (assetId: string, e?: React.MouseEvent) => {
+    if (e?.shiftKey && selectionAnchorId) {
+      const range = getRangeSelection(filtered.map((a) => a.id), selectionAnchorId, assetId)
+      if (range) {
+        e.preventDefault()
+        setSelectedAssetIds((prev) => {
+          const next = new Set(prev)
+          range.forEach((id) => next.add(id))
+          return next
+        })
+        return
+      }
+    }
+    setSelectionAnchorId(assetId)
     setSelectedAssetIds((prev) => {
       const next = new Set(prev)
       if (next.has(assetId)) next.delete(assetId)
@@ -165,6 +181,7 @@ export function AssetGrid({
   const clearSelection = () => {
     setSelectedAssetIds(new Set())
     setSelectedFolderIds(new Set())
+    setSelectionAnchorId(null)
   }
 
   const totalSelected = selectedAssetIds.size + selectedFolderIds.size
@@ -347,7 +364,7 @@ export function AssetGrid({
                 thumbnailUrl={thumbnails[asset.id]}
                 fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
-                onSelect={() => toggleAssetSelect(asset.id)}
+                onSelect={(e) => toggleAssetSelect(asset.id, e)}
                 showInfo={showCardInfo}
                 showFileSize={showFileSize}
                 showUploader={showUploader}
@@ -528,7 +545,7 @@ export function AssetGrid({
                       'absolute inset-0 flex items-center justify-center transition-all',
                       selectedAssetIds.has(asset.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
                     )}
-                    onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id) }}
+                    onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id, e) }}
                   >
                     <div className={cn(
                       'h-4 w-4 rounded border flex items-center justify-center transition-all',
