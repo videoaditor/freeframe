@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -9,6 +10,8 @@ from typing import Optional
 import boto3
 from botocore.config import Config
 from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
+
+logger = logging.getLogger("transcoder.ffmpeg")
 
 
 # Upper bound on the thread pool ffmpeg may build, per encoder and for the
@@ -109,6 +112,11 @@ class FFmpegTranscoder(BaseTranscoder):
                 "ffmpeg", "-i", input_url,
                 "-vf", "fps=0.1",
                 "-q:v", "2",
+                # Force full-range JPEG. The mjpeg encoder rejects limited-range
+                # (tv) yuv420p input ("Non full-range YUV is non-standard" ->
+                # ff_frame_thread_encoder_init failed), which is most portrait
+                # source footage. yuvj420p is exactly what mjpeg expects.
+                "-pix_fmt", "yuvj420p",
                 f"{thumb_dir}/thumb_%04d.jpg",
             ]
             self._run(cmd, timeout=600, label="ffmpeg")
@@ -235,25 +243,42 @@ class FFmpegTranscoder(BaseTranscoder):
                     )
                     uploaded_keys.append(s3_key)
 
-            # 5. Generate and upload thumbnail (using streaming URL)
-            thumb_path = work_dir / "thumb_0001.jpg"
-            thumb_cmd = [
-                "ffmpeg", "-y", "-i", input_url,
-                "-vf", "fps=0.1", "-q:v", "2", "-frames:v", "1",
-                str(work_dir / "thumb_%04d.jpg"),
-            ]
-            self._run(thumb_cmd, label="ffmpeg")
-            thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
-            if thumb_path.exists():
-                self.s3.upload_file(
-                    str(thumb_path), self.bucket, thumbnail_key,
-                    ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "max-age=86400"},
+            # 5. Generate and upload thumbnail (using streaming URL).
+            # Best-effort: the HLS renditions are already uploaded, so a poster
+            # failure must never fail the whole asset (which would mark it
+            # `failed`, retry, and - on a concurrency-1 worker - wedge the queue,
+            # leaving every later upload stuck on "processing"). A missing poster
+            # is cosmetic; the video is still reviewable.
+            # -pix_fmt yuvj420p forces full-range JPEG: the mjpeg encoder rejects
+            # limited-range (tv) yuv420p input ("Non full-range YUV is
+            # non-standard" -> ff_frame_thread_encoder_init failed), which is
+            # most portrait source footage.
+            thumbnail_keys: list[str] = []
+            try:
+                thumb_path = work_dir / "thumb_0001.jpg"
+                thumb_cmd = [
+                    "ffmpeg", "-y", "-i", input_url,
+                    "-vf", "fps=0.1", "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1",
+                    str(work_dir / "thumb_%04d.jpg"),
+                ]
+                self._run(thumb_cmd, label="ffmpeg")
+                thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
+                if thumb_path.exists():
+                    self.s3.upload_file(
+                        str(thumb_path), self.bucket, thumbnail_key,
+                        ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "max-age=86400"},
+                    )
+                    thumbnail_keys = [thumbnail_key]
+            except Exception as thumb_exc:
+                logger.warning(
+                    "thumbnail generation failed for %s, continuing without poster: %s",
+                    job.output_s3_prefix, thumb_exc,
                 )
 
             return TranscodeResult(
                 success=True,
                 hls_prefix=job.output_s3_prefix,
-                thumbnail_keys=[thumbnail_key],
+                thumbnail_keys=thumbnail_keys,
                 duration_seconds=(meta.duration_seconds or None) if meta else None,
                 width=(meta.width or None) if meta else None,
                 height=(meta.height or None) if meta else None,
