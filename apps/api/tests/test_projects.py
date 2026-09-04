@@ -178,3 +178,44 @@ def test_update_project(client, auth_headers, mock_db, test_user):
     )
     assert resp.status_code == 200
     assert resp.json()["name"] == "New Name"
+
+
+def test_auto_poster_keys_picks_newest_asset_per_project():
+    """_auto_poster_keys reduces the ordered rows to the newest asset's thumbnail
+    per project. The query orders newest-asset-first, so the first row seen for a
+    project wins and later (older) rows for it are ignored."""
+    from unittest.mock import patch
+    from apps.api.routers import projects as projects_router
+
+    project_a, project_b = uuid.uuid4(), uuid.uuid4()
+    # Rows as the query would yield them: grouped by project, newest asset first.
+    ordered_rows = [
+        (project_a, "thumbs/a-newest.jpg"),
+        (project_a, "thumbs/a-older.jpg"),
+        (project_b, "thumbs/b-newest.jpg"),
+    ]
+
+    chain = MagicMock()
+    for method in ("query", "join", "filter", "group_by", "order_by"):
+        getattr(chain, method).return_value = chain
+    chain.subquery.return_value = MagicMock()
+    chain.all.return_value = ordered_rows
+
+    db = MagicMock()
+    db.query.return_value = chain
+
+    result = projects_router._auto_poster_keys(db, [project_a, project_b])
+
+    assert result == {
+        project_a: "thumbs/a-newest.jpg",
+        project_b: "thumbs/b-newest.jpg",
+    }
+
+
+def test_auto_poster_keys_empty_without_projects():
+    """No projects → no query, empty map."""
+    from apps.api.routers import projects as projects_router
+
+    db = MagicMock()
+    assert projects_router._auto_poster_keys(db, []) == {}
+    db.query.assert_not_called()
