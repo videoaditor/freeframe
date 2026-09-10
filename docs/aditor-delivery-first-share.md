@@ -33,7 +33,7 @@ Relevant files:
   (`#5b8def` dark / `#4a7de8` light) at the token level. The orange Alan is reacting to
   is NOT the global accent — it's hardcoded per-component: `bg-orange-500` avatar
   colour in `comment-panel.tsx`, `#FF9500` in the colour picker in
-  `comment-input.tsx`, and a `bg-orange-500` swatch in `folder-share-viewer.tsx`'s
+  `lib/gradient-utils.ts`, and a `bg-orange-500` swatch in `folder-share-viewer.tsx`'s
   avatar-colour list. Confirmed by reading `globals.css` and grepping for `orange`
   across `apps/web`.
 - `docker-compose.aditor.yml` / `apps/web/Dockerfile.prod` — where instance-level UI

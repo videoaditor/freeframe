@@ -14,8 +14,9 @@ services:
     # PASSWORD_LOGIN_ENABLED=false in .env.prod.
     #
     # Every client delivery goes through a share link now (Alan, CX call
-    # 2026-09-10): a Frame.io-shaped page reads as "pick this apart", which
-    # measurably drives up revision requests. NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED
+    # 2026-09-10): a Frame.io-shaped page reads as "pick this apart". He EXPECTS
+    # that to drive up revision requests - nobody has measured it, and the
+    # revision rate is exactly the number that would show whether he is right. NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED
     # keeps the comment panel closed on load and only reveals it once the asset
     # already has a comment, so a client lands on the delivered work rather than
     # an empty review queue. Off by default upstream; on here because it is
