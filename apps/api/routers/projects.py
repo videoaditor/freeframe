@@ -16,6 +16,7 @@ from ..services.s3_service import put_object, generate_presigned_get_url, delete
 from ..services.storage import project_storage_used_bytes
 from ..services.permissions import effective_project_role, implicit_project_role, higher_role
 from ..config import settings
+from ..services import automation_share
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -117,8 +118,15 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
     db.flush()
     member = ProjectMember(project_id=project.id, user_id=current_user.id, role=ProjectRole.owner)
     db.add(member)
+    # A standing link for the automation, created WITH the project so nobody has to remember. Off
+    # unless a webhook URL is configured. See services/automation_share.py.
+    link = automation_share.create_standing_link(db, project.id, current_user.id)
     db.commit()
     db.refresh(project)
+    # Announce AFTER the commit: a webhook that fires for a project the database then rolls back
+    # would have the automation watching something that does not exist.
+    if link is not None:
+        automation_share.announce(project, link)
     return project
 
 @router.get("", response_model=list[ProjectResponse])

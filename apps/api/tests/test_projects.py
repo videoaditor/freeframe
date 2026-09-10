@@ -6,7 +6,7 @@ The projects router uses POST /projects (with org_id in body) and GET /projects.
 """
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from apps.api.models.project import ProjectType, ProjectRole
 
@@ -264,3 +264,71 @@ def test_description_requirement_rejects_a_missing_link():
         _check_description_requirement("HTTPS://TRELLO.COM/C/abc123 - winter campaign")
     finally:
         settings.require_project_description_pattern, settings.require_project_description_hint = original
+
+# ── the standing share link for an automation ────────────────────────────────────────────────
+#
+# Auto Review has no account, so it can only see a project somebody shared with it. Creating that
+# link by hand meant one folder had one and every other project was unwatched. These tests pin
+# both halves - that it is OFF by default, and that when on it creates a link with the two
+# switches that have actually blocked real reviews.
+
+def test_no_standing_link_when_no_webhook_is_configured():
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = ""
+    assert automation_share.is_enabled() is False
+    assert automation_share.create_standing_link(MagicMock(), uuid.uuid4(), uuid.uuid4()) is None
+
+
+def test_the_standing_link_can_comment_and_download():
+    # Not decoration. Without commenting the review cannot be posted; without downloads only the
+    # streaming copy exists, which cannot be analysed. Both have silently blocked real reviews.
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    from apps.api.models.share import SharePermission
+    settings.automation_share_webhook_url = "https://example.invalid/hook"
+    link = automation_share.create_standing_link(MagicMock(), uuid.uuid4(), uuid.uuid4())
+    assert link.permission == SharePermission.comment
+    assert link.allow_download is True
+    assert link.expires_at is None      # a standing link that dies takes the reviews with it
+    assert len(link.token) >= 32
+    settings.automation_share_webhook_url = ""
+
+
+def test_a_failing_webhook_never_breaks_project_creation():
+    # A link the automation never hears about is an unwatched project. A project that could not be
+    # created is an editor who cannot work. Only one of those is acceptable.
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = "https://example.invalid/hook"
+    project = MagicMock()
+    project.id = uuid.uuid4()
+    project.name = "BSG_V7"
+    project.description = "https://trello.com/c/R7TzoNY1"
+    link = MagicMock()
+    link.token = "tok"
+    with patch("apps.api.services.automation_share.httpx.post", side_effect=RuntimeError("down")):
+        automation_share.announce(project, link)   # must not raise
+    settings.automation_share_webhook_url = ""
+
+
+def test_the_announcement_carries_what_identifies_the_brief():
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = "https://example.invalid/hook"
+    settings.automation_share_webhook_secret = "s3cret"
+    project = MagicMock()
+    project.id = uuid.uuid4()
+    project.name = "BSG_V7"
+    project.description = "https://trello.com/c/R7TzoNY1"
+    link = MagicMock()
+    link.token = "tok"
+    with patch("apps.api.services.automation_share.httpx.post") as post:
+        automation_share.announce(project, link)
+    sent = post.call_args.kwargs["json"]
+    # The description is how the automation works out which brand and which card this is.
+    assert sent["description"] == "https://trello.com/c/R7TzoNY1"
+    assert sent["share_token"] == "tok"
+    assert post.call_args.kwargs["headers"]["authorization"] == "Bearer s3cret"
+    settings.automation_share_webhook_url = ""
+    settings.automation_share_webhook_secret = ""

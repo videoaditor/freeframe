@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 90
     frontend_url: str = "http://localhost:3000"
+
+    # A standing share link for an automation, created with every new project and POSTed to this
+    # URL. Empty (the default) means no link is created and nothing is sent.
+    #
+    # Why: an automation that comments as a guest can only see projects explicitly shared with it,
+    # so every project needed a link made by hand. One got one; the rest were simply unwatched -
+    # not broken, which is the harder failure to notice.
+    automation_share_webhook_url: str = ""
+    automation_share_webhook_secret: str = ""
     # Extra browser origins allowed by CORS, comma-separated (in addition to the
     # frontend + localhost defaults). Set to "*" to allow any origin — handy for
     # testing on a LAN via a machine's IP; do not use "*" in production.
