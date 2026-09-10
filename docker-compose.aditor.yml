@@ -37,13 +37,16 @@ services:
     # guest address is reachable, and a comment written by a person - one with an
     # author_id - can never be deleted this way whatever this line says.
     #
-    # The webhook that registers new projects with Auto Review is NOT set here: it
-    # needs a shared secret, and secrets belong in .env.prod, not in the repo. Add
-    # AUTOMATION_SHARE_WEBHOOK_URL and AUTOMATION_SHARE_WEBHOOK_SECRET there to turn
-    # it on.
+    # AUTOMATION_SHARE_WEBHOOK_URL gives every new project a standing share link and
+    # tells Auto Review it exists, so nobody creates one by hand. No secret is set:
+    # the receiving end also accepts a project whose description links a Trello card
+    # on one of Aditor's own boards, which an outsider cannot forge and which the
+    # review has to find anyway. Setting AUTOMATION_SHARE_WEBHOOK_SECRET in .env.prod
+    # still works and is stricter, but nothing waits for it.
     environment:
       - INSTANCE_WIDE_PROJECT_ACCESS=true
       - SHARE_COMMENT_DELETABLE_GUEST_EMAILS=review@aditor.ai
+      - AUTOMATION_SHARE_WEBHOOK_URL=https://review.aditor.ai/api/freeframe/project-registered
     ports:
       - "127.0.0.1:3091:8000"
 
