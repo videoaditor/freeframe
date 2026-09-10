@@ -29,8 +29,21 @@ services:
     # through share links as guests and hold no role, so this does not widen what
     # they see - but giving a client a real account would. Sign-in provisions
     # accounts from the people directory, which is what keeps that true.
+    #
+    # Auto Review may delete comments it wrote ITSELF, and nothing else. It comments
+    # through a share link as a guest with no account, so until now it could never
+    # take back a note: a superseded or plainly wrong automated comment stayed on a
+    # client-facing timeline until a project owner removed it by hand. Only this exact
+    # guest address is reachable, and a comment written by a person - one with an
+    # author_id - can never be deleted this way whatever this line says.
+    #
+    # The webhook that registers new projects with Auto Review is NOT set here: it
+    # needs a shared secret, and secrets belong in .env.prod, not in the repo. Add
+    # AUTOMATION_SHARE_WEBHOOK_URL and AUTOMATION_SHARE_WEBHOOK_SECRET there to turn
+    # it on.
     environment:
       - INSTANCE_WIDE_PROJECT_ACCESS=true
+      - SHARE_COMMENT_DELETABLE_GUEST_EMAILS=review@aditor.ai
     ports:
       - "127.0.0.1:3091:8000"
 
