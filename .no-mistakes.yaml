@@ -1,0 +1,4 @@
+# Pin the runtime and use the repository's pinned requirements instead of
+# relying on stack auto-detection.
+commands:
+  test: 'uv run --python 3.12 --with-requirements apps/api/requirements.txt python -m pytest apps/api/tests/ -v'

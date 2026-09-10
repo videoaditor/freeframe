@@ -159,6 +159,7 @@ def real_db():
 _REAL_DB_ONLY_FILES = {
     "test_backfill_media_metadata.py",
     "test_cleanup_soft_deleted.py",
+    "test_n8n_feedback_events_postgres.py",
     "test_orphan_sweep.py",
     "test_reap_stale_uploads.py",
     "test_share_link_expiry.py",
