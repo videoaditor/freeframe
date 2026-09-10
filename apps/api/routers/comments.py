@@ -967,3 +967,62 @@ def guest_comment(
     db.commit()
 
     return _build_comment_response(comment, db)
+
+
+def _deletable_guest_emails() -> set[str]:
+    """The guest identities allowed to remove their own share comments. Empty = the feature is off."""
+    raw = getattr(settings, "share_comment_deletable_guest_emails", "") or ""
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+@router.delete("/share/{token}/comment/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_guest_comment(
+    token: str,
+    comment_id: uuid.UUID,
+    guest_email: str = Query(..., description="the guest identity that wrote the comment"),
+    share_session: Optional[str] = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Let a configured automation delete a comment it wrote itself, through the share link.
+
+    A guest commenter has no account, so today it can never take back a comment: a superseded or
+    plainly wrong automated note sits on a client-facing timeline until a project owner removes it
+    by hand. This closes that, and nothing else.
+
+    Four conditions, all required:
+      * the share link is valid and allows commenting (a view-only link stays read-only);
+      * the comment is on an asset actually inside that share;
+      * the comment was written by a GUEST, never by a person with an account;
+      * that guest's email is one of settings.share_comment_deletable_guest_emails.
+
+    The list is empty by default, so an instance that does not configure it behaves exactly as it
+    does today. Deletion is the same soft delete the owner path uses - the row is retained.
+    """
+    allowed = _deletable_guest_emails()
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Deleting share comments is not enabled on this instance")
+    if guest_email.strip().lower() not in allowed:
+        raise HTTPException(status_code=403, detail="This guest identity may not delete comments")
+
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
+    if link.permission == SharePermission.view:
+        raise HTTPException(status_code=403, detail="This share link does not allow commenting")
+
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    # A comment with an author_id belongs to a PERSON. Never reachable here, whatever the config.
+    if comment.author_id is not None or comment.guest_author_id is None:
+        raise HTTPException(status_code=403, detail="Only a guest's own comments can be deleted this way")
+
+    guest = db.query(GuestUser).filter(GuestUser.id == comment.guest_author_id).first()
+    if not guest or (guest.email or "").lower() != guest_email.strip().lower():
+        raise HTTPException(status_code=403, detail="This comment was written by a different guest")
+
+    asset = _get_asset(db, comment.asset_id)
+    validate_asset_in_share(db, link, asset)
+
+    comment.deleted_at = datetime.now(timezone.utc)
+    db.commit()

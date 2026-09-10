@@ -65,6 +65,35 @@ class Settings(BaseSettings):
     cors_allow_origins: str = ""
     transcoder_engine: str = "ffmpeg"
 
+    # Require every project's description to carry something - typically a link to the brief in
+    # whatever tool the team plans in (Trello, Notion, Asana, a ticket).
+    #
+    # A regex, matched against the description on create and update. Empty (the default) is off
+    # and nothing changes. The hint is what the user is told when it does not match: say what to
+    # paste, because "description is invalid" sends people looking for a formatting rule.
+    #
+    #   REQUIRE_PROJECT_DESCRIPTION_PATTERN=trello\.com/c/
+    #   REQUIRE_PROJECT_DESCRIPTION_HINT=Paste the Trello card link for this project.
+    #
+    # Why an instance would want this: anything reading projects over the API - an automation, a
+    # reporting job, a review bot - has no way back to the brief a project was made from unless
+    # somebody wrote it down, and asking after the fact never works.
+    require_project_description_pattern: str = ""
+    require_project_description_hint: str = ""
+
+    # Guest identities allowed to DELETE their own comments through a share link, comma-separated
+    # emails. Empty (the default) means nobody can, which is exactly today's behaviour.
+    #
+    # Why this exists: an automation that comments through a share link has no account, so it can
+    # never clean up after itself - a wrong or superseded run stays on a client-facing timeline
+    # until a project owner happens to remove it by hand. That is not a tenable position for a tool
+    # that comments automatically.
+    #
+    # It is deliberately narrow. It permits deleting ONLY comments whose guest author is one of
+    # these exact addresses, and only through a share link that already allows commenting. No human
+    # comment is reachable through it, and neither is any guest not named here.
+    share_comment_deletable_guest_emails: str = ""
+
     # Maximum size (bytes) for a single uploaded file. 0 = unlimited (no per-file cap).
     # Note: S3 multipart still caps effective size at ~10,000 parts x chunk size.
     max_upload_bytes: int = 0

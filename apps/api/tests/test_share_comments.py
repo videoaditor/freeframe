@@ -239,3 +239,79 @@ def test_expired_bearer_is_anonymous_rather_than_rejected(
     assert response.json()["detail"] == (
         "guest_email and guest_name required for anonymous comments"
     )
+
+
+# ── DELETE /share/{token}/comment/{id} ───────────────────────────────────────────────────────
+#
+# An automation commenting through a share link has no account, so until now it could never take
+# back a comment: a superseded or wrong automated note stayed on a client-facing timeline until a
+# project owner removed it by hand. These tests pin the narrow permission that fixes that, and -
+# more importantly - the cases that must stay refused.
+
+def _guest_comment(guest_email="review@aditor.ai"):
+    comment = MagicMock()
+    comment.id = uuid.uuid4()
+    comment.author_id = None
+    comment.guest_author_id = uuid.uuid4()
+    comment.asset_id = uuid.uuid4()
+    comment.deleted_at = None
+    guest = MagicMock()
+    guest.id = comment.guest_author_id
+    guest.email = guest_email
+    return comment, guest
+
+
+def test_delete_is_refused_when_no_guest_is_configured(client, mock_db):
+    settings.share_comment_deletable_guest_emails = ""
+    r = client.delete(f"/share/tok/comment/{uuid.uuid4()}?guest_email=review@aditor.ai")
+    assert r.status_code == 403
+
+
+def test_delete_is_refused_for_a_guest_not_on_the_list(client, mock_db):
+    settings.share_comment_deletable_guest_emails = "review@aditor.ai"
+    r = client.delete(f"/share/tok/comment/{uuid.uuid4()}?guest_email=someone@else.com")
+    assert r.status_code == 403
+
+
+@patch("apps.api.routers.comments.validate_share_link_with_session")
+def test_delete_is_refused_on_a_view_only_link(mock_validate, client, mock_db):
+    settings.share_comment_deletable_guest_emails = "review@aditor.ai"
+    link = MagicMock()
+    link.permission = SharePermission.view
+    mock_validate.return_value = link
+    r = client.delete(f"/share/tok/comment/{uuid.uuid4()}?guest_email=review@aditor.ai")
+    assert r.status_code == 403
+
+
+@patch("apps.api.routers.comments.validate_share_link_with_session")
+def test_a_persons_comment_is_never_deletable_this_way(mock_validate, client, mock_db):
+    # The whole risk of this endpoint. A comment with an author_id belongs to a human being, and
+    # no configuration may make it reachable.
+    settings.share_comment_deletable_guest_emails = "review@aditor.ai"
+    link = MagicMock()
+    link.permission = SharePermission.comment
+    mock_validate.return_value = link
+    human = MagicMock()
+    human.author_id = uuid.uuid4()
+    human.guest_author_id = None
+    human.deleted_at = None
+    mock_db.first.return_value = human
+    r = client.delete(f"/share/tok/comment/{uuid.uuid4()}?guest_email=review@aditor.ai")
+    assert r.status_code == 403
+
+
+@patch("apps.api.routers.comments.validate_asset_in_share")
+@patch("apps.api.routers.comments.validate_share_link_with_session")
+def test_a_guest_deletes_its_own_comment(mock_validate, mock_asset_in_share, client, mock_db):
+    settings.share_comment_deletable_guest_emails = "review@aditor.ai"
+    link = MagicMock()
+    link.permission = SharePermission.comment
+    mock_validate.return_value = link
+    comment, guest = _guest_comment()
+    asset = MagicMock()
+    mock_db.first.side_effect = [comment, guest, asset]
+
+    r = client.delete(f"/share/tok/comment/{comment.id}?guest_email=review@aditor.ai")
+
+    assert r.status_code == 204
+    assert comment.deleted_at is not None   # soft delete, the row is kept
