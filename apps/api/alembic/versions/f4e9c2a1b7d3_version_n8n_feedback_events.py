@@ -441,7 +441,11 @@ BEGIN
         'feedback_event',
         json_build_object(
             'id', NEW.id,
-            'type', TG_ARGV[0],
+            'type', CASE
+                WHEN TG_ARGV[0] = 'comment' AND event_kind = 'deleted'
+                    THEN 'comment_deleted'
+                ELSE TG_ARGV[0]
+            END,
             'event_kind', event_kind
         )::text
     );

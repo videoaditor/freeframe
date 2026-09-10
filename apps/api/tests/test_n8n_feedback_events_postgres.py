@@ -1,12 +1,17 @@
 """Production-shape PostgreSQL checks for the n8n integration migration.
 
-Every source row is synthetic and runs inside the ``real_db`` rollback boundary.
+Every source row is synthetic and is rolled back or explicitly cleaned up.
 """
 
 import importlib.util
+import json
+import select
+import uuid
 from pathlib import Path
 
 from sqlalchemy import text
+
+from apps.api.database import engine
 
 
 VERSIONS_DIR = Path(__file__).parents[1] / "alembic" / "versions"
@@ -245,6 +250,111 @@ def test_postgres_comment_revision_and_tombstone_rows_are_fetchable(real_db):
     assert tombstone.event_occurred_at == tombstone.source_deleted_at
     assert tombstone.visibility == "tombstone"
     assert tombstone.body is None
+
+
+def _next_notification(connection, timeout=1.0):
+    connection.poll()
+    if not connection.notifies:
+        select.select([connection], [], [], timeout)
+        connection.poll()
+    if not connection.notifies:
+        return None
+    return connection.notifies.pop(0)
+
+
+def test_postgres_notifies_fetchable_comment_events_without_no_op_noise():
+    ids = {name: str(uuid.uuid4()) for name in ("user", "guest", "project", "asset", "version", "comment")}
+    listener = engine.raw_connection()
+    listener.autocommit = True
+    listener.cursor().execute("LISTEN feedback_event")
+
+    try:
+        with engine.begin() as writer:
+            writer.execute(
+                text(
+                    """
+                    INSERT INTO users (id, email, name, status, email_verified, is_superadmin)
+                    VALUES (:user, :email, 'Notification Owner', 'active', false, false);
+                    INSERT INTO guest_users (id, email, name)
+                    VALUES (:guest, :guest_email, 'Notification Reviewer');
+                    INSERT INTO projects (id, name, project_type, created_by, is_public)
+                    VALUES (:project, 'Notification Project', 'personal', :user, false);
+                    INSERT INTO assets (id, project_id, name, asset_type, status, created_by)
+                    VALUES (:asset, :project, 'Notification Asset', 'video', 'in_review', :user);
+                    INSERT INTO asset_versions (
+                        id, asset_id, version_number, processing_status, created_by
+                    ) VALUES (:version, :asset, 1, 'ready', :user);
+                    INSERT INTO comments (
+                        id, asset_id, version_id, guest_author_id, body, resolved, visibility
+                    ) VALUES (
+                        :comment, :asset, :version, :guest, 'Initial feedback', false, 'public'
+                    )
+                    """
+                ),
+                {
+                    **ids,
+                    "email": f"notification-{ids['user']}@example.invalid",
+                    "guest_email": f"notification-{ids['guest']}@example.invalid",
+                },
+            )
+
+        initial_notifications = [
+            json.loads(_next_notification(listener).payload),
+            json.loads(_next_notification(listener).payload),
+        ]
+        created = next(payload for payload in initial_notifications if payload["id"] == ids["comment"])
+        assert created == {"id": ids["comment"], "type": "comment", "event_kind": "created"}
+
+        with engine.begin() as writer:
+            writer.execute(
+                text("UPDATE comments SET body = body WHERE id = :comment"),
+                ids,
+            )
+        assert _next_notification(listener, timeout=0.2) is None
+
+        with engine.begin() as writer:
+            writer.execute(
+                text(
+                    "UPDATE comments SET body = 'Revised feedback', updated_at = now() "
+                    "WHERE id = :comment"
+                ),
+                ids,
+            )
+        updated = json.loads(_next_notification(listener).payload)
+        assert updated == {"id": ids["comment"], "type": "comment", "event_kind": "updated"}
+
+        with engine.begin() as writer:
+            writer.execute(
+                text("UPDATE comments SET deleted_at = now() WHERE id = :comment"),
+                ids,
+            )
+            tombstone = writer.execute(
+                text(
+                    """
+                    SELECT event_type, source_event_kind
+                    FROM n8n_feedback_events
+                    WHERE event_id = :comment
+                    """
+                ),
+                ids,
+            ).one()
+        deleted = json.loads(_next_notification(listener).payload)
+        assert deleted == {
+            "id": ids["comment"],
+            "type": tombstone.event_type,
+            "event_kind": tombstone.source_event_kind,
+        }
+        assert deleted["type"] == "comment_deleted"
+    finally:
+        listener.cursor().execute("UNLISTEN *")
+        listener.close()
+        with engine.begin() as writer:
+            writer.execute(text("DELETE FROM comments WHERE id = :comment"), ids)
+            writer.execute(text("DELETE FROM asset_versions WHERE id = :version"), ids)
+            writer.execute(text("DELETE FROM assets WHERE id = :asset"), ids)
+            writer.execute(text("DELETE FROM projects WHERE id = :project"), ids)
+            writer.execute(text("DELETE FROM guest_users WHERE id = :guest"), ids)
+            writer.execute(text("DELETE FROM users WHERE id = :user"), ids)
 
 
 def test_postgres_conditionally_grants_only_view_select(real_db):
