@@ -12,9 +12,19 @@ services:
     # Aditor authenticates editors purely by emailed magic code, so the password
     # path is compiled out of the UI. The API side is closed by
     # PASSWORD_LOGIN_ENABLED=false in .env.prod.
+    #
+    # Every client delivery goes through a share link now (Alan, CX call
+    # 2026-09-10): a Frame.io-shaped page reads as "pick this apart", which
+    # measurably drives up revision requests. NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED
+    # keeps the comment panel closed on load and only reveals it once the asset
+    # already has a comment, so a client lands on the delivered work rather than
+    # an empty review queue. Off by default upstream; on here because it is
+    # Aditor's own delivery behaviour, not a default anyone importing this repo
+    # should inherit silently.
     build:
       args:
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
+        NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "true"
     ports:
       - "127.0.0.1:3090:3000"
 
