@@ -62,6 +62,57 @@ def create_standing_link(db: Session, project_id, created_by) -> Optional[ShareL
     return link
 
 
+def _standing_link(db: Session, project_id) -> Optional[ShareLink]:
+    """The automation's own link for this project, if one was ever created."""
+    return (
+        db.query(ShareLink)
+        .filter(
+            ShareLink.project_id == project_id,
+            ShareLink.title == "Auto Review",
+            ShareLink.is_enabled.is_(True),
+            ShareLink.deleted_at.is_(None),
+        )
+        .order_by(ShareLink.created_at.desc())
+        .first()
+    )
+
+
+def announce_asset_ready(db: Session, asset, version_id) -> None:
+    """Tell the automation a file has finished processing and can be read NOW.
+
+    Without this the automation polls every ten minutes, so half of every wait is spent on a file
+    that was ready the whole time. The review is the thing an editor is waiting for; five minutes
+    of average delay is the difference between a tool that answers and a tool you go and check on
+    later.
+
+    Fires only when the project already has a standing automation link - i.e. only for instances
+    that opted in by configuring the webhook. Best effort, never raises: a missed call costs the
+    ten-minute poll, which is exactly where we were before.
+    """
+    url = (getattr(settings, "automation_share_webhook_url", "") or "").strip()
+    if not url:
+        return
+    link = _standing_link(db, asset.project_id)
+    if link is None:
+        return
+    secret = (getattr(settings, "automation_share_webhook_secret", "") or "").strip()
+    try:
+        httpx.post(
+            url.replace("/project-registered", "/asset-ready"),
+            json={
+                "project_id": str(asset.project_id),
+                "asset_id": str(asset.id),
+                "version_id": str(version_id),
+                "asset_name": asset.name,
+                "share_token": link.token,
+            },
+            headers={"authorization": f"Bearer {secret}"} if secret else {},
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001 - a webhook must never fail a transcode
+        logger.warning("asset-ready webhook failed for asset %s", asset.id, exc_info=True)
+
+
 def announce(project, link: ShareLink) -> None:
     """Tell the automation the project exists. Best effort, never raises."""
     url = (getattr(settings, "automation_share_webhook_url", "") or "").strip()
