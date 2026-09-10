@@ -15,6 +15,8 @@ from ..models.asset import Asset
 from ..services.s3_service import get_s3_client
 from ..config import settings
 
+logger = logging.getLogger(__name__)
+
 log = logging.getLogger("celery.transcode")
 
 
@@ -71,6 +73,15 @@ def process_asset(self, asset_id: str, version_id: str):
                 "asset_id": asset_id,
                 "version_id": version_id,
             })
+
+            # And tell the automation, if one is configured. It cannot hold an SSE connection
+            # open - it is a Cloudflare Worker - so without this it finds out by polling, and
+            # half of every wait is spent on a file that was ready the whole time.
+            try:
+                from ..services import automation_share
+                automation_share.announce_asset_ready(db, asset, version_id)
+            except Exception:  # noqa: BLE001 - never fail a finished transcode over a webhook
+                logger.warning("asset-ready announce failed for %s", asset_id, exc_info=True)
 
         except Exception as exc:
             version.processing_status = ProcessingStatus.failed

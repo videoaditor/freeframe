@@ -332,3 +332,61 @@ def test_the_announcement_carries_what_identifies_the_brief():
     assert post.call_args.kwargs["headers"]["authorization"] == "Bearer s3cret"
     settings.automation_share_webhook_url = ""
     settings.automation_share_webhook_secret = ""
+
+
+# ── asset-ready webhook ──────────────────────────────────────────────────────────────────────
+#
+# Without this the automation polls every ten minutes, so half of every wait is spent on a file
+# that was ready the whole time. It cannot hold an SSE connection open - it is a Worker.
+
+def test_no_asset_ready_call_when_the_webhook_is_unconfigured():
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = ""
+    with patch("apps.api.services.automation_share.httpx.post") as post:
+        automation_share.announce_asset_ready(MagicMock(), MagicMock(), uuid.uuid4())
+    post.assert_not_called()
+
+
+def test_no_asset_ready_call_when_the_project_has_no_standing_link():
+    # Only projects the automation was given a link for. Everything else is none of its business.
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = "https://example.invalid/project-registered"
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+    with patch("apps.api.services.automation_share.httpx.post") as post:
+        automation_share.announce_asset_ready(db, MagicMock(), uuid.uuid4())
+    post.assert_not_called()
+    settings.automation_share_webhook_url = ""
+
+
+def test_asset_ready_names_the_asset_and_its_share():
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = "https://example.invalid/project-registered"
+    link = MagicMock(); link.token = "tok"
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = link
+    asset = MagicMock(); asset.id = uuid.uuid4(); asset.project_id = uuid.uuid4(); asset.name = "Char1.mp4"
+    vid = uuid.uuid4()
+    with patch("apps.api.services.automation_share.httpx.post") as post:
+        automation_share.announce_asset_ready(db, asset, vid)
+    sent = post.call_args.kwargs["json"]
+    assert sent["asset_id"] == str(asset.id)
+    assert sent["share_token"] == "tok"
+    # A different endpoint from project registration - it is a different event.
+    assert post.call_args.args[0].endswith("/asset-ready")
+    settings.automation_share_webhook_url = ""
+
+
+def test_a_failing_asset_ready_webhook_never_fails_the_transcode():
+    from apps.api.services import automation_share
+    from apps.api.config import settings
+    settings.automation_share_webhook_url = "https://example.invalid/project-registered"
+    link = MagicMock(); link.token = "tok"
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = link
+    with patch("apps.api.services.automation_share.httpx.post", side_effect=RuntimeError("down")):
+        automation_share.announce_asset_ready(db, MagicMock(), uuid.uuid4())   # must not raise
+    settings.automation_share_webhook_url = ""
