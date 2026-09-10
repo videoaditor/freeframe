@@ -33,3 +33,15 @@ services:
       - INSTANCE_WIDE_PROJECT_ACCESS=true
     ports:
       - "127.0.0.1:3091:8000"
+
+  worker:
+    # CAX41 provides 16 vCPU and 32 GB RAM. Two Celery child processes let two
+    # videos transcode concurrently, while the container limits reserve four CPU
+    # cores and 24 GB RAM for n8n, Teable, databases, and the other shared apps.
+    # Keep each FFmpeg process at two threads per rendition; raising that value
+    # previously increased scheduler contention without improving throughput.
+    environment:
+      - TRANSCODING_CONCURRENCY=2
+      - FFMPEG_THREADS=2
+    cpus: "12.0"
+    mem_limit: 8g
