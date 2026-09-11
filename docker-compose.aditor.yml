@@ -21,9 +21,31 @@ services:
     # public hostname the editor's browser already talks to, not a credential;
     # the gate authenticates nothing and answers no verdict, which is why it can
     # be compiled into a client bundle at all.
+    # Every client delivery goes through a share link now (Alan, CX call
+    # 2026-09-10): a Frame.io-shaped page reads as "pick this apart". He EXPECTS
+    # that to drive up revision requests - nobody has measured it, and the
+    # revision rate is exactly the number that would show whether he is right. NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED
+    # keeps the comment panel closed on load and only reveals it once the asset
+    # already has a comment, so a client lands on the delivered work rather than
+    # an empty review queue. Off by default upstream; on here because it is
+    # Aditor's own delivery behaviour, not a default anyone importing this repo
+    # should inherit silently.
     build:
       args:
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
+        # OFF until the editors and the team have been told. Flip to "true" to switch it on -
+        # that is the whole change, and it is one line, deliberately.
+        #
+        # Saskia's standing rule, 2026-09-10: nothing that alters what a person sees goes live
+        # before they hear about it. This one alters what a CLIENT sees - the comment panel no
+        # longer opens on load - so merging it with the flag on would have shipped a visible
+        # change to every client the moment the PR landed.
+        NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "false"
+        # Auto Review comments through a share link, which made it a "guest" and badged it
+        # Client - its notes read as though the customer had written them. This names it as an
+        # automation instead. Safe to turn on immediately: it changes a label on comments the
+        # tool itself wrote, and nothing a person wrote.
+        NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS: "review@aditor.ai"
         NEXT_PUBLIC_REVIEW_GATE_URL: "https://review.aditor.ai"
     ports:
       - "127.0.0.1:3090:3000"
