@@ -38,6 +38,15 @@ import {
 } from "@/lib/export-comments";
 import { FpsPromptDialog } from "@/components/review/fps-prompt-dialog";
 
+// Guest identities that are automations rather than people, comma-separated. Empty by default,
+// so an instance that runs no automation behaves exactly as it did.
+const AUTOMATION_EMAILS = new Set(
+  (process.env.NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+)
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface CommentPanelProps {
@@ -422,6 +431,15 @@ function CommentItem({
   // link. Keyed on the id rather than the expanded object so a response that
   // omits the join still classifies correctly.
   const isGuestAuthor = !comment.author_id && !!comment.guest_author_id;
+  // An AUTOMATION commenting through a share link is a guest too, so it was wearing the "Client"
+  // badge - its notes read as though the client had written them. Aditor's Auto Review posts this
+  // way by design (no account, share token only), and on a client-facing timeline that is exactly
+  // the wrong attribution. Configured, not hardcoded: an instance that runs no automation is
+  // unaffected, and nobody can claim the badge by typing a name into the comment prompt, because
+  // it is matched on the guest's EMAIL.
+  const isAutomation = isGuestAuthor && AUTOMATION_EMAILS.has(
+    (comment.guest_author?.email || '').trim().toLowerCase()
+  );
   const isOwn = !!(currentUserId && comment.author_id === currentUserId);
   const avatarColor = getAvatarColor(authorName);
   const isReplyingHere = replyingTo === comment.id && depth === 0;
@@ -507,7 +525,15 @@ function CommentItem({
             <span className="text-[13px] font-semibold text-text-primary leading-none">
               {authorName}
             </span>
-            {isGuestAuthor && (
+            {isAutomation && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium leading-none bg-accent/15 text-accent shrink-0"
+                title="Posted automatically, not by a person"
+              >
+                Automated
+              </span>
+            )}
+            {isGuestAuthor && !isAutomation && (
               // A guest author reached this asset through a share link and has no
               // account here. The name beside it is whatever they typed into the
               // comment prompt, so it is not evidence of who they are - this badge
