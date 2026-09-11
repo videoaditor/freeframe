@@ -33,6 +33,11 @@ services:
         # longer opens on load - so merging it with the flag on would have shipped a visible
         # change to every client the moment the PR landed.
         NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "false"
+        # Auto Review comments through a share link, which made it a "guest" and badged it
+        # Client - its notes read as though the customer had written them. This names it as an
+        # automation instead. Safe to turn on immediately: it changes a label on comments the
+        # tool itself wrote, and nothing a person wrote.
+        NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS: "review@aditor.ai"
     ports:
       - "127.0.0.1:3090:3000"
 
