@@ -79,6 +79,14 @@ type CommentsResponse = GuestComment[]
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Build-time flag: NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED=true starts the share
+// view's comment panel closed and only opens it once the asset already has a
+// comment on it. Default (unset/false) keeps today's behaviour: the panel
+// opens by default on desktop widths, same as before this flag existed.
+// See docs/aditor-delivery-first-share.md for why - a client should land on a
+// finished delivery, not a review queue asking to be picked apart.
+const SHARE_COMMENTS_COLLAPSED = process.env.NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED === 'true'
+
 async function fetchShareInfo(
   token: string,
   password?: string,
@@ -835,7 +843,28 @@ function ShareViewer({
   const [streamUrl, setStreamUrl] = React.useState<string | null>(asset.stream_url ?? null)
   const [streamLoading, setStreamLoading] = React.useState(false)
   const [commentKey, setCommentKey] = React.useState(0)
-  const [sidebarOpen, setSidebarOpen] = React.useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
+  const [sidebarOpen, setSidebarOpen] = React.useState(() => {
+    if (SHARE_COMMENTS_COLLAPSED) return false
+    return typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  })
+
+  // Flag on: the panel starts closed (see SHARE_COMMENTS_COLLAPSED above) and
+  // only reveals itself once we learn the asset already has a comment. This
+  // fetch is skipped entirely when the flag is off, so it costs nothing
+  // unless an instance has opted in.
+  React.useEffect(() => {
+    if (!SHARE_COMMENTS_COLLAPSED) return
+    let cancelled = false
+    fetch(`${API_URL}/share/${token}/comments`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: CommentsResponse) => {
+        if (!cancelled && Array.isArray(data) && data.length > 0) setSidebarOpen(true)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [token, asset.id])
 
   // For video/audio assets, get a stream URL if not already provided
   React.useEffect(() => {
