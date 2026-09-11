@@ -169,17 +169,44 @@ export default function HandinPage() {
       const uploadId = startUpload(file, project.id, file.name, project.name);
       const newAssetId = await waitForUpload(uploadId);
 
-      // permission: comment and allow_download: true are the two settings the
-      // review cannot work without. Set here so the editor never has to find
-      // them in a dialog.
-      setStep("Creating the share link");
-      const res = await api.post<{ share_link: ShareLink & { url?: string } }>(
-        `/assets/${newAssetId}/share`,
-        { permission: "comment", allow_download: true },
+      // ONE LINK, NOT TWO.
+      //
+      // Creating a project already mints a standing share link for Auto Review
+      // (services/automation_share.py, live on this instance). Minting a second
+      // one here would hand the editor a choice between two links that look
+      // alike and behave differently - the surest way to have the wrong one
+      // posted to a client.
+      //
+      // The standing link is also the BETTER link to send: it is project-scoped,
+      // so a card with three hooks is one link showing all three, while an
+      // asset-level link shows one file. And it carries the two settings the
+      // review cannot work without - permission: comment and allow_download -
+      // because it is created in code rather than through a dialog.
+      //
+      // Only if there is no standing link (an instance with the webhook
+      // unconfigured) does this create one, with the same two settings, so the
+      // editor never has to find them.
+      setStep("Getting the share link");
+      const existing = await api
+        .get<{ token: string; permission: string; share_type: string }[]>(
+          `/projects/${project.id}/share-links`,
+        )
+        .catch(() => []);
+      const standing = (existing ?? []).find(
+        (l) => l.share_type === "project" && l.permission === "comment",
       );
-      const link = res.share_link;
-      const url =
-        link.url ?? `${window.location.origin}/share/${link.token}`;
+
+      let token: string;
+      if (standing) {
+        token = standing.token;
+      } else {
+        const res = await api.post<{ share_link: ShareLink & { url?: string } }>(
+          `/projects/${project.id}/share`,
+          { permission: "comment", allow_download: true },
+        );
+        token = res.share_link.token;
+      }
+      const url = `${window.location.origin}/share/${token}`;
 
       // The link goes on screen here, before a single word of the review has
       // been asked for, let alone read.
