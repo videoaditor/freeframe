@@ -28,6 +28,7 @@ import * as React from "react";
 import { Loader2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import {
+  GATE_BASE,
   fetchReview,
   isHandinConfigured,
   lookUpCard,
@@ -207,6 +208,27 @@ export default function HandinPage() {
         token = res.share_link.token;
       }
       const url = `${window.location.origin}/share/${token}`;
+
+      // TELL THE REVIEWER THIS ONE WAS ASKED FOR.
+      //
+      // Every project registers itself and lands DISARMED - reviewing an upload nobody asked about
+      // puts a comment in front of somebody's client. A hand-in is the exception: the editor came
+      // to this page, pasted their card and is waiting for feedback. Without this call the review
+      // panel below would say "The review will appear here" and mean it for ever.
+      //
+      // Best effort. A failure here costs the review, not the hand-in: the link is already on
+      // screen and the upload is already done.
+      await fetch(`${GATE_BASE}/api/freeframe/project-registered`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          share_token: token,
+          project_name: project.name,
+          // The Trello URL is how the brand is resolved on the other side.
+          description: cardUrl.trim() || "",
+          via: "gate",
+        }),
+      }).catch(() => undefined);
 
       // The link goes on screen here, before a single word of the review has
       // been asked for, let alone read.
