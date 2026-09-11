@@ -13,6 +13,14 @@ services:
     # path is compiled out of the UI. The API side is closed by
     # PASSWORD_LOGIN_ENABLED=false in .env.prod.
     #
+    # NEXT_PUBLIC_REVIEW_GATE_URL turns on /handin, the one-route hand-in: the
+    # editor pastes a Trello card, uploads once, and gets back the share link to
+    # post, with the craft review underneath it. Additive - the existing upload
+    # route is untouched, and this is a page an editor may choose. Off wherever
+    # this is unset, so only Aditor's own build grows the route. It is the
+    # public hostname the editor's browser already talks to, not a credential;
+    # the gate authenticates nothing and answers no verdict, which is why it can
+    # be compiled into a client bundle at all.
     # Every client delivery goes through a share link now (Alan, CX call
     # 2026-09-10): a Frame.io-shaped page reads as "pick this apart". He EXPECTS
     # that to drive up revision requests - nobody has measured it, and the
@@ -38,6 +46,7 @@ services:
         # automation instead. Safe to turn on immediately: it changes a label on comments the
         # tool itself wrote, and nothing a person wrote.
         NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS: "review@aditor.ai"
+        NEXT_PUBLIC_REVIEW_GATE_URL: "https://review.aditor.ai"
     ports:
       - "127.0.0.1:3090:3000"
 
