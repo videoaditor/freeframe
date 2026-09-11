@@ -25,7 +25,14 @@ services:
     build:
       args:
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
-        NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "true"
+        # OFF until the editors and the team have been told. Flip to "true" to switch it on -
+        # that is the whole change, and it is one line, deliberately.
+        #
+        # Saskia's standing rule, 2026-09-10: nothing that alters what a person sees goes live
+        # before they hear about it. This one alters what a CLIENT sees - the comment panel no
+        # longer opens on load - so merging it with the flag on would have shipped a visible
+        # change to every client the moment the PR landed.
+        NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "false"
     ports:
       - "127.0.0.1:3090:3000"
 
