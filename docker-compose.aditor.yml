@@ -12,9 +12,19 @@ services:
     # Aditor authenticates editors purely by emailed magic code, so the password
     # path is compiled out of the UI. The API side is closed by
     # PASSWORD_LOGIN_ENABLED=false in .env.prod.
+    #
+    # NEXT_PUBLIC_REVIEW_GATE_URL turns on /handin, the one-route hand-in: the
+    # editor pastes a Trello card, uploads once, and gets back the share link to
+    # post, with the craft review underneath it. Additive - the existing upload
+    # route is untouched, and this is a page an editor may choose. Off wherever
+    # this is unset, so only Aditor's own build grows the route. It is the
+    # public hostname the editor's browser already talks to, not a credential;
+    # the gate authenticates nothing and answers no verdict, which is why it can
+    # be compiled into a client bundle at all.
     build:
       args:
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
+        NEXT_PUBLIC_REVIEW_GATE_URL: "https://review.aditor.ai"
     ports:
       - "127.0.0.1:3090:3000"
 

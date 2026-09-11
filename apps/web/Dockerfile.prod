@@ -16,6 +16,12 @@ ARG NEXT_PUBLIC_API_URL=/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=true
 ENV NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=$NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED
+# Base URL of the craft-review service behind the /handin route. Empty by
+# default, which turns that route off - a self-hoster who is not Aditor gets no
+# page pointing at Aditor's reviewer. Not a secret: it is a public hostname the
+# browser calls directly, which is why it is a build arg and not an API secret.
+ARG NEXT_PUBLIC_REVIEW_GATE_URL=
+ENV NEXT_PUBLIC_REVIEW_GATE_URL=$NEXT_PUBLIC_REVIEW_GATE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm build
