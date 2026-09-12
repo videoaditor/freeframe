@@ -6,8 +6,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const EMAIL = 'review@aditor.ai'
-process.env.NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS = EMAIL
+process.env.NEXT_PUBLIC_REVIEW_GATE_URL = 'https://review.aditor.ai'
 
 // Imported inside beforeAll, not at the top: the module reads the setting ONCE at import, and a
 // static import is hoisted above the assignment above - so the setting would not be there yet.
@@ -25,25 +24,26 @@ beforeAll(async () => {
   REVIEW_WINDOW_MS = m.REVIEW_WINDOW_MS
 })
 
-const ours = (body: string) => ({ body, guest_author: { email: EMAIL } })
-const theirs = (body: string) => ({ body, guest_author: { email: 'client@brand.com' } })
-
 describe('reading whether the review has landed', () => {
-  it('is still running while only other people have commented', () => {
-    // A client note on the asset is not our review arriving.
-    expect(summarise([theirs('Looks great!')]).state).toBe('running')
-    expect(summarise([]).state).toBe('running')
+  it('is still running until the reviewer says ready', () => {
+    expect(summarise(null).state).toBe('running')
+    expect(summarise({ state: 'pending' }).state).toBe('running')
   })
 
-  it('counts must-fix apart from the rest, and never counts the summary', () => {
-    const r = summarise([
-      ours('Auto Review - 1 thing worth fixing, 2 smaller notes'),
-      ours('Must fix - CTA missing. No call to action in the final 10 seconds.'),
-      ours('No music bed. Voiceover only.'),
-      ours('Hook execution. Punch in at 0:01.'),
-      theirs('Client says hi'),
-    ])
-    expect(r).toEqual({ state: 'done', mustFix: 1, notes: 2 })
+  it('reads a CLEAN read as done, not as not-started', () => {
+    // The whole reason this asks the reviewer instead of counting comments: from 2026-09-12 a
+    // clean read says nothing on the timeline, so there is no comment to count. Two empty lists
+    // is a real answer.
+    expect(summarise({ state: 'ready', worthFixing: [], niceToHave: [] }))
+      .toEqual({ state: 'done', mustFix: 0, notes: 0 })
+  })
+
+  it('counts must-fix apart from the rest', () => {
+    expect(summarise({
+      state: 'ready',
+      worthFixing: ['Must fix - CTA missing.'],
+      niceToHave: ['No music bed.', 'Hook execution. Punch in at 0:01.'],
+    })).toEqual({ state: 'done', mustFix: 1, notes: 2 })
   })
 
   it('stops asking once the upload is old', () => {
@@ -53,9 +53,8 @@ describe('reading whether the review has landed', () => {
     expect(withinReviewWindow('not a date')).toBe(false)
   })
 
-  it('does nothing at all when no automation is configured', async () => {
+  it('does nothing at all when no reviewer is configured', () => {
+    // Empty gate URL = upstream's behaviour: no asking, no line on the row.
     expect(reviewingIsPossible()).toBe(true)
-    // The module reads the setting once at import, which is what keeps an unconfigured instance
-    // from ever polling: no emails, no questions, no line on the row.
   })
 })

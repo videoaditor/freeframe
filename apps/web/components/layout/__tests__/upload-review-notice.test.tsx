@@ -31,6 +31,9 @@ describe('the upload-complete review notice', () => {
     expect(src).toContain("REVIEW_NOTICE && review.state === 'running'")
     expect(src).toContain("review.state === 'done'")
     expect(src).toContain('Feedback is on the video')
+    // A clean read says nothing on the timeline, so this row is the only place the editor learns
+    // it came back clean - "feedback is on the video" would send them looking for nothing.
+    expect(src).toContain('Reviewed - nothing to fix')
   })
 
   it('keeps asking when a lookup FAILED, rather than settling on "no review"', () => {

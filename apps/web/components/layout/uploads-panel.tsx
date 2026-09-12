@@ -194,10 +194,12 @@ function UploadItem({ upload }: { upload: UploadFile }) {
           )}
           {upload.status === 'complete' && review.state === 'done' && (
             <span className="text-[11px] text-text-secondary" data-testid="review-done">
-              &middot; Feedback is on the video
+              {/* A clean read leaves NOTHING on the timeline, so "feedback is on the video" would
+                * be a lie and send the editor looking for something that is not there. This line
+                * is the only place they learn it came back clean, besides #card-feedback. */}
               {review.mustFix || review.notes
-                ? ` - ${[review.mustFix ? `${review.mustFix} to fix` : '', review.notes ? `${review.notes} note${review.notes === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}`
-                : ' - nothing worth fixing'}
+                ? `\u00b7 Feedback is on the video - ${[review.mustFix ? `${review.mustFix} to fix` : '', review.notes ? `${review.notes} note${review.notes === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}`
+                : '\u00b7 Reviewed - nothing to fix'}
             </span>
           )}
           {upload.status === 'failed' && upload.error && (
