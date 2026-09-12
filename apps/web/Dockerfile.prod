@@ -24,6 +24,12 @@ ARG NEXT_PUBLIC_REVIEW_GATE_URL=
 ENV NEXT_PUBLIC_REVIEW_GATE_URL=$NEXT_PUBLIC_REVIEW_GATE_URL
 ARG NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED=false
 ENV NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED=$NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED
+# What an editor is told when an upload finishes, e.g. "Sent for review - feedback appears on the
+# video in a few minutes." Empty upstream, so the line does not appear at all unless an instance
+# sets it. Not a secret: it is a sentence shown in the browser.
+ARG NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE=
+ENV NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE=$NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE
+
 # Guest identities that are automations, not people. Empty upstream, so the badge behaves exactly
 # as it always has unless an instance names one.
 ARG NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS=
