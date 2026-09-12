@@ -94,5 +94,15 @@ services:
     environment:
       - TRANSCODING_CONCURRENCY=2
       - FFMPEG_THREADS=2
+      # THE WORKER IS WHAT ANNOUNCES A FINISHED FILE, so it needs this too.
+      #
+      # announce_asset_ready() is called from the Celery transcode task, not from the api, and it
+      # returns immediately when the URL is empty. Set on `api` alone - as it was - the api creates
+      # standing links and registers projects correctly, and the "this file is ready now" call
+      # never fires at all. Nothing breaks: Auto Review still finds the upload on its ten-minute
+      # poll, so every review simply arrives up to ten minutes later than it should, for ever,
+      # with nothing anywhere saying why. That is the failure this whole integration keeps
+      # producing, and it is the one an editor feels.
+      - AUTOMATION_SHARE_WEBHOOK_URL=https://review.aditor.ai/api/freeframe/project-registered
     cpus: "12.0"
     mem_limit: 8g
