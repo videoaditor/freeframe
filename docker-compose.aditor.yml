@@ -46,6 +46,9 @@ services:
         # automation instead. Safe to turn on immediately: it changes a label on comments the
         # tool itself wrote, and nothing a person wrote.
         NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS: "review@aditor.ai"
+        # An editor who uploads and sees nothing cannot tell "the review is coming" from "nobody
+        # is looking". The old route had a button they pressed; this line replaces that button.
+        NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE: "Sent for review - feedback appears on the video in a few minutes, and in #card-feedback"
         NEXT_PUBLIC_REVIEW_GATE_URL: "https://review.aditor.ai"
     ports:
       - "127.0.0.1:3090:3000"

@@ -26,6 +26,10 @@ function getFileIcon(fileType: string) {
   return <FileIcon className="h-5 w-5" />
 }
 
+/** What an editor is told once their upload finishes. Empty = the line does not appear at all,
+ *  which is upstream's behaviour and every self-hoster's. */
+const REVIEW_NOTICE = (process.env.NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE || '').trim()
+
 type FilterTab = 'all' | 'active' | 'complete' | 'failed'
 
 function matchesFilter(status: UploadStatus, filter: FilterTab): boolean {
@@ -137,6 +141,23 @@ function UploadItem({ upload }: { upload: UploadFile }) {
           {upload.status === 'complete' && (
             <span className="text-[11px] text-text-tertiary">
               {formatRelativeTime(new Date(upload.createdAt).toISOString())}
+            </span>
+          )}
+          {/* SENT FOR REVIEW, SAID OUT LOUD.
+            *
+            * Saskia, 2026-09-12: "when they upload the videos for the first time, they should
+            * somehow get a message that it was sent to review. They get the review in a few
+            * minutes."
+            *
+            * Right, and the reason matters: with the review automatic, an editor who uploads and
+            * sees nothing has no way to tell "it is coming" from "nobody is looking". The old
+            * route at least had a button they pressed. This is the replacement for that button -
+            * the reassurance, not the action.
+            *
+            * Empty upstream, so nothing changes for anyone who is not Aditor. */}
+          {upload.status === 'complete' && REVIEW_NOTICE && (
+            <span className="text-[11px] text-text-secondary" data-testid="review-notice">
+              &middot; {REVIEW_NOTICE}
             </span>
           )}
           {upload.status === 'failed' && upload.error && (
