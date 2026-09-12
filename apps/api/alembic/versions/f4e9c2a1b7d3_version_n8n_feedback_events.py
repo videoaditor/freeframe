@@ -7,6 +7,10 @@ Create Date: 2026-09-10
 The first 21 feedback columns and all share-link columns reproduce the live,
 previously host-managed contract. New feedback columns are appended so
 CREATE OR REPLACE VIEW remains compatible with existing consumers.
+
+The baseline was captured read-only from the production host's
+``/opt/freeframe-integration/schema.sql`` (v2, 2026-09-02); that file is not an
+application migration and must not be rerun after this migration lands.
 """
 
 from typing import Sequence, Union
@@ -23,7 +27,7 @@ SOURCE_CONTRACT_VERSION = "freeframe-feedback.v1"
 
 # Do not reorder or rename the live prefix. PostgreSQL permits a replacement
 # view to append columns, but not to alter its established column contract.
-FEEDBACK_EVENT_COLUMNS = (
+LEGACY_FEEDBACK_EVENT_COLUMNS = (
     "event_id",
     "event_type",
     "created_at",
@@ -45,6 +49,9 @@ FEEDBACK_EVENT_COLUMNS = (
     "parent_id",
     "owner_email",
     "owner_name",
+)
+
+FEEDBACK_EVENT_COLUMNS = LEGACY_FEEDBACK_EVENT_COLUMNS + (
     "comment_id",
     "source_event_kind",
     "event_occurred_at",
@@ -92,8 +99,14 @@ SELECT
     COALESCE(asg.email, cre.email) AS owner_email,
     COALESCE(asg.name, cre.name) AS owner_name,
     c.id AS comment_id,
-    CASE WHEN c.updated_at > c.created_at THEN 'updated' ELSE 'created' END::text AS source_event_kind,
-    c.updated_at AS event_occurred_at,
+    CASE
+        WHEN c.updated_at IS NOT NULL AND c.updated_at > c.created_at THEN 'updated'
+        ELSE 'created'
+    END::text AS source_event_kind,
+    CASE
+        WHEN c.updated_at IS NOT NULL AND c.updated_at > c.created_at THEN c.updated_at
+        ELSE c.created_at
+    END AS event_occurred_at,
     c.updated_at AS source_updated_at,
     NULL::timestamp with time zone AS source_deleted_at,
     '{SOURCE_CONTRACT_VERSION}'::text AS source_contract_version
@@ -113,6 +126,10 @@ UNION ALL
 
 -- A separate non-public event type keeps every legacy comment query's row set
 -- unchanged while giving revision-aware consumers an explicit tombstone.
+-- Keep the parent joins but do not filter their soft-delete state: a comment
+-- tombstone must remain fetchable when its asset or project was deleted in the
+-- same polling window. The tombstone is non-public, so legacy public-comment
+-- consumers do not treat it as a new client comment.
 SELECT
     c.id AS event_id,
     'comment_deleted'::text AS event_type,
@@ -150,8 +167,6 @@ LEFT JOIN guest_users g ON g.id = c.guest_author_id
 LEFT JOIN users asg ON asg.id = a.assignee_id
 LEFT JOIN users cre ON cre.id = a.created_by
 WHERE c.deleted_at IS NOT NULL
-  AND a.deleted_at IS NULL
-  AND p.deleted_at IS NULL
 
 UNION ALL
 
@@ -437,7 +452,7 @@ BEGIN
 
     -- Keep the established id/type keys and append metadata only. Never place
     -- comment text, share tokens, or user details in the notification payload.
-    PERFORM pg_notify(
+    PERFORM pg_catalog.pg_notify(
         'feedback_event',
         json_build_object(
             'id', NEW.id,
@@ -452,6 +467,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql
+SET search_path = pg_catalog
 """
 
 REVOKE_NOTIFY_EXECUTE_SQL = "REVOKE EXECUTE ON FUNCTION notify_feedback_event() FROM PUBLIC"
@@ -526,7 +542,6 @@ LEGACY_TRIGGER_SQL = (
 DOWNGRADE_SQL = (
     "DROP TRIGGER IF EXISTS trg_notify_asset_deleted ON assets",
     "DROP TRIGGER IF EXISTS trg_notify_version ON asset_versions",
-    "DROP TRIGGER IF EXISTS trg_notify_approval_changed ON approvals",
     "DROP TRIGGER IF EXISTS trg_notify_approval ON approvals",
     "DROP TRIGGER IF EXISTS trg_notify_comment_changed ON comments",
     "DROP TRIGGER IF EXISTS trg_notify_comment ON comments",

@@ -5,17 +5,40 @@ Every source row is synthetic and is rolled back or explicitly cleaned up.
 
 import importlib.util
 import json
+import os
 import select
 import uuid
 from pathlib import Path
 
+import pytest
 from sqlalchemy import text
 
 from apps.api.database import engine
 
 
+# These tests execute DDL and synthetic writes. They are never allowed to run
+# merely because an arbitrary DATABASE_URL happens to be reachable.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("FREEFRAME_RUN_N8N_POSTGRES_TESTS") != "1",
+    reason="explicit n8n Postgres integration-test opt-in is required",
+)
+
+
 VERSIONS_DIR = Path(__file__).parents[1] / "alembic" / "versions"
 MIGRATION_PATH = next(VERSIONS_DIR.glob("*_version_n8n_feedback_events.py"))
+
+
+@pytest.fixture(autouse=True)
+def _require_dedicated_test_database():
+    """Fail closed unless the caller names the database as a test database."""
+    expected = os.environ.get("FREEFRAME_N8N_TEST_DATABASE")
+    if not expected:
+        pytest.skip("FREEFRAME_N8N_TEST_DATABASE is required for DDL tests")
+
+    with engine.connect() as connection:
+        actual = connection.execute(text("SELECT current_database()")).scalar_one()
+    if actual != expected:
+        pytest.skip(f"connected database is {actual!r}, not the named test database")
 
 
 def _load_migration():
@@ -61,10 +84,14 @@ def test_postgres_exposes_the_versioned_column_and_trigger_contract(real_db):
         real_db.execute(
             text(
                 """
-                SELECT tgname, pg_get_triggerdef(oid)
-                FROM pg_trigger
-                WHERE NOT tgisinternal
-                  AND tgname LIKE 'trg_notify_%'
+                SELECT t.tgname, pg_get_triggerdef(t.oid)
+                FROM pg_trigger AS t
+                JOIN pg_class AS c ON c.oid = t.tgrelid
+                JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                WHERE NOT t.tgisinternal
+                  AND t.tgname LIKE 'trg_notify_%'
+                  AND n.nspname = 'public'
+                  AND c.relname IN ('comments', 'approvals', 'asset_versions', 'assets')
                 """
             )
         ).all()
@@ -81,15 +108,18 @@ def test_postgres_exposes_the_versioned_column_and_trigger_contract(real_db):
 
 def test_postgres_adopts_and_restores_the_legacy_contract_idempotently(real_db):
     migration = _load_migration()
-    synthetic_user_id = "20000000-0000-0000-0000-000000000001"
+    synthetic_user_id = str(uuid.uuid4())
     real_db.execute(
         text(
             """
             INSERT INTO users (id, email, name, status, email_verified, is_superadmin)
-            VALUES (:id, 'migration-check@example.invalid', 'Migration Check', 'active', false, false)
+            VALUES (:id, :email, 'Migration Check', 'active', false, false)
             """
         ),
-        {"id": synthetic_user_id},
+        {
+            "id": synthetic_user_id,
+            "email": f"migration-{synthetic_user_id}@example.invalid",
+        },
     )
 
     for statement in migration.DOWNGRADE_SQL:
@@ -110,10 +140,15 @@ def test_postgres_adopts_and_restores_the_legacy_contract_idempotently(real_db):
     legacy_triggers = real_db.execute(
         text(
             """
-            SELECT tgname
-            FROM pg_trigger
-            WHERE NOT tgisinternal AND tgname LIKE 'trg_notify_%'
-            ORDER BY tgname
+            SELECT t.tgname
+            FROM pg_trigger AS t
+            JOIN pg_class AS c ON c.oid = t.tgrelid
+            JOIN pg_namespace AS n ON n.oid = c.relnamespace
+            WHERE NOT t.tgisinternal
+              AND t.tgname LIKE 'trg_notify_%'
+              AND n.nspname = 'public'
+              AND c.relname IN ('comments', 'approvals', 'asset_versions', 'assets')
+            ORDER BY t.tgname
             """
         )
     ).scalars().all()
@@ -251,6 +286,31 @@ def test_postgres_comment_revision_and_tombstone_rows_are_fetchable(real_db):
     assert tombstone.visibility == "tombstone"
     assert tombstone.body is None
 
+    # Parent soft-deletes must not erase the already-observed comment
+    # tombstone before a rolling poll can fetch it.
+    real_db.execute(
+        text("UPDATE assets SET deleted_at = '2026-01-01T00:03:00Z' WHERE id = :asset"),
+        ids,
+    )
+    real_db.execute(
+        text("UPDATE projects SET deleted_at = '2026-01-01T00:04:00Z' WHERE id = :project"),
+        ids,
+    )
+    after_parent_delete = real_db.execute(
+        text(
+            """
+            SELECT event_type, source_event_kind, source_deleted_at, visibility
+            FROM n8n_feedback_events
+            WHERE comment_id = :comment
+            """
+        ),
+        ids,
+    ).one()
+    assert after_parent_delete.event_type == "comment_deleted"
+    assert after_parent_delete.source_event_kind == "deleted"
+    assert after_parent_delete.source_deleted_at.isoformat() == "2026-01-01T00:02:00+00:00"
+    assert after_parent_delete.visibility == "tombstone"
+
 
 def _next_notification(connection, timeout=1.0):
     connection.poll()
@@ -373,6 +433,7 @@ def test_postgres_conditionally_grants_only_view_select(real_db):
             FROM information_schema.role_table_grants
             WHERE grantee = 'n8n_read'
               AND table_schema = 'public'
+              AND table_name IN ('n8n_feedback_events', 'n8n_share_links')
             ORDER BY table_name, privilege_type
             """
         )
@@ -382,3 +443,8 @@ def test_postgres_conditionally_grants_only_view_select(real_db):
         ("n8n_feedback_events", "SELECT"),
         ("n8n_share_links", "SELECT"),
     ]
+    for table_name in ('comments', 'assets', 'projects', 'share_links'):
+        assert not real_db.execute(
+            text("SELECT has_table_privilege('n8n_read', :table_name, 'SELECT')"),
+            {"table_name": f"public.{table_name}"},
+        ).scalar_one()

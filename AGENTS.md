@@ -130,10 +130,14 @@ Read this section before writing backend code or tests.
 
 - Alembic owns the `n8n_feedback_events` and `n8n_share_links` views and their notification triggers.
   Do not reintroduce host-managed DDL for these objects.
+- The live baseline was captured read-only from `/opt/freeframe-integration/schema.sql`.
+  That host file is historical evidence and must not be rerun after the Alembic migration adds columns.
 - The first 21 columns of `n8n_feedback_events` and all eight columns of `n8n_share_links` are compatibility contracts for existing automation.
   Append compatible event metadata instead of renaming, reordering, or changing those columns.
 - `event_id` and `comment_id` are stable source identifiers.
-  Consumers that ingest comment edits and soft deletions must cursor on `event_occurred_at` and version evidence from `source_event_kind`, not infer deletion from a row disappearing.
+  Active comments retain their original `created_at`, while consumers that ingest comment edits and soft deletions cursor on `event_occurred_at` and version evidence from `source_event_kind`, never from a row disappearing.
+- Comment tombstones use the stable comment ID, `source_event_kind='deleted'`, and non-public `visibility='tombstone'`.
+  Their parent joins intentionally do not filter soft-deleted assets or projects, so a rolling poll can still fetch the tombstone.
 - Approval updates and asset restores have no durable source timestamp in the current model, so the event surface does not claim cursor-safe revision semantics for them.
   Add source history or timestamps before exposing those transitions as pollable events.
 - The optional `n8n_read` role receives `SELECT` on these two views only.
