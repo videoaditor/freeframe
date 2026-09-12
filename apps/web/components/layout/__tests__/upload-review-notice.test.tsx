@@ -25,6 +25,24 @@ describe('the upload-complete review notice', () => {
     expect(src).toContain("upload.status === 'complete' && REVIEW_NOTICE")
   })
 
+  it('shows the running line only while it IS running, and the result when it lands', () => {
+    // A sentence that reads the same on day one and day thirty cannot tell an editor whether
+    // anything is happening, which was the whole point of asking for it.
+    expect(src).toContain("REVIEW_NOTICE && review.state === 'running'")
+    expect(src).toContain("review.state === 'done'")
+    expect(src).toContain('Feedback is on the video')
+  })
+
+  it('keeps asking when a lookup FAILED, rather than settling on "no review"', () => {
+    // "unknown" is not "nothing found". Only a real answer stops the polling.
+    expect(src).toContain("if (next.state === 'done' || next.state === 'off') clearInterval(timer)")
+  })
+
+  it('does not poll for a file nobody could still be reviewing', () => {
+    expect(src).toContain('withinReviewWindow(upload.createdAt)')
+    expect(src).toContain('reviewingIsPossible()')
+  })
+
   it('says nothing about a verdict', () => {
     // It reports that the review is COMING. A word about passing, failing or a score here would
     // make the upload panel a place where delivery looks conditional, and it never is.

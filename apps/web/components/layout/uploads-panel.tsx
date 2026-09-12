@@ -16,6 +16,10 @@ import {
 } from 'lucide-react'
 import { cn, formatBytes, formatRelativeTime } from '@/lib/utils'
 import { useUploadStore, type UploadFile, type UploadStatus } from '@/stores/upload-store'
+import {
+  fetchReviewState, reviewingIsPossible, withinReviewWindow,
+  REVIEW_POLL_MS, type ReviewState,
+} from '@/lib/review-status'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,8 +30,8 @@ function getFileIcon(fileType: string) {
   return <FileIcon className="h-5 w-5" />
 }
 
-/** What an editor is told once their upload finishes. Empty = the line does not appear at all,
- *  which is upstream's behaviour and every self-hoster's. */
+/** What an editor is told once their upload finishes, while the review is still running. Empty =
+ *  the line does not appear at all, which is upstream's behaviour and every self-hoster's. */
 const REVIEW_NOTICE = (process.env.NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE || '').trim()
 
 type FilterTab = 'all' | 'active' | 'complete' | 'failed'
@@ -90,6 +94,34 @@ function StatusBadge({ status }: { status: UploadStatus }) {
 
 function UploadItem({ upload }: { upload: UploadFile }) {
   const { cancelUpload, removeFile } = useUploadStore()
+
+  // IS THE REVIEW STILL COMING, OR IS IT HERE?
+  //
+  // Asked rather than assumed, and only while an answer is plausible: the upload has finished, an
+  // automation is configured at all, and it happened recently enough that a review could still be
+  // on its way. The interval clears itself the moment an answer arrives, so a panel left open all
+  // afternoon is not quietly polling for every file in it.
+  const [review, setReview] = React.useState<ReviewState>({ state: 'off' })
+  const assetId = upload.assetId
+  const shouldAsk = upload.status === 'complete' && !!assetId
+    && reviewingIsPossible() && withinReviewWindow(upload.createdAt)
+
+  React.useEffect(() => {
+    if (!shouldAsk || !assetId) return
+    let live = true
+    setReview({ state: 'running' })
+    const ask = async () => {
+      const next = await fetchReviewState(assetId)
+      if (!live) return
+      setReview(next)
+      // "unknown" means the lookup failed, not that there is no review - so keep asking rather
+      // than settling on a wrong answer.
+      if (next.state === 'done' || next.state === 'off') clearInterval(timer)
+    }
+    void ask()
+    const timer = setInterval(ask, REVIEW_POLL_MS)
+    return () => { live = false; clearInterval(timer) }
+  }, [shouldAsk, assetId])
   const isUploading = upload.status === 'pending' || upload.status === 'uploading'
   const isProcessing = upload.status === 'processing'
   const showProgress = isUploading || isProcessing
@@ -155,9 +187,17 @@ function UploadItem({ upload }: { upload: UploadFile }) {
             * the reassurance, not the action.
             *
             * Empty upstream, so nothing changes for anyone who is not Aditor. */}
-          {upload.status === 'complete' && REVIEW_NOTICE && (
-            <span className="text-[11px] text-text-secondary" data-testid="review-notice">
+          {upload.status === 'complete' && REVIEW_NOTICE && review.state === 'running' && (
+            <span className="text-[11px] text-accent" data-testid="review-running">
               &middot; {REVIEW_NOTICE}
+            </span>
+          )}
+          {upload.status === 'complete' && review.state === 'done' && (
+            <span className="text-[11px] text-text-secondary" data-testid="review-done">
+              &middot; Feedback is on the video
+              {review.mustFix || review.notes
+                ? ` - ${[review.mustFix ? `${review.mustFix} to fix` : '', review.notes ? `${review.notes} note${review.notes === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}`
+                : ' - nothing worth fixing'}
             </span>
           )}
           {upload.status === 'failed' && upload.error && (
