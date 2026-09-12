@@ -13,14 +13,19 @@
  * moment it finds something. A review takes about two minutes; a panel that polls for ever because
  * one review failed is a worse problem than a missing line.
  */
-import { api } from './api'
-
-const AUTOMATION_EMAILS = new Set(
-  (process.env.NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS || '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean)
-)
+/**
+ * ASKED OF THE REVIEWER, NOT OF THE COMMENTS.
+ *
+ * The first version inferred "the review has landed" from the presence of a comment by the
+ * automation's guest email. That broke the moment a clean read stopped saying anything on the
+ * timeline (Saskia, 2026-09-12: "say nothing on a timeline that is clean") - a clean video would
+ * have shown "Review running" until the window closed, which is the exact confusion the line was
+ * added to remove.
+ *
+ * The reviewer's own endpoint knows. It answers `ready` with two empty lists for a clean read,
+ * which no amount of comment-counting can tell apart from "not started".
+ */
+const GATE_URL = (process.env.NEXT_PUBLIC_REVIEW_GATE_URL || '').replace(/\/$/, '')
 
 export const REVIEW_POLL_MS = 20_000
 /** Long enough for a slow read plus a cron tick; short enough that a dead review stops asking. */
@@ -33,7 +38,7 @@ export type ReviewState =
   | { state: 'unknown' }
 
 export function reviewingIsPossible(): boolean {
-  return AUTOMATION_EMAILS.size > 0
+  return GATE_URL.length > 0
 }
 
 /** Is this upload young enough that a review could still be on its way? */
@@ -43,30 +48,31 @@ export function withinReviewWindow(createdAt: number | string, now = Date.now())
   return now - t < REVIEW_WINDOW_MS
 }
 
-interface CommentLike {
-  body?: string
-  guest_author?: { email?: string } | null
+interface GateReviewResponse {
+  state?: 'ready' | 'pending'
+  worthFixing?: string[]
+  niceToHave?: string[]
 }
 
-/** MUST FIX leads the note, exactly as the reviewer writes it. Counting words rather than asking
- *  for a score, because there is no score: it was removed from everything an editor sees. */
-export function summarise(comments: CommentLike[]): ReviewState {
-  const ours = comments.filter((c) => {
-    const email = (c.guest_author?.email || '').toLowerCase()
-    return email && AUTOMATION_EMAILS.has(email)
-  })
-  if (!ours.length) return { state: 'running' }
-  const isSummary = (b: string) => b.startsWith('Auto Review')
-  const mustFix = ours.filter((c) => (c.body || '').startsWith('Must fix')).length
-  const notes = ours.filter((c) => !isSummary(c.body || '') && !(c.body || '').startsWith('Must fix')).length
-  return { state: 'done', mustFix, notes }
+/** No score anywhere: it was removed from everything an editor sees, so this counts findings. An
+ *  empty pair of lists is a CLEAN read, which is a real answer and not a missing one. */
+export function summarise(r: GateReviewResponse | null): ReviewState {
+  if (!r || r.state !== 'ready') return { state: 'running' }
+  return {
+    state: 'done',
+    mustFix: (r.worthFixing || []).length,
+    notes: (r.niceToHave || []).length,
+  }
 }
 
 export async function fetchReviewState(assetId: string): Promise<ReviewState> {
   if (!reviewingIsPossible()) return { state: 'off' }
   try {
-    const comments = await api.get<CommentLike[]>(`/assets/${assetId}/comments`)
-    return summarise(comments || [])
+    // The reviewer's own record, and deliberately not through `api`: this is a different origin
+    // and needs no FreeFrame credentials - the asset id is the only thing it takes.
+    const res = await fetch(`${GATE_URL}/api/gate/review?asset=${encodeURIComponent(assetId)}`)
+    if (!res.ok) return { state: 'unknown' }
+    return summarise((await res.json()) as GateReviewResponse)
   } catch {
     // A failed lookup is not "no review". Saying nothing beats saying the wrong thing.
     return { state: 'unknown' }
