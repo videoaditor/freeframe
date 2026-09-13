@@ -25,7 +25,7 @@
  */
 
 import * as React from "react";
-import { Loader2, Upload } from "lucide-react";
+import { Film, Loader2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   GATE_BASE,
@@ -37,6 +37,7 @@ import {
 } from "@/lib/handin";
 import { HandinResult } from "@/components/handin/handin-result";
 import { DeliverButton } from "@/components/handin/deliver-button";
+import { UploadZone } from "@/components/upload/upload-zone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUploadStore } from "@/stores/upload-store";
@@ -46,6 +47,13 @@ import type { Project, ShareLink } from "@/types";
 
 /** How often to ask the gate for the review once an asset exists. */
 const REVIEW_POLL_MS = 5000;
+
+/** Human file size for the selected-file chip. */
+function formatSize(bytes: number): string {
+  return bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(0)} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type Phase = "form" | "working" | "done";
 
@@ -282,7 +290,7 @@ export default function HandinPage() {
           )}
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5 rounded-xl border border-border bg-bg-secondary p-6">
           <div>
             <label
               htmlFor="card-url"
@@ -314,7 +322,7 @@ export default function HandinPage() {
             {!lookingUp && card && (card.name || card.brand) && (
               <div
                 data-testid="card-confirmation"
-                className="mt-2 rounded-md border border-border bg-bg-secondary px-3 py-2"
+                className="mt-2 rounded-md border border-border bg-bg-tertiary px-3 py-2"
               >
                 {card.name && (
                   <p className="text-sm text-text-primary">{card.name}</p>
@@ -337,19 +345,30 @@ export default function HandinPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="handin-file"
-              className="text-sm font-medium text-text-primary"
-            >
-              Video file
-            </label>
-            <input
-              id="handin-file"
-              type="file"
-              accept="video/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1.5 block w-full text-sm text-text-secondary"
-            />
+            <label className="text-sm font-medium text-text-primary">Video file</label>
+            {file ? (
+              <div className="mt-1.5 flex items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-2.5">
+                <span className="mr-2 flex min-w-0 items-center gap-2 text-sm text-text-primary">
+                  <Film className="h-4 w-4 shrink-0 text-text-tertiary" />
+                  <span className="truncate">{file.name}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-text-tertiary">{formatSize(file.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFile(null)}
+                    className="text-xs text-text-tertiary transition-colors hover:text-text-primary"
+                  >
+                    Change
+                  </button>
+                </span>
+              </div>
+            ) : (
+              <UploadZone
+                className="mt-1.5"
+                onFilesSelected={(files) => setFile(files[0] ?? null)}
+              />
+            )}
           </div>
 
           {error && (

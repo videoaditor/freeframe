@@ -711,7 +711,7 @@ export default function ProjectDetailPage() {
               authorNames={authorNames}
               fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
-              onUpload={() => setUploadOpen(true)}
+              onUpload={() => router.push("/handin")}
               onAssetSelect={(asset, e) => {
                 e?.stopPropagation();
                 setSelectedAsset(asset as AssetResponse);
@@ -851,8 +851,10 @@ export default function ProjectDetailPage() {
                       New Folder
                     </button>
                   )}
+                  {/* Uploading goes through the hand-in page, so every upload carries its Trello
+                      card and gets reviewed. See apps/web/app/(dashboard)/handin. */}
                   {canUpload && (
-                    <Button size="sm" onClick={() => setUploadOpen(true)}>
+                    <Button size="sm" onClick={() => router.push("/handin")}>
                       <Upload className="h-4 w-4" />
                       Upload
                     </Button>

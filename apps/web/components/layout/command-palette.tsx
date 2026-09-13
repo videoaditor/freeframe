@@ -133,7 +133,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       id: "upload-asset",
       label: "Upload Asset",
       icon: Upload,
-      href: "/assets/upload",
+      href: "/handin",
       group: "actions",
       shortcut: "N A",
     },
