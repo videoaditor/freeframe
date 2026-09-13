@@ -7,11 +7,13 @@ from pydantic import BaseModel, Field
 class FolderCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     parent_id: Optional[uuid.UUID] = None
+    description: Optional[str] = Field(None, max_length=2000)
 
 
 class FolderUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     parent_id: Optional[uuid.UUID] = None  # use model_fields_set to distinguish unset vs null
+    description: Optional[str] = Field(None, max_length=2000)
 
 
 class FolderResponse(BaseModel):
@@ -19,6 +21,7 @@ class FolderResponse(BaseModel):
     project_id: uuid.UUID
     parent_id: Optional[uuid.UUID]
     name: str
+    description: Optional[str] = None
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime

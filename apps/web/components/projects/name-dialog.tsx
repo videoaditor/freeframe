@@ -14,7 +14,16 @@ interface NameDialogProps {
   placeholder?: string
   defaultValue?: string
   submitLabel?: string
-  onSubmit: (name: string) => void
+  /** A SECOND field, when the thing being named needs more than a name.
+   *
+   *  Aditor files each hand-in as a folder, and the Trello card link has to arrive with it: it is
+   *  what tells the review which brand's rules to use, which script to check and who cut it. An
+   *  instance that requires it and gives nobody a box to type it in has simply stopped people
+   *  creating folders, so the box and the requirement ship together.
+   *
+   *  Absent by default, which is every other caller of this dialog. */
+  extraField?: { label: string; placeholder?: string; required?: boolean }
+  onSubmit: (name: string, extra?: string) => void
 }
 
 export function NameDialog({
@@ -25,20 +34,27 @@ export function NameDialog({
   placeholder = 'Enter name...',
   defaultValue = '',
   submitLabel = 'Create',
+  extraField,
   onSubmit,
 }: NameDialogProps) {
   const [value, setValue] = React.useState(defaultValue)
+  const [extra, setExtra] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
-    if (open) setValue(defaultValue)
+    if (open) {
+      setValue(defaultValue)
+      setExtra('')
+    }
   }, [open, defaultValue])
+
+  const extraMissing = !!extraField?.required && !extra.trim()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = value.trim()
-    if (!trimmed) return
-    onSubmit(trimmed)
+    if (!trimmed || extraMissing) return
+    onSubmit(trimmed, extraField ? extra.trim() : undefined)
     onOpenChange(false)
   }
 
@@ -75,6 +91,20 @@ export function NameDialog({
               placeholder={placeholder}
               autoComplete="off"
             />
+            {extraField && (
+              <div className="space-y-1">
+                <label className="text-xs text-text-tertiary" htmlFor="name-dialog-extra">
+                  {extraField.label}
+                </label>
+                <Input
+                  id="name-dialog-extra"
+                  value={extra}
+                  onChange={(e) => setExtra(e.target.value)}
+                  placeholder={extraField.placeholder}
+                  autoComplete="off"
+                />
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
@@ -84,7 +114,7 @@ export function NameDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={!value.trim()}>
+              <Button type="submit" size="sm" disabled={!value.trim() || extraMissing}>
                 {submitLabel}
               </Button>
             </div>

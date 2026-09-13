@@ -25,6 +25,10 @@ class Folder(Base):
         UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Free text on the folder, mirroring a project's. Aditor puts the Trello card link here: with
+    #: one project per BRAND and a folder per card, this is the only place the card can live, and
+    #: without it a hand-in has no brand rules, no script and no editor name.
+    description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )

@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -6,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..config import settings
+from ..services import automation_share
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.asset import Asset
@@ -131,6 +134,25 @@ def _max_subtree_depth(db: Session, folder_id: uuid.UUID) -> int:
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 
+def _check_folder_description_requirement(description: str | None) -> None:
+    """Enforce settings.require_folder_description_pattern, when an instance sets one.
+
+    Off by default: an empty pattern skips this entirely, so existing instances see no change.
+    Mirrors the project-level rule in routers/projects.py - the two exist separately because an
+    instance may file hand-ins as projects, as folders, or (during a move) both.
+    """
+    pattern = (settings.require_folder_description_pattern or "").strip()
+    if not pattern:
+        return
+    if description and re.search(pattern, description, re.IGNORECASE):
+        return
+    hint = (settings.require_folder_description_hint or "").strip()
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=hint or "This instance requires a link in the folder description.",
+    )
+
+
 @router.post(
     "/projects/{project_id}/folders",
     response_model=FolderResponse,
@@ -157,15 +179,34 @@ def create_folder(
                 detail=f"Maximum folder depth of {MAX_FOLDER_DEPTH} exceeded",
             )
 
+    # THE CARD LINK, ENFORCED WHERE THE HAND-IN IS.
+    #
+    # With one project per BRAND and a folder per card, the folder is the hand-in - so the Trello
+    # link has to be on the folder, and refusing one without it is the same protection projects
+    # already have. A hand-in with no card gets no brand rules, no script and no editor name, and
+    # nobody finds out until somebody asks why a review never came.
+    #
+    # Off unless an instance sets the pattern, exactly like the project rule.
+    _check_folder_description_requirement(body.description)
+
     folder = Folder(
         project_id=project_id,
         parent_id=body.parent_id,
         name=body.name,
+        description=body.description,
         created_by=current_user.id,
     )
     db.add(folder)
+    db.flush()
+    # A standing link for the automation, created WITH the hand-in so nobody has to remember.
+    # Off unless a webhook URL is configured. See services/automation_share.py.
+    link = automation_share.create_standing_folder_link(db, project_id, folder.id, current_user.id)
     db.commit()
     db.refresh(folder)
+    # Announce AFTER the commit: a webhook that fires for a folder the database then rolls back
+    # would have the automation watching something that does not exist.
+    if link is not None:
+        automation_share.announce_folder(folder, link)
     return _folder_to_response(db, folder)
 
 

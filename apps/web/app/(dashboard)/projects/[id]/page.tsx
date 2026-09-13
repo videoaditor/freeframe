@@ -61,6 +61,12 @@ import type {
   ShareLink,
 } from "@/types";
 
+/** What an instance calls the link a folder must carry, e.g. "Trello card link". Empty upstream,
+ *  which is what keeps the extra box - and the requirement behind it - out of everyone else's
+ *  New Folder dialog. */
+const FOLDER_LINK_LABEL = (process.env.NEXT_PUBLIC_FOLDER_LINK_LABEL || '').trim();
+const FOLDER_LINK_PLACEHOLDER = (process.env.NEXT_PUBLIC_FOLDER_LINK_PLACEHOLDER || '').trim();
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1164,8 +1170,15 @@ export default function ProjectDetailPage() {
         title="New Folder"
         placeholder="Folder name"
         submitLabel="Create"
-        onSubmit={async (name) => {
-          await createFolder(name, folderDialogParentId);
+        /* The card box appears only where an instance asks for one. Requiring the link server-side
+         * while giving nobody somewhere to type it would just stop people creating folders. */
+        extraField={
+          FOLDER_LINK_LABEL
+            ? { label: FOLDER_LINK_LABEL, placeholder: FOLDER_LINK_PLACEHOLDER, required: true }
+            : undefined
+        }
+        onSubmit={async (name, description) => {
+          await createFolder(name, folderDialogParentId, description);
           mutateAssets();
           mutateSubfolders();
         }}
