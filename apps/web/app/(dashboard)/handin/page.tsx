@@ -25,6 +25,7 @@
  */
 
 import * as React from "react";
+import useSWR from "swr";
 import { Check, Film, Loader2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import {
@@ -37,6 +38,7 @@ import {
 } from "@/lib/handin";
 import { HandinResult } from "@/components/handin/handin-result";
 import { DeliverButton } from "@/components/handin/deliver-button";
+import { WorkspacePicker, type WorkspaceChoice } from "@/components/handin/workspace-picker";
 import { UploadZone } from "@/components/upload/upload-zone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,11 @@ import { useUploadStore } from "@/stores/upload-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePageTitle } from "@/hooks/use-page-title";
 import type { Project, ShareLink } from "@/types";
+
+/** Loosely normalize a name for matching a card's brand to a workspace project. */
+function norm(s: string): string {
+  return s.toLowerCase().replace(/\bgmbh\b|\bug\b|\bco\b|\bkg\b|\bb\.?v\.?\b|\bltd\b|\binc\b/g, "").replace(/[^a-z0-9]/g, "");
+}
 
 /** How often to ask the gate for the review once an asset exists. */
 const REVIEW_POLL_MS = 5000;
@@ -64,6 +71,7 @@ export default function HandinPage() {
   const [card, setCard] = React.useState<GateCard | null>(null);
   const [lookingUp, setLookingUp] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
+  const [workspace, setWorkspace] = React.useState<WorkspaceChoice | null>(null);
   const [phase, setPhase] = React.useState<Phase>("form");
   const [step, setStep] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -78,6 +86,28 @@ export default function HandinPage() {
   // Who is delivering, so the delivery comment carries their name. FreeFrame already knows the
   // signed-in editor; the editor never types it.
   const user = useAuthStore((s) => s.user);
+
+  // The workspaces the editor can file this hand-in into. The card can't be mapped to a project
+  // automatically (projects carry no brand), so the editor picks - pre-filled when we can guess.
+  const { data: projects } = useSWR<Project[]>("/projects", (k: string) => api.get<Project[]>(k));
+  const workspaceOptions = React.useMemo(
+    () => (projects ?? []).map((p) => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)),
+    [projects],
+  );
+
+  // Best-effort pre-select: match the card's brand/name to a "- Workspace" project. The editor
+  // still sees and can change it, so a wrong guess is visible, never silent.
+  React.useEffect(() => {
+    if (workspace || !projects?.length || !card) return;
+    const hint = norm(String(card.brand || "") + String(card.name || ""));
+    if (!hint) return;
+    const workspaces = projects.filter((p) => / - workspace$/i.test(p.name));
+    const hit = workspaces.find((p) => {
+      const n = norm(p.name.replace(/ - workspace$/i, ""));
+      return n.length > 2 && (hint.includes(n) || n.includes(norm(String(card.brand || ""))));
+    });
+    if (hit) setWorkspace({ kind: "existing", id: hit.id, name: hit.name });
+  }, [projects, card, workspace]);
 
   // Look the card up on blur or paste. The editor types neither name nor brand;
   // both come back from the card so the project cannot be misfiled by a typo.
@@ -162,104 +192,82 @@ export default function HandinPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (!file || !workspace) return;
 
     setPhase("working");
     setError(null);
 
     try {
-      // The project is named after the card, and the card's URL goes in the
-      // description. That description is how the brand is resolved downstream -
-      // the review finds the card from it - so it is load-bearing, not a note.
-      setStep("Creating the project");
-      const projectName = (card?.name ?? "").trim() || file.name;
-      const project = await api.post<Project>("/projects", {
-        name: projectName,
-        description: cardUrl.trim() || null,
-        // Aditor is one team working across every brand, so a hand-in belongs
-        // to the team rather than to the editor who happened to upload it.
-        project_type: "team",
+      // 1. The workspace project: an existing brand workspace, or a new one the editor named.
+      //    Aditor is one team across every brand, so a hand-in belongs to the team (project_type
+      //    "team"), not to whoever uploaded it.
+      setStep(workspace.kind === "create" ? "Creating the workspace" : "Opening the workspace");
+      let projectId: string;
+      let projectName: string;
+      if (workspace.kind === "create") {
+        const p = await api.post<Project>("/projects", { name: workspace.name, project_type: "team" });
+        projectId = p.id;
+        projectName = p.name;
+      } else {
+        projectId = workspace.id;
+        projectName = workspace.name;
+      }
+
+      // 2. File the hand-in as a FOLDER in that workspace, with the card link in its description.
+      //    That description is load-bearing: it is how the review resolves the brand and briefing,
+      //    and creating the folder is what registers it with Auto Review (a standing folder link
+      //    and arming happen server-side here). One folder per hand-in, one brand per workspace.
+      setStep("Filing the hand-in");
+      const folderName = (card?.name ?? "").trim() || file.name;
+      const folder = await api.post<{ id: string }>(`/projects/${projectId}/folders`, {
+        name: folderName,
+        parent_id: null,
+        description: cardUrl.trim(),
       });
 
+      // 3. The video goes INTO that folder.
       setStep("Uploading");
-      const uploadId = startUpload(file, project.id, file.name, project.name);
+      const uploadId = startUpload(file, projectId, file.name, projectName, folder.id);
       const newAssetId = await waitForUpload(uploadId);
 
-      // ONE LINK, NOT TWO.
-      //
-      // Creating a project already mints a standing share link for Auto Review
-      // (services/automation_share.py, live on this instance). Minting a second
-      // one here would hand the editor a choice between two links that look
-      // alike and behave differently - the surest way to have the wrong one
-      // posted to a client.
-      //
-      // The standing link is also the BETTER link to send: it is project-scoped,
-      // so a card with three hooks is one link showing all three, while an
-      // asset-level link shows one file. And it carries the two settings the
-      // review cannot work without - permission: comment and allow_download -
-      // because it is created in code rather than through a dialog.
-      //
-      // Only if there is no standing link (an instance with the webhook
-      // unconfigured) does this create one, with the same two settings, so the
-      // editor never has to find them.
+      // 4. The link to post. Creating the folder minted the standing "Auto Review" folder link;
+      //    reuse it - it is folder-scoped (this hand-in only) and already carries the two settings
+      //    the review needs. Only if it is somehow absent do we mint one, with those same settings.
       setStep("Getting the share link");
-      const existing = await api
-        .get<{ token: string; permission: string; share_type: string }[]>(
-          `/projects/${project.id}/share-links`,
-        )
+      const shares = await api
+        .get<{ token: string; title?: string; permission: string; is_enabled?: boolean }[]>(`/folders/${folder.id}/shares`)
         .catch(() => []);
-      const standing = (existing ?? []).find(
-        (l) => l.share_type === "project" && l.permission === "comment",
+      const standing = (shares ?? []).find(
+        (s) => s.title === "Auto Review" && s.permission === "comment" && s.is_enabled !== false,
       );
-
       let token: string;
       if (standing) {
         token = standing.token;
       } else {
-        const res = await api.post<{ share_link: ShareLink & { url?: string } }>(
-          `/projects/${project.id}/share`,
-          { permission: "comment", allow_download: true },
-        );
-        token = res.share_link.token;
+        const res = await api.post<ShareLink>(`/folders/${folder.id}/share`, {
+          permission: "comment",
+          allow_download: true,
+        });
+        token = res.token;
       }
       const url = `${window.location.origin}/share/${token}`;
 
-      // TELL THE REVIEWER THIS ONE WAS ASKED FOR.
-      //
-      // Every project registers itself and lands DISARMED - reviewing an upload nobody asked about
-      // puts a comment in front of somebody's client. A hand-in is the exception: the editor came
-      // to this page, pasted their card and is waiting for feedback. Without this call the review
-      // panel below would say "The review will appear here" and mean it for ever.
-      //
-      // Best effort. A failure here costs the review, not the hand-in: the link is already on
-      // screen and the upload is already done.
-      // Registering the hand-in (via=gate) arms the review AND, when the card is on one of our
-      // boards, posts the delivery comment on the Trello card and marks it done - automatically,
-      // because hitting "Hand in" IS the editor's decision to deliver. `editor_name` is what the
-      // delivery comment is signed with. Best effort: a failure here costs the auto-delivery, not
-      // the hand-in - the link is already on screen and the manual "Post delivery comment" button
-      // below is the fallback.
+      // 5. Deliver to the Trello card automatically - the folder token is already watched from
+      //    step 2, so this posts the @aditorteam1 comment (with the editor's name) and marks the
+      //    card done. Best effort: if it does not go through, the manual button below is the
+      //    fallback, and the link is already on screen regardless.
       try {
-        const regRes = await fetch(`${GATE_BASE}/api/freeframe/project-registered`, {
+        const dr = await fetch(`${GATE_BASE}/api/gate/deliver`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            share_token: token,
-            project_name: project.name,
-            // The Trello URL is how the brand is resolved on the other side.
-            description: cardUrl.trim() || "",
-            via: "gate",
-            editor_name: user?.name || "",
-          }),
+          body: JSON.stringify({ share_token: token, editor_name: user?.name || "" }),
         });
-        const reg = (await regRes.json().catch(() => ({}))) as { delivered?: boolean };
-        setDelivered(!!reg.delivered);
+        const dj = (await dr.json().catch(() => ({}))) as { posted?: boolean; reason?: string };
+        setDelivered(dr.ok && (!!dj.posted || dj.reason === "already-delivered"));
       } catch {
         /* auto-delivery is best effort; the manual button below covers a failure */
       }
 
-      // The link goes on screen here, before a single word of the review has
-      // been asked for, let alone read.
       setShareUrl(url);
       setShareToken(token);
       setAssetId(newAssetId);
@@ -371,6 +379,19 @@ export default function HandinPage() {
           </div>
 
           <div>
+            <label className="text-sm font-medium text-text-primary">Workspace</label>
+            <p className="mt-0.5 text-xs text-text-tertiary">
+              The brand this hand-in belongs to. It&apos;s filed as a folder inside it - search, or
+              type a new name to create one.
+            </p>
+            <WorkspacePicker
+              projects={workspaceOptions}
+              value={workspace}
+              onChange={setWorkspace}
+            />
+          </div>
+
+          <div>
             <label className="text-sm font-medium text-text-primary">Video file</label>
             {file ? (
               <div className="mt-1.5 flex items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-2.5">
@@ -403,7 +424,7 @@ export default function HandinPage() {
             </p>
           )}
 
-          <Button type="submit" disabled={!file || phase === "working"}>
+          <Button type="submit" disabled={!file || !workspace || !cardUrl.trim() || phase === "working"}>
             {phase === "working" ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
