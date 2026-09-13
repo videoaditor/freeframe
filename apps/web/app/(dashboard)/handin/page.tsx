@@ -25,7 +25,7 @@
  */
 
 import * as React from "react";
-import { Film, Loader2, Upload } from "lucide-react";
+import { Check, Film, Loader2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   GATE_BASE,
@@ -70,6 +70,7 @@ export default function HandinPage() {
 
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
+  const [delivered, setDelivered] = React.useState(false);
   const [assetId, setAssetId] = React.useState<string | null>(null);
   const [review, setReview] = React.useState<GateReview | null>(null);
 
@@ -232,17 +233,30 @@ export default function HandinPage() {
       //
       // Best effort. A failure here costs the review, not the hand-in: the link is already on
       // screen and the upload is already done.
-      await fetch(`${GATE_BASE}/api/freeframe/project-registered`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          share_token: token,
-          project_name: project.name,
-          // The Trello URL is how the brand is resolved on the other side.
-          description: cardUrl.trim() || "",
-          via: "gate",
-        }),
-      }).catch(() => undefined);
+      // Registering the hand-in (via=gate) arms the review AND, when the card is on one of our
+      // boards, posts the delivery comment on the Trello card and marks it done - automatically,
+      // because hitting "Hand in" IS the editor's decision to deliver. `editor_name` is what the
+      // delivery comment is signed with. Best effort: a failure here costs the auto-delivery, not
+      // the hand-in - the link is already on screen and the manual "Post delivery comment" button
+      // below is the fallback.
+      try {
+        const regRes = await fetch(`${GATE_BASE}/api/freeframe/project-registered`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            share_token: token,
+            project_name: project.name,
+            // The Trello URL is how the brand is resolved on the other side.
+            description: cardUrl.trim() || "",
+            via: "gate",
+            editor_name: user?.name || "",
+          }),
+        });
+        const reg = (await regRes.json().catch(() => ({}))) as { delivered?: boolean };
+        setDelivered(!!reg.delivered);
+      } catch {
+        /* auto-delivery is best effort; the manual button below covers a failure */
+      }
 
       // The link goes on screen here, before a single word of the review has
       // been asked for, let alone read.
@@ -272,21 +286,33 @@ export default function HandinPage() {
     <div className="mx-auto max-w-2xl p-8">
       <h1 className="text-lg font-medium text-text-primary">Hand in</h1>
       <p className="mt-1 text-sm text-text-tertiary">
-        Upload once. You get the link to post, and a craft review underneath it.
+        Upload once. It&apos;s delivered to your Trello card automatically - the link is posted
+        there with your name and the card is marked done - and you get a craft review here.
       </p>
 
       {phase === "done" && shareUrl ? (
         <div className="mt-6">
           {/* Link first, review second. See handin-result.tsx. */}
           <HandinResult shareUrl={shareUrl} review={review} />
-          {/* A separate, always-enabled action below the link + review: post the delivery comment
-              on the Trello card. Never gates the link (that is shown above regardless). */}
-          {shareToken && (
-            <DeliverButton
-              shareToken={shareToken}
-              editorName={user?.name}
-              editorOnCard={card?.editorOnCard}
-            />
+          {/* Handing in delivers to the Trello card automatically. Show that it happened; only if
+              the auto-delivery did not go through do we fall back to the manual button. The link
+              itself is shown above regardless - delivery never gates it. */}
+          {delivered ? (
+            <section
+              data-testid="handin-delivered"
+              className="mt-6 flex items-center gap-2 rounded-lg border border-border bg-bg-secondary p-4 text-sm text-text-primary"
+            >
+              <Check className="h-4 w-4 text-green-500" />
+              Delivered to the Trello card, with your name.
+            </section>
+          ) : (
+            shareToken && (
+              <DeliverButton
+                shareToken={shareToken}
+                editorName={user?.name}
+                editorOnCard={card?.editorOnCard}
+              />
+            )
           )}
         </div>
       ) : (
