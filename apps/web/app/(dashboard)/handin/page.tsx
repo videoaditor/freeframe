@@ -36,9 +36,11 @@ import {
   type GateReview,
 } from "@/lib/handin";
 import { HandinResult } from "@/components/handin/handin-result";
+import { DeliverButton } from "@/components/handin/deliver-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUploadStore } from "@/stores/upload-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { usePageTitle } from "@/hooks/use-page-title";
 import type { Project, ShareLink } from "@/types";
 
@@ -59,10 +61,14 @@ export default function HandinPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
+  const [shareToken, setShareToken] = React.useState<string | null>(null);
   const [assetId, setAssetId] = React.useState<string | null>(null);
   const [review, setReview] = React.useState<GateReview | null>(null);
 
   const startUpload = useUploadStore((s) => s.startUpload);
+  // Who is delivering, so the delivery comment carries their name. FreeFrame already knows the
+  // signed-in editor; the editor never types it.
+  const user = useAuthStore((s) => s.user);
 
   // Look the card up on blur or paste. The editor types neither name nor brand;
   // both come back from the card so the project cannot be misfiled by a typo.
@@ -233,6 +239,7 @@ export default function HandinPage() {
       // The link goes on screen here, before a single word of the review has
       // been asked for, let alone read.
       setShareUrl(url);
+      setShareToken(token);
       setAssetId(newAssetId);
       setPhase("done");
     } catch (err) {
@@ -264,6 +271,15 @@ export default function HandinPage() {
         <div className="mt-6">
           {/* Link first, review second. See handin-result.tsx. */}
           <HandinResult shareUrl={shareUrl} review={review} />
+          {/* A separate, always-enabled action below the link + review: post the delivery comment
+              on the Trello card. Never gates the link (that is shown above regardless). */}
+          {shareToken && (
+            <DeliverButton
+              shareToken={shareToken}
+              editorName={user?.name}
+              editorOnCard={card?.editorOnCard}
+            />
+          )}
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
