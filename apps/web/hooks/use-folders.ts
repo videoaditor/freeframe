@@ -10,10 +10,17 @@ export function useFolders(projectId: string) {
     (key: string) => api.get<FolderTreeNode[]>(key),
   )
 
-  async function createFolder(name: string, parentId?: string | null): Promise<Folder> {
+  async function createFolder(
+    name: string,
+    parentId?: string | null,
+    description?: string,
+  ): Promise<Folder> {
     const folder = await api.post<Folder>(`/projects/${projectId}/folders`, {
       name,
       parent_id: parentId ?? null,
+      // Where the Trello card link travels when a folder IS the hand-in. Omitted by callers that
+      // do not collect one, and ignored by an instance that does not ask for it.
+      ...(description ? { description } : {}),
     })
     await mutateTree()
     return folder

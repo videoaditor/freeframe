@@ -62,6 +62,81 @@ def create_standing_link(db: Session, project_id, created_by) -> Optional[ShareL
     return link
 
 
+def create_standing_folder_link(db: Session, project_id, folder_id, created_by) -> Optional[ShareLink]:
+    """The same standing link, scoped to ONE FOLDER.
+
+    Aditor files each hand-in as a folder inside a per-brand project. The automation needs a link
+    that shows exactly that hand-in and nothing else - a project-wide link would hand it every
+    other card's cuts for the same brand, and it would review them all again on every folder.
+
+    Same two switches as the project version, for the same reasons: without `comment` it cannot
+    post the review, and without downloads only the streaming copy exists, which cannot be read.
+    """
+    if not is_enabled():
+        return None
+    link = ShareLink(
+        folder_id=folder_id,
+        token=secrets.token_urlsafe(32),
+        created_by=created_by,
+        title="Auto Review",
+        description="Standing link so Auto Review can see this hand-in. Safe to leave in place.",
+        permission=SharePermission.comment,
+        allow_download=True,
+        visibility="public",
+    )
+    db.add(link)
+    db.flush()
+    return link
+
+
+def announce_folder(folder, link: ShareLink) -> None:
+    """Tell the automation a hand-in exists, the same way a project announces itself.
+
+    Deliberately the SAME endpoint and the same field names. The automation keys everything on a
+    share token and does not care whether the token shows a project or a folder, so a folder
+    arrives as a project-shaped registration with the folder's name and description - and needs no
+    change on the far side at all.
+    """
+    url = (getattr(settings, "automation_share_webhook_url", "") or "").strip()
+    if not url or link is None:
+        return
+    secret = (getattr(settings, "automation_share_webhook_secret", "") or "").strip()
+    base = (getattr(settings, "frontend_url", "") or "").rstrip("/")
+    try:
+        httpx.post(
+            url,
+            json={
+                "project_id": str(folder.project_id),
+                "folder_id": str(folder.id),
+                "project_name": folder.name,
+                # The card link lives on the FOLDER now: it is the hand-in, so it is what carries
+                # the brand, the briefing and the editor's name.
+                "description": folder.description or "",
+                "share_token": link.token,
+                "share_url": f"{base}/share/{link.token}" if base else None,
+            },
+            headers={"authorization": f"Bearer {secret}"} if secret else {},
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001 - a webhook must never fail a folder creation
+        logger.warning("automation share webhook failed for folder %s", folder.id, exc_info=True)
+
+
+def _folder_standing_link(db: Session, folder_id) -> Optional[ShareLink]:
+    """The automation's own link for this folder, if one was ever created."""
+    return (
+        db.query(ShareLink)
+        .filter(
+            ShareLink.folder_id == folder_id,
+            ShareLink.title == "Auto Review",
+            ShareLink.is_enabled.is_(True),
+            ShareLink.deleted_at.is_(None),
+        )
+        .order_by(ShareLink.created_at.desc())
+        .first()
+    )
+
+
 def _standing_link(db: Session, project_id) -> Optional[ShareLink]:
     """The automation's own link for this project, if one was ever created."""
     return (
@@ -92,7 +167,14 @@ def announce_asset_ready(db: Session, asset, version_id) -> None:
     url = (getattr(settings, "automation_share_webhook_url", "") or "").strip()
     if not url:
         return
-    link = _standing_link(db, asset.project_id)
+    # THE FOLDER'S LINK FIRST. An asset inside a hand-in folder belongs to that hand-in, and
+    # telling the automation about the project-wide link instead would point it at every other
+    # card for the same brand.
+    link = None
+    if getattr(asset, "folder_id", None):
+        link = _folder_standing_link(db, asset.folder_id)
+    if link is None:
+        link = _standing_link(db, asset.project_id)
     if link is None:
         return
     secret = (getattr(settings, "automation_share_webhook_secret", "") or "").strip()

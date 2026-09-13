@@ -24,6 +24,14 @@ ARG NEXT_PUBLIC_REVIEW_GATE_URL=
 ENV NEXT_PUBLIC_REVIEW_GATE_URL=$NEXT_PUBLIC_REVIEW_GATE_URL
 ARG NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED=false
 ENV NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED=$NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED
+# The label and placeholder for the link a FOLDER must carry, when an instance files each hand-in
+# as a folder inside a per-brand project. Empty upstream, so the New Folder dialog keeps its single
+# field everywhere else.
+ARG NEXT_PUBLIC_FOLDER_LINK_LABEL=
+ENV NEXT_PUBLIC_FOLDER_LINK_LABEL=$NEXT_PUBLIC_FOLDER_LINK_LABEL
+ARG NEXT_PUBLIC_FOLDER_LINK_PLACEHOLDER=
+ENV NEXT_PUBLIC_FOLDER_LINK_PLACEHOLDER=$NEXT_PUBLIC_FOLDER_LINK_PLACEHOLDER
+
 # What an editor is told when an upload finishes, e.g. "Sent for review - feedback appears on the
 # video in a few minutes." Empty upstream, so the line does not appear at all unless an instance
 # sets it. Not a secret: it is a sentence shown in the browser.

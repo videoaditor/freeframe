@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     # somebody wrote it down, and asking after the fact never works.
     require_project_description_pattern: str = ""
     require_project_description_hint: str = ""
+    # The same rule one level down, for instances that file each hand-in as a FOLDER inside a
+    # per-brand project rather than as a project of its own.
+    require_folder_description_pattern: str = ""
+    require_folder_description_hint: str = ""
 
     # Guest identities allowed to DELETE their own comments through a share link, comma-separated
     # emails. Empty (the default) means nobody can, which is exactly today's behaviour.
