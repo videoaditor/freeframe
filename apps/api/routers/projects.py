@@ -107,6 +107,16 @@ def _check_description_requirement(description: str | None) -> None:
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # A workspace (project) is created only by a superadmin - and the brand-onboarding automation,
+    # which acts as one. Editors file every hand-in into an EXISTING brand workspace via /handin.
+    # Letting editors create projects produced per-card junk projects whose share link showed
+    # nothing (the videos sat in a folder in a different project), which is what "the videos are not
+    # in the folder" turned out to be. One workspace per brand; nobody spins up a per-card project.
+    if not getattr(current_user, "is_superadmin", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an admin can create a workspace. File your hand-in into an existing workspace instead.",
+        )
     _check_description_requirement(body.description)
     project = Project(
         name=body.name,

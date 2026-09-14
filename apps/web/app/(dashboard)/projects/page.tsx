@@ -6,6 +6,7 @@ import useSWR from "swr";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   Plus,
+  Upload,
   LayoutGrid,
   List,
   FolderOpen,
@@ -207,7 +208,7 @@ function ProjectSection({
 export default function ProjectsPage() {
   usePageTitle("Projects");
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, isSuperAdmin } = useAuthStore();
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -316,6 +317,15 @@ export default function ProjectsPage() {
             </button>
           </div>
 
+          {/* Editors hand in through /handin, which files into the right brand workspace and
+              delivers to the Trello card. This is their primary action; only an admin creates a
+              workspace (the New Project dialog below). */}
+          <Button size="sm" onClick={() => router.push("/handin")}>
+            <Upload className="h-4 w-4" />
+            Upload
+          </Button>
+
+          {isSuperAdmin && (
           <Dialog.Root
             open={dialogOpen}
             onOpenChange={(open) => {
@@ -324,9 +334,9 @@ export default function ProjectsPage() {
             }}
           >
             <Dialog.Trigger asChild>
-              <Button size="sm">
+              <Button size="sm" variant="secondary">
                 <Plus className="h-4 w-4" />
-                New Project
+                New Workspace
               </Button>
             </Dialog.Trigger>
 
@@ -338,10 +348,10 @@ export default function ProjectsPage() {
                 </Dialog.Close>
 
                 <Dialog.Title className="text-base font-semibold text-text-primary">
-                  New Project
+                  New Workspace
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                  Create a new project to organize your assets.
+                  One workspace per brand. Editors file their hand-ins into it from the Upload page.
                 </Dialog.Description>
 
                 <form onSubmit={handleCreate} className="mt-5 space-y-4">
@@ -381,13 +391,14 @@ export default function ProjectsPage() {
                       </Button>
                     </Dialog.Close>
                     <Button type="submit" size="sm" loading={isCreating}>
-                      Create project
+                      Create workspace
                     </Button>
                   </div>
                 </form>
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>
+          )}
         </div>
       </div>
 
@@ -408,15 +419,27 @@ export default function ProjectsPage() {
         </div>
       ) : !projects || projects.length === 0 ? (
         <div className="rounded-xl border border-border bg-bg-secondary">
-          <EmptyState
-            icon={FolderOpen}
-            title="No projects yet"
-            description="Create your first project to start organizing assets."
-            action={{
-              label: "New Project",
-              onClick: () => setDialogOpen(true),
-            }}
-          />
+          {isSuperAdmin ? (
+            <EmptyState
+              icon={FolderOpen}
+              title="No workspaces yet"
+              description="Create a workspace per brand. Editors file their hand-ins into it."
+              action={{
+                label: "New Workspace",
+                onClick: () => setDialogOpen(true),
+              }}
+            />
+          ) : (
+            <EmptyState
+              icon={FolderOpen}
+              title="Nothing here yet"
+              description="Hand in your videos from the Upload page - they are filed into the right brand workspace and delivered to the Trello card automatically."
+              action={{
+                label: "Upload",
+                onClick: () => router.push("/handin"),
+              }}
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-8">
@@ -427,7 +450,7 @@ export default function ProjectsPage() {
             viewMode={viewMode}
             emptyMessage="You haven't created any projects yet."
             onNewProject={() => setDialogOpen(true)}
-            showNewButton
+            showNewButton={isSuperAdmin}
             userId={user?.id}
             onMutate={() => mutate()}
           />

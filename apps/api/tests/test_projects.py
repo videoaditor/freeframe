@@ -48,7 +48,8 @@ def _mock_project_member(project_id: uuid.UUID, user_id: uuid.UUID, role: Projec
 
 
 def test_create_project(client, auth_headers, mock_db, test_user):
-    """POST /projects — happy path returns 201."""
+    """POST /projects — a superadmin can create a workspace (201)."""
+    test_user.is_superadmin = True  # only admins create workspaces now
     org_id = uuid.uuid4()
 
     def _refresh_side_effect(obj):
@@ -73,6 +74,20 @@ def test_create_project(client, auth_headers, mock_db, test_user):
     )
     assert resp.status_code == 201
     assert resp.json()["name"] == "Test Project"
+
+
+def test_create_project_forbidden_for_a_non_admin(client, auth_headers, mock_db, test_user):
+    """POST /projects — an editor (non-superadmin) cannot create a workspace. Editors file every
+    hand-in into an existing workspace via /handin; per-card projects were what made a share link
+    show nothing while the videos sat in a folder elsewhere (2026-09-14 hand-in cleanup)."""
+    test_user.is_superadmin = False
+    resp = client.post(
+        "/projects",
+        json={"name": "Do not buy the levide knee - Week 6", "org_id": str(uuid.uuid4())},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 403
+    assert "workspace" in resp.json()["detail"].lower()
 
 
 def test_list_projects(client, auth_headers, mock_db, test_user):

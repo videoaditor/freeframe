@@ -97,6 +97,9 @@ export default function HandinPage() {
   // Who is delivering, so the delivery comment carries their name. FreeFrame already knows the
   // signed-in editor; the editor never types it.
   const user = useAuthStore((s) => s.user);
+  // Only an admin (or the brand-onboarding automation) creates a workspace. Editors file into an
+  // existing brand workspace - a per-card workspace is what left a share link pointing at nothing.
+  const isSuperAdmin = useAuthStore((s) => s.isSuperAdmin);
 
   // The workspaces the editor can file this hand-in into. The card can't be mapped to a project
   // automatically (projects carry no brand), so the editor picks - pre-filled when we can guess.
@@ -234,13 +237,27 @@ export default function HandinPage() {
       //    That description is load-bearing: it is how the review resolves the brand and briefing,
       //    and creating the folder is what registers it with Auto Review (a standing folder link
       //    and arming happen server-side here). One folder per hand-in, one brand per workspace.
+      //
+      //    REUSE the card's folder if it already exists in this workspace. Re-handing-in the same
+      //    card (a V2, or a retry after an error) must land in the SAME folder, so its one share
+      //    link keeps working - otherwise every attempt spawned a new folder (7+ piled up on one
+      //    card) and the link an editor had pointed at an older, emptier one.
       setStep("Filing the hand-in");
       const folderName = (card?.name ?? "").trim() || files[0].name;
-      const folder = await api.post<{ id: string }>(`/projects/${projectId}/folders`, {
-        name: folderName,
-        parent_id: null,
-        description: cardUrl.trim(),
-      });
+      const cardKey = (cardUrl.match(/trello\.com\/c\/([A-Za-z0-9]+)/i)?.[1] || "").toLowerCase();
+      const existingFolder = cardKey
+        ? await api
+            .get<{ id: string; description?: string | null }[]>(`/projects/${projectId}/folders`)
+            .then((fs) => fs.find((f) => (f.description || "").toLowerCase().includes(`/c/${cardKey}`)))
+            .catch(() => undefined)
+        : undefined;
+      const folder =
+        existingFolder ??
+        (await api.post<{ id: string }>(`/projects/${projectId}/folders`, {
+          name: folderName,
+          parent_id: null,
+          description: cardUrl.trim(),
+        }));
 
       // 3. Every video goes INTO that one folder. They upload together; the
       //    reviewer picks up each asset on its own as it finishes transcoding,
@@ -419,6 +436,7 @@ export default function HandinPage() {
               projects={workspaceOptions}
               value={workspace}
               onChange={setWorkspace}
+              allowCreate={isSuperAdmin}
             />
           </div>
 

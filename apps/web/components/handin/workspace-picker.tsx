@@ -21,10 +21,17 @@ export function WorkspacePicker({
   projects,
   value,
   onChange,
+  allowCreate = false,
 }: {
   projects: { id: string; name: string }[];
   value: WorkspaceChoice | null;
   onChange: (choice: WorkspaceChoice) => void;
+  /**
+   * Whether this user may create a new workspace. Only admins can - a new brand comes online
+   * through onboarding or an admin, never an editor. Editors typing an unknown name were how
+   * per-card "workspaces" got made, so for them the create option is simply not offered.
+   */
+  allowCreate?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -85,7 +92,7 @@ export function WorkspacePicker({
               );
             })}
 
-            {q && !exact && (
+            {allowCreate && q && !exact && (
               <button
                 type="button"
                 onClick={() => { onChange({ kind: "create", name: query.trim() }); setOpen(false); }}
@@ -97,9 +104,16 @@ export function WorkspacePicker({
             )}
 
             {!filtered.length && !q && (
-              <p className="px-3 py-2 text-xs text-text-tertiary">Type to search, or to name a new workspace.</p>
+              <p className="px-3 py-2 text-xs text-text-tertiary">
+                {allowCreate ? "Type to search, or to name a new workspace." : "Type to search your brand workspace."}
+              </p>
             )}
-            {!filtered.length && q && exact && (
+            {!filtered.length && q && !allowCreate && (
+              <p className="px-3 py-2 text-xs text-text-tertiary">
+                No workspace found. Ask an admin to add this brand.
+              </p>
+            )}
+            {!filtered.length && q && allowCreate && exact && (
               <p className="px-3 py-2 text-xs text-text-tertiary">No other match.</p>
             )}
           </div>
