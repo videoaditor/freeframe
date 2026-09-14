@@ -7,11 +7,15 @@ class ProjectCreate(BaseModel):
     name: str
     description: str | None = None
     project_type: ProjectType = ProjectType.personal
+    # Projects are created only by admins / the onboarding automation now, and what they create is a
+    # brand workspace, so this defaults true. The hand-in dropdown shows only workspaces.
+    is_workspace: bool = True
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     is_public: bool | None = None
+    is_workspace: bool | None = None
 
 class ProjectResponse(BaseModel):
     id: uuid.UUID
@@ -22,6 +26,7 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     poster_url: str | None = None
     is_public: bool = False
+    is_workspace: bool = False
     asset_count: int = 0
     storage_bytes: int = 0
     member_count: int = 0

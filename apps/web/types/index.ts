@@ -90,6 +90,7 @@ export interface Project {
   team_id?: string | null;
   poster_url?: string | null;
   is_public?: boolean;
+  is_workspace?: boolean;
   created_at: string;
   deleted_at: string | null;
   asset_count?: number;

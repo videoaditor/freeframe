@@ -122,6 +122,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
         name=body.name,
         description=body.description,
         project_type=body.project_type,
+        is_workspace=body.is_workspace,
         created_by=current_user.id,
     )
     db.add(project)
@@ -257,6 +258,10 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
         project.description = body.description
     if body.is_public is not None:
         project.is_public = body.is_public
+    if body.is_workspace is not None:
+        # An admin marks a project as a brand workspace (or unmarks a junk one) - this is what the
+        # hand-in dropdown filters on.
+        project.is_workspace = body.is_workspace
     db.commit()
     db.refresh(project)
     resp = ProjectResponse.model_validate(project)
