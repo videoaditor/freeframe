@@ -43,89 +43,62 @@ def test_share_comments_returns_array_for_asset_share(
     mock_batched.assert_called_once_with(asset_id, [comment], mock_db, exclude_internal=True)
 
 
-@patch("apps.api.routers.comments.validate_asset_in_share")
-@patch("apps.api.routers.comments._build_comment_responses_batched")
-@patch("apps.api.routers.comments.validate_share_link_with_session")
-def test_share_comments_hides_the_automated_reviewer_from_the_client_view(
-    mock_validate,
-    mock_batched,
-    mock_validate_asset,
-    client,
-    mock_db,
-):
-    """The automated craft reviewer comments through a share link so its findings reach the editor.
-    On the CLIENT-facing share timeline those comments are hidden (identity-scoped to the configured
-    guest email); a human "Client" guest comment on the same asset is never touched."""
-    asset_id = uuid.uuid4()
+# ── Automated reviewer comments are stored internal (hidden from client shares) ────────────────
+#
+# The craft reviewer comments through a share link as a guest (review@aditor.ai). Its findings are
+# internal notes for the editor, not for the client on the delivered cut. Rather than a second
+# hiding rule, its comments are stored visibility="internal" at write time, so the ONE existing
+# exclude-internal share filter keeps them off every client-facing timeline while members still see
+# them in the app. These pin that decision.
 
-    reviewer_guest_id = uuid.uuid4()
-    reviewer_comment = MagicMock()
-    reviewer_comment.guest_author_id = reviewer_guest_id  # review@aditor.ai
+def test_a_configured_automation_guest_comments_internal():
+    from apps.api.routers.comments import _guest_comment_visibility
 
-    client_comment = MagicMock()
-    client_comment.guest_author_id = uuid.uuid4()  # a real client, must survive
-
-    link = MagicMock()
-    link.asset_id = asset_id
-    mock_validate.return_value = link
-    asset = MagicMock()
-    asset.id = asset_id
-    mock_db.first.return_value = asset  # _get_asset lookup
-    mock_db.order_by.return_value = mock_db
-    # First .all(): the top-level comments. Second .all(): the hidden guest ids (as row tuples).
-    mock_db.all.side_effect = [
-        [reviewer_comment, client_comment],
-        [(reviewer_guest_id,)],
-    ]
-    mock_batched.return_value = [{"id": str(uuid.uuid4()), "body": "thanks!"}]
-
-    original = settings.share_comment_hidden_guest_emails
-    settings.share_comment_hidden_guest_emails = "review@aditor.ai"
+    original = settings.automation_guest_emails
+    settings.automation_guest_emails = "review@aditor.ai"
     try:
-        response = client.get("/share/some-token/comments")
+        # A guest author whose email is the configured automation address -> internal.
+        assert _guest_comment_visibility(uuid.uuid4(), "review@aditor.ai") == "internal"
+        # Case-insensitive, matching how guest emails are stored.
+        assert _guest_comment_visibility(uuid.uuid4(), "Review@Aditor.AI") == "internal"
     finally:
-        settings.share_comment_hidden_guest_emails = original
-
-    assert response.status_code == 200
-    # The reviewer's comment is dropped before the responses are built; the client's remains.
-    mock_batched.assert_called_once_with(asset_id, [client_comment], mock_db, exclude_internal=True)
+        settings.automation_guest_emails = original
 
 
-@patch("apps.api.routers.comments.validate_asset_in_share")
-@patch("apps.api.routers.comments._build_comment_responses_batched")
-@patch("apps.api.routers.comments.validate_share_link_with_session")
-def test_share_comments_hides_nothing_when_no_guest_is_configured(
-    mock_validate,
-    mock_batched,
-    mock_validate_asset,
-    client,
-    mock_db,
-):
-    """The hide list defaults empty: every comment reaches the client, and the extra guest-id
-    lookup is not even run (so no second .all() is consumed)."""
-    asset_id = uuid.uuid4()
-    reviewer_comment = MagicMock()
-    reviewer_comment.guest_author_id = uuid.uuid4()
+def test_a_human_guest_comments_publicly():
+    from apps.api.routers.comments import _guest_comment_visibility
 
-    link = MagicMock()
-    link.asset_id = asset_id
-    mock_validate.return_value = link
-    asset = MagicMock()
-    asset.id = asset_id
-    mock_db.first.return_value = asset
-    mock_db.order_by.return_value = mock_db
-    mock_db.all.return_value = [reviewer_comment]
-    mock_batched.return_value = [{"id": str(uuid.uuid4()), "body": "note"}]
-
-    original = settings.share_comment_hidden_guest_emails
-    settings.share_comment_hidden_guest_emails = ""
+    original = settings.automation_guest_emails
+    settings.automation_guest_emails = "review@aditor.ai"
     try:
-        response = client.get("/share/some-token/comments")
+        # A real client guest is never hidden - their comment stays public.
+        assert _guest_comment_visibility(uuid.uuid4(), "client@brand.com") == "public"
     finally:
-        settings.share_comment_hidden_guest_emails = original
+        settings.automation_guest_emails = original
 
-    assert response.status_code == 200
-    mock_batched.assert_called_once_with(asset_id, [reviewer_comment], mock_db, exclude_internal=True)
+
+def test_a_member_comment_is_never_stamped_internal_by_this():
+    from apps.api.routers.comments import _guest_comment_visibility
+
+    original = settings.automation_guest_emails
+    settings.automation_guest_emails = "review@aditor.ai"
+    try:
+        # A logged-in member has no guest_author_id; the automation rule must not touch it, even if
+        # some email were carried on the body.
+        assert _guest_comment_visibility(None, "review@aditor.ai") == "public"
+    finally:
+        settings.automation_guest_emails = original
+
+
+def test_nothing_is_internal_when_no_automation_guest_is_configured():
+    from apps.api.routers.comments import _guest_comment_visibility
+
+    original = settings.automation_guest_emails
+    settings.automation_guest_emails = ""  # the default: the feature is off
+    try:
+        assert _guest_comment_visibility(uuid.uuid4(), "review@aditor.ai") == "public"
+    finally:
+        settings.automation_guest_emails = original
 
 
 @patch("apps.api.routers.comments.validate_asset_in_share")

@@ -107,19 +107,17 @@ class Settings(BaseSettings):
     # comment is reachable through it, and neither is any guest not named here.
     share_comment_deletable_guest_emails: str = ""
 
-    # Comma-separated guest emails whose comments are HIDDEN from public share views.
-    # Empty (the default) means nothing is hidden, which is exactly today's behaviour.
+    # Comma-separated guest emails that belong to automation, not people - today, the automated
+    # craft reviewer that comments through a share link (review@aditor.ai). Empty (the default)
+    # means no guest is treated as automation, which is exactly stock behaviour.
     #
-    # Why this exists: the automated craft reviewer comments through a share link so its findings
-    # reach the editor who handed the video in. Those findings are internal craft notes, not
-    # something a client should read on the cut that was delivered to them. This hides that
-    # reviewer's comments on the CLIENT-facing share timeline while leaving them fully visible in
-    # the internal, authenticated review view (a different endpoint), where the editor reads them.
-    #
-    # It is deliberately narrow and identity-scoped: it hides ONLY comments whose guest author is
-    # one of these exact addresses, and only on the public /share/{token}/comments path. No human
-    # guest ("Client") comment and no member comment is ever hidden by it.
-    share_comment_hidden_guest_emails: str = ""
+    # A comment posted by one of these guests is stored with visibility="internal", so the existing
+    # share filter (which already drops internal comments from every public share view) hides it
+    # from clients, while members still see it in the app. The reviewer's findings are internal
+    # craft notes for the editor who handed the video in, not something a client should read on the
+    # cut delivered to them - and this reuses the one internal-visibility mechanism rather than
+    # adding a second hiding rule. Identity-scoped: no human guest is ever affected.
+    automation_guest_emails: str = ""
 
     # Maximum size (bytes) for a single uploaded file. 0 = unlimited (no per-file cap).
     # Note: S3 multipart still caps effective size at ~10,000 parts x chunk size.

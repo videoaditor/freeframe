@@ -7,7 +7,6 @@ from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -855,23 +854,9 @@ def list_share_comments(
         query = query.filter(Comment.version_id == version_id)
     top_level = query.order_by(Comment.created_at).all()
 
-    # Hide the automated craft reviewer's comments from the client-facing timeline. Its findings are
-    # internal notes for the editor, delivered through this share link; the client should not read a
-    # critique on the cut delivered to them. Identity-scoped to configured guest emails, so no human
-    # "Client" comment is touched, and the internal review view (a different endpoint) is unaffected.
-    # Dropping an automated top-level comment drops its subtree too, so no orphaned reply leaks it.
-    hidden = _hidden_share_guest_emails()
-    if hidden and top_level:
-        hidden_ids = {
-            gid
-            for (gid,) in db.query(GuestUser.id)
-            .filter(func.lower(GuestUser.email).in_(hidden))
-            .all()
-        }
-        if hidden_ids:
-            top_level = [c for c in top_level if c.guest_author_id not in hidden_ids]
-
     # Batched build (fixed query count) — guests have no user, so no current_user_id.
+    # The automated reviewer's comments are stored visibility="internal" (see guest_comment), so the
+    # exclude_internal filter above already keeps them off this client-facing timeline.
     return _build_comment_responses_batched(asset_id, top_level, db, exclude_internal=True)
 
 
@@ -928,6 +913,11 @@ def guest_comment(
             db.flush()
         guest_author_id = guest.id
 
+    # A comment from a configured automation guest (the craft reviewer) is stored internal, so the
+    # existing exclude-internal share filter keeps it off every client-facing timeline while members
+    # still see it in the app. Human guests and members are never affected.
+    visibility = _guest_comment_visibility(guest_author_id, body.guest_email)
+
     comment = Comment(
         asset_id=asset.id,
         version_id=version_id,
@@ -937,6 +927,7 @@ def guest_comment(
         timecode_start=body.timecode_start,
         timecode_end=body.timecode_end,
         body=body.body,
+        visibility=visibility,
     )
     db.add(comment)
     db.flush()
@@ -992,10 +983,20 @@ def _deletable_guest_emails() -> set[str]:
     return {e.strip().lower() for e in raw.split(",") if e.strip()}
 
 
-def _hidden_share_guest_emails() -> set[str]:
-    """Guest identities whose comments are hidden from public share views. Empty = nothing hidden."""
-    raw = getattr(settings, "share_comment_hidden_guest_emails", "") or ""
+def _automation_guest_emails() -> set[str]:
+    """Guest identities that are automation, not people (the craft reviewer). Empty = none.
+    Their comments are stored internal so the existing share filter keeps them off client views."""
+    raw = getattr(settings, "automation_guest_emails", "") or ""
     return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def _guest_comment_visibility(guest_author_id, guest_email: Optional[str]) -> str:
+    """Visibility to store a new share comment with: 'internal' for a configured automation guest
+    (the craft reviewer - kept off client-facing shares by the existing filter, still shown to
+    members in the app), 'public' for every human guest and every member."""
+    if guest_author_id is not None and (guest_email or "").lower() in _automation_guest_emails():
+        return "internal"
+    return "public"
 
 
 @router.delete("/share/{token}/comment/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
