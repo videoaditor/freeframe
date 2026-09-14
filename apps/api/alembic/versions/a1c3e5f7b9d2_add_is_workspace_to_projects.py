@@ -10,7 +10,7 @@ leftover duplicates, are flagged by hand afterwards - the flag makes that revers
 non-destructive (no rename, no data movement).
 
 Revision ID: a1c3e5f7b9d2
-Revises: c8d9e2f1a3b4
+Revises: b2c3d4e5f6a7
 """
 from typing import Sequence, Union
 
@@ -18,7 +18,10 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a1c3e5f7b9d2"
-down_revision: Union[str, Sequence[str], None] = "c8d9e2f1a3b4"
+# Chain onto the real single head (the migration the prod DB is at), NOT c8d9e2f1a3b4 - that is an
+# ancestor on a since-merged branch, and pointing at it forked the tree into two heads, which crashed
+# `alembic upgrade head` on deploy.
+down_revision: Union[str, Sequence[str], None] = "b2c3d4e5f6a7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
