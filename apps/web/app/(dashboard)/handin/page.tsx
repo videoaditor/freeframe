@@ -104,8 +104,15 @@ export default function HandinPage() {
   // The workspaces the editor can file this hand-in into. The card can't be mapped to a project
   // automatically (projects carry no brand), so the editor picks - pre-filled when we can guess.
   const { data: projects } = useSWR<Project[]>("/projects", (k: string) => api.get<Project[]>(k));
+  // Only brand WORKSPACES are offered - not the ~100 per-card junk projects that piled up. A brand
+  // with no workspace yet shows "ask an admin" in the picker, which is correct: a new brand is
+  // onboarded by an admin / the onboarding automation, never spun up per hand-in.
   const workspaceOptions = React.useMemo(
-    () => (projects ?? []).map((p) => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)),
+    () =>
+      (projects ?? [])
+        .filter((p) => p.is_workspace)
+        .map((p) => ({ id: p.id, name: p.name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     [projects],
   );
 
@@ -115,7 +122,7 @@ export default function HandinPage() {
     if (workspace || !projects?.length || !card) return;
     const hint = norm(String(card.brand || "") + String(card.name || ""));
     if (!hint) return;
-    const workspaces = projects.filter((p) => / - workspace$/i.test(p.name));
+    const workspaces = projects.filter((p) => p.is_workspace);
     const hit = workspaces.find((p) => {
       const n = norm(p.name.replace(/ - workspace$/i, ""));
       return n.length > 2 && (hint.includes(n) || n.includes(norm(String(card.brand || ""))));
