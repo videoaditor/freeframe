@@ -117,14 +117,19 @@ function FindingList({ title, items }: { title: string; items: string[] }) {
  *
  * This component never returns null for a bad review and never reorders itself
  * around one - it sits below the link and stays there.
+ *
+ * `label` is the video's file name, shown when a hand-in has more than one video
+ * so the editor can tell which review belongs to which cut. A single-video
+ * hand-in passes no label and reads exactly as before.
  */
-export function ReviewPanel({ review }: { review: GateReview | null }) {
+export function ReviewPanel({ review, label }: { review: GateReview | null; label?: string }) {
   return (
     <section
       data-testid="handin-review"
       className="mt-6 rounded-lg border border-border bg-bg-secondary p-4"
     >
       <h2 className="text-sm font-medium text-text-primary">Craft review</h2>
+      {label && <p className="mt-0.5 truncate text-xs text-text-tertiary">{label}</p>}
 
       {review === null || review.state === "pending" ? (
         <p className="mt-2 text-sm text-text-tertiary">
@@ -150,23 +155,35 @@ export function ReviewPanel({ review }: { review: GateReview | null }) {
   );
 }
 
+/** One video's review, with the file name to label it when a hand-in has several. */
+export interface HandinReviewItem {
+  review: GateReview | null;
+  label?: string;
+}
+
 /**
- * Link first, review second. No condition between them.
+ * Link first, reviews second. No condition between them.
  *
- * `review` is not consulted to decide anything about the link - it is handed
- * straight to `ReviewPanel` and read nowhere else in this function.
+ * A hand-in is one share link (folder-scoped) covering every video that was
+ * handed in, and one review per video. `reviews` is not consulted to decide
+ * anything about the link - the link is rendered from `shareUrl` alone, above
+ * the reviews, unconditionally. Each item is handed straight to `ReviewPanel`
+ * and read nowhere else here, so no score, count or severity is ever in scope
+ * where the link is rendered.
  */
 export function HandinResult({
   shareUrl,
-  review,
+  reviews,
 }: {
   shareUrl: string;
-  review: GateReview | null;
+  reviews: HandinReviewItem[];
 }) {
   return (
     <div data-testid="handin-result">
       <ShareLinkPanel url={shareUrl} />
-      <ReviewPanel review={review} />
+      {reviews.map((item, i) => (
+        <ReviewPanel key={i} review={item.review} label={item.label} />
+      ))}
     </div>
   );
 }

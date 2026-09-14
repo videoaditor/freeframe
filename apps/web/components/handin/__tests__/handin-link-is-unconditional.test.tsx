@@ -33,7 +33,7 @@ describe('hand-in - the share link does not depend on the review', () => {
   }
 
   it('shows the link with a 10/100 review that is nothing but defects', () => {
-    render(<HandinResult shareUrl={LINK} review={disaster} />)
+    render(<HandinResult shareUrl={LINK} reviews={[{ review: disaster }]} />)
     expect(screen.getByTestId('handin-share-link')).toBeInTheDocument()
     expect(screen.getByDisplayValue(LINK)).toBeInTheDocument()
   })
@@ -44,7 +44,7 @@ describe('hand-in - the share link does not depend on the review', () => {
     render(
       <HandinResult
         shareUrl={LINK}
-        review={{ state: 'pending', note: 'Still reading the file.' }}
+        reviews={[{ review: { state: 'pending', note: 'Still reading the file.' } }]}
       />,
     )
     expect(screen.getByDisplayValue(LINK)).toBeInTheDocument()
@@ -54,8 +54,28 @@ describe('hand-in - the share link does not depend on the review', () => {
   it('shows the link when the review failed outright and there is no review at all', () => {
     // review === null is what the page holds when the gate is unreachable. A
     // review service being down must never cost an editor their delivery.
-    render(<HandinResult shareUrl={LINK} review={null} />)
+    render(<HandinResult shareUrl={LINK} reviews={[{ review: null }]} />)
     expect(screen.getByDisplayValue(LINK)).toBeInTheDocument()
+  })
+
+  it('shows the link when several videos were handed in at once', () => {
+    // A batch hand-in is one link over many videos. The link is still rendered
+    // once, above every review, no matter how many reviews sit below it.
+    render(
+      <HandinResult
+        shareUrl={LINK}
+        reviews={[
+          { label: 'hook1.mp4', review: disaster },
+          { label: 'hook2.mp4', review: { state: 'pending' } },
+          { label: 'hook3.mp4', review: null },
+        ]}
+      />,
+    )
+    expect(screen.getByDisplayValue(LINK)).toBeInTheDocument()
+    expect(screen.getByText('hook1.mp4')).toBeInTheDocument()
+    expect(screen.getByText('hook2.mp4')).toBeInTheDocument()
+    expect(screen.getByText('hook3.mp4')).toBeInTheDocument()
+    expect(screen.getAllByTestId('handin-review')).toHaveLength(3)
   })
 
   it('puts the link above the findings in the document, not below them', () => {
@@ -64,7 +84,7 @@ describe('hand-in - the share link does not depend on the review', () => {
     // editor reads the verdict first and the link second, which is the shape of
     // a gate even when nothing is technically hidden.
     const { container } = render(
-      <HandinResult shareUrl={LINK} review={disaster} />,
+      <HandinResult shareUrl={LINK} reviews={[{ review: disaster }]} />,
     )
     const html = container.innerHTML
     const linkAt = html.indexOf('handin-share-link')
@@ -92,12 +112,14 @@ describe('hand-in - the findings use the review page headings', () => {
     render(
       <HandinResult
         shareUrl="https://x/share/t"
-        review={{
-          state: 'ready',
-          score: 70,
-          worthFixing: ['Must fix - CTA missing.'],
-          niceToHave: ['Add a music bed.'],
-        }}
+        reviews={[{
+          review: {
+            state: 'ready',
+            score: 70,
+            worthFixing: ['Must fix - CTA missing.'],
+            niceToHave: ['Add a music bed.'],
+          },
+        }]}
       />,
     )
     expect(screen.getByText('Worth fixing')).toBeInTheDocument()
@@ -112,7 +134,7 @@ describe('hand-in - the findings use the review page headings', () => {
     render(
       <HandinResult
         shareUrl="https://x/share/t"
-        review={{ state: 'ready', score: 95, worthFixing: [], niceToHave: ['Tighten the tail.'] }}
+        reviews={[{ review: { state: 'ready', score: 95, worthFixing: [], niceToHave: ['Tighten the tail.'] } }]}
       />,
     )
     expect(screen.queryByText('Worth fixing')).not.toBeInTheDocument()

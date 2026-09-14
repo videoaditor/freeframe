@@ -70,7 +70,9 @@ export default function HandinPage() {
   const [cardUrl, setCardUrl] = React.useState("");
   const [card, setCard] = React.useState<GateCard | null>(null);
   const [lookingUp, setLookingUp] = React.useState(false);
-  const [file, setFile] = React.useState<File | null>(null);
+  // A hand-in can be one cut or every cut for a card at once. They all go into
+  // one folder and share one link; the reviewer reviews each on its own.
+  const [files, setFiles] = React.useState<File[]>([]);
   const [workspace, setWorkspace] = React.useState<WorkspaceChoice | null>(null);
   const [phase, setPhase] = React.useState<Phase>("form");
   const [step, setStep] = React.useState("");
@@ -79,8 +81,17 @@ export default function HandinPage() {
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
   const [delivered, setDelivered] = React.useState(false);
-  const [assetId, setAssetId] = React.useState<string | null>(null);
-  const [review, setReview] = React.useState<GateReview | null>(null);
+  // One entry per handed-in video, in upload order, plus its review as it lands.
+  const [assets, setAssets] = React.useState<{ id: string; name: string }[]>([]);
+  const [reviews, setReviews] = React.useState<Record<string, GateReview>>({});
+
+  /** Add newly picked files, skipping ones already chosen (same name and size). */
+  const addFiles = React.useCallback((selected: File[]) => {
+    setFiles((prev) => {
+      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
+      return [...prev, ...selected.filter((f) => !seen.has(`${f.name}:${f.size}`))];
+    });
+  }, []);
 
   const startUpload = useUploadStore((s) => s.startUpload);
   // Who is delivering, so the delivery comment carries their name. FreeFrame already knows the
@@ -126,26 +137,32 @@ export default function HandinPage() {
   }, []);
 
   /**
-   * Poll the gate for the review.
+   * Poll the gate for the review of every handed-in video, until each is ready.
    *
-   * This effect owns the review and nothing else. It never touches `shareUrl`,
+   * This effect owns the reviews and nothing else. It never touches `shareUrl`,
    * so no answer it receives - pending, ready, or a total failure to parse -
    * can affect whether the link is on screen.
    */
   React.useEffect(() => {
-    if (!assetId) return;
+    if (!assets.length) return;
     let cancelled = false;
 
     async function tick() {
-      const next = await fetchReview(assetId as string);
-      if (cancelled) return;
-      setReview(next);
-      return next.state === "ready";
+      const results = await Promise.all(
+        assets.map(async (a) => [a.id, await fetchReview(a.id)] as const),
+      );
+      if (cancelled) return true;
+      setReviews((prev) => {
+        const next = { ...prev };
+        for (const [id, r] of results) next[id] = r;
+        return next;
+      });
+      return results.every(([, r]) => r.state === "ready");
     }
 
     let timer: ReturnType<typeof setInterval> | undefined;
-    void tick().then((ready) => {
-      if (cancelled || ready) return;
+    void tick().then((allReady) => {
+      if (cancelled || allReady) return;
       timer = setInterval(async () => {
         const done = await tick();
         if (done && timer) clearInterval(timer);
@@ -156,7 +173,7 @@ export default function HandinPage() {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [assetId]);
+  }, [assets]);
 
   /**
    * Wait for the bytes to land, then hand back the asset id.
@@ -192,7 +209,7 @@ export default function HandinPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !workspace) return;
+    if (!files.length || !workspace) return;
 
     setPhase("working");
     setError(null);
@@ -218,17 +235,23 @@ export default function HandinPage() {
       //    and creating the folder is what registers it with Auto Review (a standing folder link
       //    and arming happen server-side here). One folder per hand-in, one brand per workspace.
       setStep("Filing the hand-in");
-      const folderName = (card?.name ?? "").trim() || file.name;
+      const folderName = (card?.name ?? "").trim() || files[0].name;
       const folder = await api.post<{ id: string }>(`/projects/${projectId}/folders`, {
         name: folderName,
         parent_id: null,
         description: cardUrl.trim(),
       });
 
-      // 3. The video goes INTO that folder.
-      setStep("Uploading");
-      const uploadId = startUpload(file, projectId, file.name, projectName, folder.id);
-      const newAssetId = await waitForUpload(uploadId);
+      // 3. Every video goes INTO that one folder. They upload together; the
+      //    reviewer picks up each asset on its own as it finishes transcoding,
+      //    so all of them get reviewed, not just the first.
+      setStep(files.length > 1 ? `Uploading ${files.length} videos` : "Uploading");
+      const uploaded = await Promise.all(
+        files.map(async (f) => {
+          const uploadId = startUpload(f, projectId, f.name, projectName, folder.id);
+          return { id: await waitForUpload(uploadId), name: f.name };
+        }),
+      );
 
       // 4. The link to post. Creating the folder minted the standing "Auto Review" folder link;
       //    reuse it - it is folder-scoped (this hand-in only) and already carries the two settings
@@ -270,7 +293,7 @@ export default function HandinPage() {
 
       setShareUrl(url);
       setShareToken(token);
-      setAssetId(newAssetId);
+      setAssets(uploaded);
       setPhase("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -294,14 +317,22 @@ export default function HandinPage() {
     <div className="mx-auto max-w-2xl p-8">
       <h1 className="text-lg font-medium text-text-primary">Hand in</h1>
       <p className="mt-1 text-sm text-text-tertiary">
-        Upload once. It&apos;s delivered to your Trello card automatically - the link is posted
-        there with your name and the card is marked done - and you get a craft review here.
+        Upload your cut - or all the cuts for this card at once. They&apos;re delivered to your
+        Trello card automatically - one link is posted there with your name and the card is marked
+        done - and you get a craft review for each here.
       </p>
 
       {phase === "done" && shareUrl ? (
         <div className="mt-6">
-          {/* Link first, review second. See handin-result.tsx. */}
-          <HandinResult shareUrl={shareUrl} review={review} />
+          {/* Link first, reviews second. See handin-result.tsx. One link over
+              every video; one review per video, labelled when there are several. */}
+          <HandinResult
+            shareUrl={shareUrl}
+            reviews={assets.map((a) => ({
+              label: assets.length > 1 ? a.name : undefined,
+              review: reviews[a.id] ?? null,
+            }))}
+          />
           {/* Handing in delivers to the Trello card automatically. Show that it happened; only if
               the auto-delivery did not go through do we fall back to the manual button. The link
               itself is shown above regardless - delivery never gates it. */}
@@ -392,30 +423,36 @@ export default function HandinPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-text-primary">Video file</label>
-            {file ? (
-              <div className="mt-1.5 flex items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-2.5">
-                <span className="mr-2 flex min-w-0 items-center gap-2 text-sm text-text-primary">
-                  <Film className="h-4 w-4 shrink-0 text-text-tertiary" />
-                  <span className="truncate">{file.name}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-text-tertiary">{formatSize(file.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFile(null)}
-                    className="text-xs text-text-tertiary transition-colors hover:text-text-primary"
+            <label className="text-sm font-medium text-text-primary">Video files</label>
+            <p className="mt-0.5 text-xs text-text-tertiary">
+              Hand in one cut, or all the cuts for this card at once - each gets its own review.
+            </p>
+            {files.length > 0 && (
+              <ul className="mt-1.5 space-y-2">
+                {files.map((f, i) => (
+                  <li
+                    key={`${f.name}:${f.size}:${i}`}
+                    className="flex items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-2.5"
                   >
-                    Change
-                  </button>
-                </span>
-              </div>
-            ) : (
-              <UploadZone
-                className="mt-1.5"
-                onFilesSelected={(files) => setFile(files[0] ?? null)}
-              />
+                    <span className="mr-2 flex min-w-0 items-center gap-2 text-sm text-text-primary">
+                      <Film className="h-4 w-4 shrink-0 text-text-tertiary" />
+                      <span className="truncate">{f.name}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="text-xs text-text-tertiary">{formatSize(f.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                        className="text-xs text-text-tertiary transition-colors hover:text-text-primary"
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
+            <UploadZone className="mt-2" onFilesSelected={addFiles} />
           </div>
 
           {error && (
@@ -424,7 +461,7 @@ export default function HandinPage() {
             </p>
           )}
 
-          <Button type="submit" disabled={!file || !workspace || !cardUrl.trim() || phase === "working"}>
+          <Button type="submit" disabled={!files.length || !workspace || !cardUrl.trim() || phase === "working"}>
             {phase === "working" ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
