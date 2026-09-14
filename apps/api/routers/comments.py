@@ -7,6 +7,7 @@ from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -854,6 +855,22 @@ def list_share_comments(
         query = query.filter(Comment.version_id == version_id)
     top_level = query.order_by(Comment.created_at).all()
 
+    # Hide the automated craft reviewer's comments from the client-facing timeline. Its findings are
+    # internal notes for the editor, delivered through this share link; the client should not read a
+    # critique on the cut delivered to them. Identity-scoped to configured guest emails, so no human
+    # "Client" comment is touched, and the internal review view (a different endpoint) is unaffected.
+    # Dropping an automated top-level comment drops its subtree too, so no orphaned reply leaks it.
+    hidden = _hidden_share_guest_emails()
+    if hidden and top_level:
+        hidden_ids = {
+            gid
+            for (gid,) in db.query(GuestUser.id)
+            .filter(func.lower(GuestUser.email).in_(hidden))
+            .all()
+        }
+        if hidden_ids:
+            top_level = [c for c in top_level if c.guest_author_id not in hidden_ids]
+
     # Batched build (fixed query count) — guests have no user, so no current_user_id.
     return _build_comment_responses_batched(asset_id, top_level, db, exclude_internal=True)
 
@@ -972,6 +989,12 @@ def guest_comment(
 def _deletable_guest_emails() -> set[str]:
     """The guest identities allowed to remove their own share comments. Empty = the feature is off."""
     raw = getattr(settings, "share_comment_deletable_guest_emails", "") or ""
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def _hidden_share_guest_emails() -> set[str]:
+    """Guest identities whose comments are hidden from public share views. Empty = nothing hidden."""
+    raw = getattr(settings, "share_comment_hidden_guest_emails", "") or ""
     return {e.strip().lower() for e in raw.split(",") if e.strip()}
 
 

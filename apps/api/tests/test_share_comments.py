@@ -46,6 +46,91 @@ def test_share_comments_returns_array_for_asset_share(
 @patch("apps.api.routers.comments.validate_asset_in_share")
 @patch("apps.api.routers.comments._build_comment_responses_batched")
 @patch("apps.api.routers.comments.validate_share_link_with_session")
+def test_share_comments_hides_the_automated_reviewer_from_the_client_view(
+    mock_validate,
+    mock_batched,
+    mock_validate_asset,
+    client,
+    mock_db,
+):
+    """The automated craft reviewer comments through a share link so its findings reach the editor.
+    On the CLIENT-facing share timeline those comments are hidden (identity-scoped to the configured
+    guest email); a human "Client" guest comment on the same asset is never touched."""
+    asset_id = uuid.uuid4()
+
+    reviewer_guest_id = uuid.uuid4()
+    reviewer_comment = MagicMock()
+    reviewer_comment.guest_author_id = reviewer_guest_id  # review@aditor.ai
+
+    client_comment = MagicMock()
+    client_comment.guest_author_id = uuid.uuid4()  # a real client, must survive
+
+    link = MagicMock()
+    link.asset_id = asset_id
+    mock_validate.return_value = link
+    asset = MagicMock()
+    asset.id = asset_id
+    mock_db.first.return_value = asset  # _get_asset lookup
+    mock_db.order_by.return_value = mock_db
+    # First .all(): the top-level comments. Second .all(): the hidden guest ids (as row tuples).
+    mock_db.all.side_effect = [
+        [reviewer_comment, client_comment],
+        [(reviewer_guest_id,)],
+    ]
+    mock_batched.return_value = [{"id": str(uuid.uuid4()), "body": "thanks!"}]
+
+    original = settings.share_comment_hidden_guest_emails
+    settings.share_comment_hidden_guest_emails = "review@aditor.ai"
+    try:
+        response = client.get("/share/some-token/comments")
+    finally:
+        settings.share_comment_hidden_guest_emails = original
+
+    assert response.status_code == 200
+    # The reviewer's comment is dropped before the responses are built; the client's remains.
+    mock_batched.assert_called_once_with(asset_id, [client_comment], mock_db, exclude_internal=True)
+
+
+@patch("apps.api.routers.comments.validate_asset_in_share")
+@patch("apps.api.routers.comments._build_comment_responses_batched")
+@patch("apps.api.routers.comments.validate_share_link_with_session")
+def test_share_comments_hides_nothing_when_no_guest_is_configured(
+    mock_validate,
+    mock_batched,
+    mock_validate_asset,
+    client,
+    mock_db,
+):
+    """The hide list defaults empty: every comment reaches the client, and the extra guest-id
+    lookup is not even run (so no second .all() is consumed)."""
+    asset_id = uuid.uuid4()
+    reviewer_comment = MagicMock()
+    reviewer_comment.guest_author_id = uuid.uuid4()
+
+    link = MagicMock()
+    link.asset_id = asset_id
+    mock_validate.return_value = link
+    asset = MagicMock()
+    asset.id = asset_id
+    mock_db.first.return_value = asset
+    mock_db.order_by.return_value = mock_db
+    mock_db.all.return_value = [reviewer_comment]
+    mock_batched.return_value = [{"id": str(uuid.uuid4()), "body": "note"}]
+
+    original = settings.share_comment_hidden_guest_emails
+    settings.share_comment_hidden_guest_emails = ""
+    try:
+        response = client.get("/share/some-token/comments")
+    finally:
+        settings.share_comment_hidden_guest_emails = original
+
+    assert response.status_code == 200
+    mock_batched.assert_called_once_with(asset_id, [reviewer_comment], mock_db, exclude_internal=True)
+
+
+@patch("apps.api.routers.comments.validate_asset_in_share")
+@patch("apps.api.routers.comments._build_comment_responses_batched")
+@patch("apps.api.routers.comments.validate_share_link_with_session")
 def test_share_comments_returns_array_for_folder_or_project_share_asset(
     mock_validate,
     mock_batched,
