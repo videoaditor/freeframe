@@ -185,3 +185,64 @@ class TestGlobalRateLimitMiddleware:
 
         assert allowed is False
         assert retry_after == 25
+
+
+class TestServiceKeyExemption:
+    """A trusted service (the automated reviewer) presenting the service API key bypasses the IP
+    limiter. Without this, one Worker IP resolving a batch hand-in's share tokens trips the per-IP
+    share limiter and 429s - the "share-unreachable 429" that stopped Auto Review on batch uploads."""
+
+    def _req(self, headers):
+        r = MagicMock()
+        r.headers = headers
+        r.client = MagicMock()
+        r.client.host = "1.2.3.4"
+        return r
+
+    def test_valid_key_is_trusted(self):
+        from apps.api.middleware.rate_limit import is_trusted_service_request
+        from apps.api.config import settings
+        orig = settings.service_api_key
+        settings.service_api_key = "svc-secret"
+        try:
+            assert is_trusted_service_request(self._req({"x-api-key": "svc-secret"})) is True
+            assert is_trusted_service_request(self._req({"x-api-key": "wrong"})) is False
+            assert is_trusted_service_request(self._req({})) is False
+        finally:
+            settings.service_api_key = orig
+
+    def test_no_exemption_when_key_unconfigured(self):
+        from apps.api.middleware.rate_limit import is_trusted_service_request
+        from apps.api.config import settings
+        orig = settings.service_api_key
+        settings.service_api_key = ""
+        try:
+            # An empty configured key must never make a presented empty/any key "trusted".
+            assert is_trusted_service_request(self._req({"x-api-key": "anything"})) is False
+            assert is_trusted_service_request(self._req({"x-api-key": ""})) is False
+        finally:
+            settings.service_api_key = orig
+
+    @patch("apps.api.middleware.rate_limit.check_rate_limit")
+    def test_dependency_skips_the_limit_for_a_trusted_service(self, mock_check):
+        from apps.api.middleware.rate_limit import rate_limit
+        from apps.api.config import settings
+        orig = settings.service_api_key
+        settings.service_api_key = "svc-secret"
+        try:
+            rate_limit("share_validate", 30, 60)(self._req({"x-api-key": "svc-secret"}))
+            mock_check.assert_not_called()  # never even consulted the limiter
+        finally:
+            settings.service_api_key = orig
+
+    @patch("apps.api.middleware.rate_limit.check_rate_limit", return_value=(True, 0))
+    def test_dependency_still_limits_a_normal_client(self, mock_check):
+        from apps.api.middleware.rate_limit import rate_limit
+        from apps.api.config import settings
+        orig = settings.service_api_key
+        settings.service_api_key = "svc-secret"
+        try:
+            rate_limit("share_validate", 30, 60)(self._req({}))
+            mock_check.assert_called_once()
+        finally:
+            settings.service_api_key = orig

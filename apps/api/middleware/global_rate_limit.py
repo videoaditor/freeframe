@@ -15,6 +15,7 @@ from jose import jwt, JWTError
 
 from ..config import settings
 from ..services.redis_service import get_redis
+from .rate_limit import is_trusted_service_request
 
 # Limits per window — tuned for media-review workflows where a single folder
 # page can trigger 10+ paginated asset fetches plus SWR calls for project,
@@ -38,6 +39,12 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
 
         # Skip exempt paths — uploads are auth-gated and have their own flow control
         if path in EXEMPT_PATHS or path.startswith("/stream/") or path.startswith("/upload/"):
+            return await call_next(request)
+
+        # Trusted internal service (the automated reviewer, data-extraction jobs) presents the
+        # service API key and bypasses the per-IP global limiter too - one egress IP fetching a whole
+        # batch hand-in must not exhaust the anonymous budget and 429 itself. See rate_limit.py.
+        if is_trusted_service_request(request):
             return await call_next(request)
 
         # Determine identity: user_id from JWT or IP
