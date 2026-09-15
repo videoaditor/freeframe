@@ -25,8 +25,9 @@
  */
 
 import * as React from "react";
+import Link from "next/link";
 import useSWR from "swr";
-import { Check, Film, Loader2, Upload } from "lucide-react";
+import { Check, Film, FolderOpen, Loader2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   GATE_BASE,
@@ -80,6 +81,8 @@ export default function HandinPage() {
 
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
+  // Where the just-created folder lives in FreeFrame, so the editor can open it after handing in.
+  const [folderHref, setFolderHref] = React.useState<string | null>(null);
   const [delivered, setDelivered] = React.useState(false);
   // One entry per handed-in video, in upload order, plus its review as it lands.
   const [assets, setAssets] = React.useState<{ id: string; name: string }[]>([]);
@@ -324,6 +327,7 @@ export default function HandinPage() {
 
       setShareUrl(url);
       setShareToken(token);
+      setFolderHref(`/projects/${projectId}?folder=${folder.id}`);
       setAssets(uploaded);
       setPhase("done");
     } catch (err) {
@@ -364,6 +368,17 @@ export default function HandinPage() {
               review: reviews[a.id] ?? null,
             }))}
           />
+          {/* A way back into FreeFrame itself: open the folder these videos landed in, inside the
+              brand workspace. The share link above is for the client; this is for the editor. */}
+          {folderHref && (
+            <Link
+              href={folderHref}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
+            >
+              <FolderOpen className="h-4 w-4" />
+              Open folder in FreeFrame
+            </Link>
+          )}
           {/* Handing in delivers to the Trello card automatically. Show that it happened; only if
               the auto-delivery did not go through do we fall back to the manual button. The link
               itself is shown above regardless - delivery never gates it. */}
