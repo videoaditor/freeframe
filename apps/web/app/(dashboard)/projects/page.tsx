@@ -254,6 +254,17 @@ export default function ProjectsPage() {
     [projects, user?.id],
   );
 
+  // The overview is workspace-first (Shawn+Saskia, 2026-09-14: "nur noch die Brand Projekte").
+  // Editors see ONLY the brand Workspaces - their hand-ins land there through /handin - and the ~90
+  // per-card junk projects are hidden from them. Nothing is deleted or unreachable: a junk project
+  // still opens by direct link (/projects/<id>), via instance-wide access. Superadmins keep the full
+  // view so they can still find and clean up the junk (the folder consolidation).
+  const showJunkSections = isSuperAdmin;
+  const hasVisibleProjects = showJunkSections
+    ? !!(projects && projects.length > 0)
+    : workspaces.length > 0;
+  const shownCount = showJunkSections ? (projects?.length ?? 0) : workspaces.length;
+
   const resetForm = () => {
     setForm({ name: "", description: "", project_type: "personal" });
     setFormError("");
@@ -292,9 +303,10 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-text-primary">Projects</h1>
-          {projects && projects.length > 0 && (
+          {shownCount > 0 && (
             <p className="mt-0.5 text-sm text-text-tertiary">
-              {projects.length} project{projects.length !== 1 ? "s" : ""}
+              {shownCount} {showJunkSections ? "project" : "workspace"}
+              {shownCount !== 1 ? "s" : ""}
             </p>
           )}
         </div>
@@ -427,7 +439,7 @@ export default function ProjectsPage() {
             </div>
           ))}
         </div>
-      ) : !projects || projects.length === 0 ? (
+      ) : !hasVisibleProjects ? (
         <div className="rounded-xl border border-border bg-bg-secondary">
           {isSuperAdmin ? (
             <EmptyState
@@ -466,7 +478,10 @@ export default function ProjectsPage() {
               onMutate={() => mutate()}
             />
           )}
-          {myProjects.length > 0 && (
+          {/* The junk sections (per-card projects that are not brand workspaces) are shown to
+              superadmins ONLY - they need them to find and clean up the ~90 stray projects. Editors
+              get the Workspaces-only view above; a stray project stays reachable by direct link. */}
+          {showJunkSections && myProjects.length > 0 && (
           <ProjectSection
             title="My Projects"
             icon={<FolderOpen className="h-4 w-4 text-text-tertiary" />}
@@ -477,7 +492,7 @@ export default function ProjectsPage() {
             onMutate={() => mutate()}
           />
           )}
-          {sharedProjects.length > 0 && (
+          {showJunkSections && sharedProjects.length > 0 && (
             <ProjectSection
               title="Shared with Me"
               icon={<Share2 className="h-4 w-4 text-text-tertiary" />}
@@ -489,7 +504,7 @@ export default function ProjectsPage() {
               onMutate={() => mutate()}
             />
           )}
-          {publicProjects.length > 0 && (
+          {showJunkSections && publicProjects.length > 0 && (
             <ProjectSection
               title="Public Projects"
               icon={<Globe className="h-4 w-4 text-text-tertiary" />}
