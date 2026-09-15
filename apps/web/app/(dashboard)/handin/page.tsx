@@ -32,10 +32,12 @@ import { api } from "@/lib/api";
 import {
   GATE_BASE,
   fetchReview,
+  fetchDeliveryStatus,
   isHandinConfigured,
   lookUpCard,
   type GateCard,
   type GateReview,
+  type DeliveryStatus,
 } from "@/lib/handin";
 import { HandinResult } from "@/components/handin/handin-result";
 import { DeliverButton } from "@/components/handin/deliver-button";
@@ -55,6 +57,9 @@ function norm(s: string): string {
 
 /** How often to ask the gate for the review once an asset exists. */
 const REVIEW_POLL_MS = 5000;
+
+/** How often to re-check whether the hand-in has been delivered (or is still held/reviewing). */
+const DELIVERY_POLL_MS = 5000;
 
 /** Human file size for the selected-file chip. */
 function formatSize(bytes: number): string {
@@ -83,7 +88,8 @@ export default function HandinPage() {
   const [shareToken, setShareToken] = React.useState<string | null>(null);
   // Where the just-created folder lives in FreeFrame, so the editor can open it after handing in.
   const [folderHref, setFolderHref] = React.useState<string | null>(null);
-  const [delivered, setDelivered] = React.useState(false);
+  // The DELIVERY state of this hand-in - delivered / held / reviewing. Never gates the link.
+  const [delivery, setDelivery] = React.useState<DeliveryStatus | null>(null);
   // One entry per handed-in video, in upload order, plus its review as it lands.
   const [assets, setAssets] = React.useState<{ id: string; name: string }[]>([]);
   const [reviews, setReviews] = React.useState<Record<string, GateReview>>({});
@@ -187,6 +193,38 @@ export default function HandinPage() {
       if (timer) clearInterval(timer);
     };
   }, [assets]);
+
+  /**
+   * Poll the delivery state until the hand-in is delivered.
+   *
+   * Delivery is the ONLY thing gated on the review: it waits until nothing mandatory is open, and
+   * fires by itself once the editor's fix or objection clears the last blocker - so we keep polling
+   * through "held" and "reviewing", not only until the first answer. This never touches the link.
+   */
+  React.useEffect(() => {
+    if (phase !== "done" || !shareToken) return;
+    let cancelled = false;
+
+    async function tick(): Promise<boolean> {
+      const s = await fetchDeliveryStatus(shareToken!);
+      if (cancelled) return true;
+      setDelivery(s);
+      return s.state === "delivered";
+    }
+
+    let timer: ReturnType<typeof setInterval> | undefined;
+    void tick().then((done) => {
+      if (cancelled || done) return;
+      timer = setInterval(async () => {
+        if (await tick() && timer) clearInterval(timer);
+      }, DELIVERY_POLL_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [phase, shareToken]);
 
   /**
    * Wait for the bytes to land, then hand back the asset id.
@@ -309,20 +347,27 @@ export default function HandinPage() {
       }
       const url = `${window.location.origin}/share/${token}`;
 
-      // 5. Deliver to the Trello card automatically - the folder token is already watched from
-      //    step 2, so this posts the @aditorteam1 comment (with the editor's name) and marks the
-      //    card done. Best effort: if it does not go through, the manual button below is the
-      //    fallback, and the link is already on screen regardless.
+      // 5. Deliver to the Trello card - GATED ON THE REVIEW (Shawn+Saskia, 2026-09-14). This records
+      //    the intent to deliver (with the editor's name) and posts the @aditorteam1 comment now IF
+      //    the review is already clear. If a mandatory finding is still open it is HELD - the editor
+      //    fixes a V2 or objects to a wrong note - and if the review is still running it delivers
+      //    automatically once it comes back clear. The link is already on screen regardless; only the
+      //    automatic Trello delivery waits. The deliver-status poll below keeps this fresh.
       try {
         const dr = await fetch(`${GATE_BASE}/api/gate/deliver`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ share_token: token, editor_name: user?.name || "" }),
         });
-        const dj = (await dr.json().catch(() => ({}))) as { posted?: boolean; reason?: string };
-        setDelivered(dr.ok && (!!dj.posted || dj.reason === "already-delivered"));
+        const dj = (await dr.json().catch(() => ({}))) as {
+          posted?: boolean; reason?: string; openBlockers?: { assetId?: string; name: string; findings: string[] }[];
+        };
+        if (dr.ok && (dj.posted || dj.reason === "already-delivered")) setDelivery({ state: "delivered" });
+        else if (dj.reason === "held") setDelivery({ state: "held", openBlockers: dj.openBlockers ?? [] });
+        else if (dj.reason === "reviewing") setDelivery({ state: "reviewing" });
+        // else leave delivery null -> the manual fallback button shows.
       } catch {
-        /* auto-delivery is best effort; the manual button below covers a failure */
+        /* delivery is best effort; the poll + manual button below cover a failure */
       }
 
       setShareUrl(url);
@@ -352,9 +397,10 @@ export default function HandinPage() {
     <div className="mx-auto max-w-2xl p-8">
       <h1 className="text-lg font-medium text-text-primary">Hand in</h1>
       <p className="mt-1 text-sm text-text-tertiary">
-        Upload your cut - or all the cuts for this card at once. They&apos;re delivered to your
-        Trello card automatically - one link is posted there with your name and the card is marked
-        done - and you get a craft review for each here.
+        Upload your cut - or all the cuts for this card at once. You get a craft review for each here,
+        and once nothing mandatory is open it&apos;s delivered to your Trello card automatically - one
+        link posted there with your name, the card marked done. If a note is wrong, reply to it and it
+        gets checked.
       </p>
 
       {phase === "done" && shareUrl ? (
@@ -379,10 +425,11 @@ export default function HandinPage() {
               Open folder in FreeFrame
             </Link>
           )}
-          {/* Handing in delivers to the Trello card automatically. Show that it happened; only if
-              the auto-delivery did not go through do we fall back to the manual button. The link
-              itself is shown above regardless - delivery never gates it. */}
-          {delivered ? (
+          {/* Delivery to the Trello card is automatic AND gated on the review (Shawn+Saskia
+              2026-09-14): it fires when nothing mandatory is open, is HELD while a blocker stands,
+              and delivers by itself once a fix or an objection clears it. The link above is shown
+              regardless - the gate is on the delivery, never on the link. */}
+          {delivery?.state === "delivered" ? (
             <section
               data-testid="handin-delivered"
               className="mt-6 flex items-center gap-2 rounded-lg border border-border bg-bg-secondary p-4 text-sm text-text-primary"
@@ -390,7 +437,45 @@ export default function HandinPage() {
               <Check className="h-4 w-4 text-green-500" />
               Delivered to the Trello card, with your name.
             </section>
+          ) : delivery?.state === "held" ? (
+            <section
+              data-testid="handin-held"
+              className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm"
+            >
+              <p className="font-medium text-text-primary">Not delivered yet.</p>
+              <p className="mt-1 text-text-secondary">
+                Something mandatory is still open. Fix it and upload a V2 into the same card - or, if a
+                note is wrong, reply to it in FreeFrame and it will be checked and withdrawn. Delivery
+                happens on its own once everything mandatory is cleared.
+              </p>
+              <ul className="mt-3 space-y-3">
+                {delivery.openBlockers.map((b, i) => (
+                  <li key={b.assetId ?? i}>
+                    {assets.length > 1 && (
+                      <p className="truncate text-xs font-medium text-text-tertiary">{b.name}</p>
+                    )}
+                    <ul className="mt-1 space-y-1">
+                      {b.findings.map((f, j) => (
+                        <li key={j} className="text-text-secondary">{f}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : delivery?.state === "reviewing" || delivery?.state === "clear" ? (
+            <section
+              data-testid="handin-reviewing"
+              className="mt-6 flex items-center gap-2 rounded-lg border border-border bg-bg-secondary p-4 text-sm text-text-secondary"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {delivery.state === "clear"
+                ? "Review is clean - delivering to the Trello card now."
+                : "The review is still running - this delivers to the Trello card automatically once it is clear."}
+            </section>
           ) : (
+            /* Delivery never registered (the request did not go through). The manual button is the
+               fallback; it hits the same gated endpoint, so it too respects the review. */
             shareToken && (
               <DeliverButton
                 shareToken={shareToken}

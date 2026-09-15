@@ -1,14 +1,17 @@
 /**
  * Client for the review gate at review.aditor.ai, used by the /handin page.
  *
- * Two endpoints, both of which are deliberately incapable of refusing anybody:
+ *   POST /api/gate/card           - resolves a Trello card link to its name and brand
+ *   GET  /api/gate/review         - the craft review for an uploaded asset, once it exists
+ *   GET  /api/gate/deliver-status - whether the hand-in has been delivered / is held / is reviewing
  *
- *   POST /api/gate/card    - resolves a Trello card link to its name and brand
- *   GET  /api/gate/review  - the craft review for an uploaded asset, once it exists
- *
- * Neither answers with a verdict, and nothing here derives one. The review is
- * advice the editor reads; the delivery decision stays with the editor. See
+ * The review is advice the editor reads, and the LINK is never gated - it is on
+ * screen for every finished upload, whatever the review says. See
  * `components/handin/handin-result.tsx` for the structural half of that promise.
+ *
+ * The one thing that IS gated (Shawn+Saskia, 2026-09-14) is the AUTOMATIC delivery
+ * to the Trello card: it waits for the review and fires only when nothing mandatory
+ * is still open. `deliver-status` reports that state; it can never withhold the link.
  */
 
 /**
@@ -85,5 +88,47 @@ export async function fetchReview(assetId: string): Promise<GateReview> {
     return { state: 'pending', note: (data as { note?: string })?.note ?? 'The review will appear here when it is ready.' }
   } catch {
     return { state: 'pending', note: 'The review will appear here when it is ready.' }
+  }
+}
+
+/** One open mandatory finding holding the delivery, with the video it is on. */
+export interface OpenBlocker {
+  assetId?: string
+  name: string
+  findings: string[]
+}
+
+/**
+ * The delivery state of a hand-in.
+ *
+ *   delivered - the @aditorteam1 comment is on the card; nothing left to do.
+ *   held      - a mandatory finding is still open; deliver waits for a V2 or an objection.
+ *   reviewing - the review has not finished; deliver fires automatically once it is clear.
+ *   clear     - reviewed clean, delivery imminent (a brief transient before "delivered").
+ *
+ * This is ONLY about the automatic Trello delivery. The share link is shown regardless.
+ */
+export type DeliveryStatus =
+  | { state: 'delivered'; deliveredAt?: number | null }
+  | { state: 'held'; openBlockers: OpenBlocker[] }
+  | { state: 'reviewing'; openBlockers?: OpenBlocker[] }
+  | { state: 'clear' }
+
+/**
+ * Poll the delivery state. A fetch failure is reported as `reviewing` - the calm,
+ * non-scolding state - never as `held`, so a broken read cannot falsely tell an
+ * editor they must upload a V2.
+ */
+export async function fetchDeliveryStatus(token: string): Promise<DeliveryStatus> {
+  try {
+    const res = await fetch(`${GATE_BASE}/api/gate/deliver-status?token=${encodeURIComponent(token)}`)
+    if (!res.ok) return { state: 'reviewing' }
+    const data = (await res.json()) as DeliveryStatus
+    if (data && (data.state === 'delivered' || data.state === 'held' || data.state === 'clear' || data.state === 'reviewing')) {
+      return data
+    }
+    return { state: 'reviewing' }
+  } catch {
+    return { state: 'reviewing' }
   }
 }
