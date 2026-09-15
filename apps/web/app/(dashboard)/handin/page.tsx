@@ -250,7 +250,14 @@ export default function HandinPage() {
       //    link keeps working - otherwise every attempt spawned a new folder (7+ piled up on one
       //    card) and the link an editor had pointed at an older, emptier one.
       setStep("Filing the hand-in");
-      const folderName = (card?.name ?? "").trim() || files[0].name;
+      // Name the folder after the Trello card, reliably. The card is normally resolved already (on
+      // paste/blur), but if it isn't - a flaky lookup, or a paste that didn't fire a blur - resolve
+      // it now rather than falling back to a hook's file name. A folder called "Hook 1-a.mp4" is
+      // exactly the "which card is this?" confusion we are removing; the file-name fallback is only
+      // for when the card genuinely cannot be read.
+      const resolvedCard =
+        card?.name?.trim() ? card : await lookUpCard(cardUrl.trim()).catch(() => card);
+      const folderName = (resolvedCard?.name ?? "").trim() || files[0].name;
       const cardKey = (cardUrl.match(/trello\.com\/c\/([A-Za-z0-9]+)/i)?.[1] || "").toLowerCase();
       const existingFolder = cardKey
         ? await api
