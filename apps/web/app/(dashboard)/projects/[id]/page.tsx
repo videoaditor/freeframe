@@ -390,7 +390,10 @@ export default function ProjectDetailPage() {
   return (
     <div className="flex h-full flex-col lg:flex-row overflow-hidden">
       {/* ─── Left Sidebar (Frame.io style) ──────────────────────────────── */}
-      <div className="hidden lg:flex w-72 flex-col border-r border-border bg-bg-secondary shrink-0">
+      {/* min-h-0 + overflow-y-auto so a long folder list actually scrolls. Without it the list grows
+          past the viewport and the parent's overflow-hidden clips it with no way to reach the folders
+          lower down - which is why a freshly handed-in folder looked "not there". */}
+      <div className="hidden lg:flex w-72 flex-col border-r border-border bg-bg-secondary shrink-0 min-h-0 overflow-y-auto">
         {/* Assets section */}
         <div className="p-3 space-y-0.5">
           <div className="flex items-center justify-between px-2 mb-1">
