@@ -35,6 +35,7 @@ class FolderTreeNode(BaseModel):
     name: str
     parent_id: Optional[uuid.UUID]
     item_count: int = 0
+    created_at: datetime
     children: list["FolderTreeNode"] = []
 
 

@@ -278,6 +278,7 @@ def get_folder_tree(
             name=f.name,
             parent_id=f.parent_id,
             item_count=(subfolder_counts.get(f.id, 0) + asset_counts.get(f.id, 0)),
+            created_at=f.created_at,
         )
 
     roots: list[FolderTreeNode] = []
@@ -287,6 +288,14 @@ def get_folder_tree(
         else:
             roots.append(node)
 
+    # Newest first, at every level - so a just-created hand-in folder is at the top where the
+    # editor lands, matching the list_folders order the rest of the UI already uses.
+    def _sort_newest_first(nodes: list[FolderTreeNode]) -> None:
+        nodes.sort(key=lambda n: n.created_at, reverse=True)
+        for n in nodes:
+            _sort_newest_first(n.children)
+
+    _sort_newest_first(roots)
     return roots
 
 

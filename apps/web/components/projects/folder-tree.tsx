@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   ChevronRight,
   FolderOpen,
@@ -40,6 +40,11 @@ interface FolderNodeProps {
   onDropItems?: (targetFolderId: string | null, assetIds: string[], folderIds: string[]) => void
 }
 
+// Does this subtree (excluding the node itself) contain the given folder id?
+function subtreeContains(node: FolderTreeNode, id: string): boolean {
+  return node.children.some((c) => c.id === id || subtreeContains(c, id))
+}
+
 function FolderNode({
   node,
   depth,
@@ -50,12 +55,28 @@ function FolderNode({
   onDeleteFolder,
   onDropItems,
 }: FolderNodeProps) {
-  const [expanded, setExpanded] = useState(false)
+  const isActive = currentFolderId === node.id
+  // Auto-expand when the active folder lives somewhere in this subtree, so a just-created
+  // folder is revealed on load instead of hidden inside a collapsed parent.
+  const hasActiveDescendant = useMemo(
+    () => currentFolderId != null && subtreeContains(node, currentFolderId),
+    [node, currentFolderId],
+  )
+  const [expanded, setExpanded] = useState(hasActiveDescendant)
   const [menuOpen, setMenuOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [renameName, setRenameName] = useState(node.name)
   const [isDragOver, setIsDragOver] = useState(false)
-  const isActive = currentFolderId === node.id
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  // Reveal + scroll the active folder into view when it changes (e.g. arriving from /handin).
+  useEffect(() => {
+    if (hasActiveDescendant) setExpanded(true)
+  }, [hasActiveDescendant])
+
+  useEffect(() => {
+    if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [isActive])
 
   const hasChildren = node.children.length > 0
 
@@ -97,6 +118,7 @@ function FolderNode({
   return (
     <div>
       <div
+        ref={rowRef}
         className={cn(
           'group flex items-center gap-1 px-2 py-1 rounded-md text-[13px] cursor-pointer transition-colors',
           isActive

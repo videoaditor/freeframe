@@ -471,6 +471,7 @@ export interface FolderTreeNode {
   name: string
   parent_id: string | null
   item_count: number
+  created_at: string
   children: FolderTreeNode[]
 }
 
