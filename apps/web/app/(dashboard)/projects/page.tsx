@@ -7,6 +7,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import {
   Plus,
   Upload,
+  Building2,
   LayoutGrid,
   List,
   FolderOpen,
@@ -226,20 +227,29 @@ export default function ProjectsPage() {
     mutate,
   } = useSWR<Project[]>("/projects", () => api.get<Project[]>("/projects"));
 
+  // Brand workspaces are team-shared: everyone sees them, whether or not they hold a membership row.
+  // Without this an editor who hands a cut into a brand's workspace (instance-wide access lets them,
+  // so no membership is created) could not see the workspace - or the folder they just filed - in
+  // their overview at all. Shown in their own section; kept out of the others so nothing double-lists.
+  const workspaces = React.useMemo(
+    () => (projects ?? []).filter((p) => p.is_workspace).sort((a, b) => a.name.localeCompare(b.name)),
+    [projects],
+  );
+
   const myProjects = React.useMemo(
-    () => (projects ?? []).filter((p) => p.created_by === user?.id),
+    () => (projects ?? []).filter((p) => p.created_by === user?.id && !p.is_workspace),
     [projects, user?.id],
   );
 
   const sharedProjects = React.useMemo(
-    () => (projects ?? []).filter((p) => p.created_by !== user?.id && p.role),
+    () => (projects ?? []).filter((p) => p.created_by !== user?.id && p.role && !p.is_workspace),
     [projects, user?.id],
   );
 
   const publicProjects = React.useMemo(
     () =>
       (projects ?? []).filter(
-        (p) => p.is_public && p.created_by !== user?.id && !p.role,
+        (p) => p.is_public && p.created_by !== user?.id && !p.role && !p.is_workspace,
       ),
     [projects, user?.id],
   );
@@ -443,17 +453,30 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="space-y-8">
+          {workspaces.length > 0 && (
+            <ProjectSection
+              title="Workspaces"
+              icon={<Building2 className="h-4 w-4 text-text-tertiary" />}
+              projects={workspaces}
+              viewMode={viewMode}
+              emptyMessage=""
+              onNewProject={() => setDialogOpen(true)}
+              showNewButton={isSuperAdmin}
+              userId={user?.id}
+              onMutate={() => mutate()}
+            />
+          )}
+          {myProjects.length > 0 && (
           <ProjectSection
             title="My Projects"
             icon={<FolderOpen className="h-4 w-4 text-text-tertiary" />}
             projects={myProjects}
             viewMode={viewMode}
             emptyMessage="You haven't created any projects yet."
-            onNewProject={() => setDialogOpen(true)}
-            showNewButton={isSuperAdmin}
             userId={user?.id}
             onMutate={() => mutate()}
           />
+          )}
           {sharedProjects.length > 0 && (
             <ProjectSection
               title="Shared with Me"
