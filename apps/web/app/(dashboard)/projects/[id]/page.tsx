@@ -123,7 +123,7 @@ export default function ProjectDetailPage() {
   const [assetToRename, setAssetToRename] = React.useState<AssetResponse | null>(null);
   const [assetToDelete, setAssetToDelete] = React.useState<AssetResponse | null>(null);
 
-  const { files: uploadFiles, startUpload } = useUploadStore();
+  const { files: uploadFiles, startUpload, startVersionUpload } = useUploadStore();
   const { user } = useAuthStore();
 
   const {
@@ -360,12 +360,26 @@ export default function ProjectDetailPage() {
     if (files.length > 0) setAssetName(files[0].name.replace(/\.[^/.]+$/, ""));
   };
 
+  // A PICKED FILE THAT SHARES A NAME WITH AN EXISTING ASSET IN THIS FOLDER BECOMES A NEW
+  // VERSION OF IT, NOT A SEPARATE FILE. Saskia, 2026-09-16: "Add files" exists so a folder
+  // already delivered can take a client-requested fix without re-litigating the whole hand-in -
+  // matching by name is what makes that a version instead of a fresh, unrelated submission.
+  // Base name only (extension stripped), exact match, case-insensitive: a coincidence beyond
+  // that is exactly the "a filename is not an identity" failure this project has hit before, so
+  // the match is shown to a human before anything uploads rather than trusted silently.
+  const baseName = (n: string) => n.replace(/\.[^/.]+$/, "").trim().toLowerCase();
+  const versionMatchFor = (file: File): AssetResponse | undefined =>
+    (assets ?? []).find((a) => a.folder_id === currentFolderId && baseName(a.name) === baseName(file.name));
+
   const handleStartUpload = () => {
     pendingFiles.forEach((file) => {
+      const match = versionMatchFor(file);
+      if (match) {
+        startVersionUpload(file, match.id, match.name, projectId);
+        return;
+      }
       const name =
         pendingFiles.length === 1 ? assetName || file.name : file.name;
-      // Note: startUpload does not yet accept folderId — assets will upload to root.
-      // Upload store needs to be updated in a future task to support folder placement.
       startUpload(file, projectId, name, project?.name, currentFolderId);
     });
     setPendingFiles([]);
@@ -862,6 +876,22 @@ export default function ProjectDetailPage() {
                       Upload
                     </Button>
                   )}
+                  {/* Saskia, 2026-09-16: a folder that's already been reviewed needs a way to take
+                      more - a different-format cut, a client-requested fix - without going through
+                      hand-in again, which re-litigates the whole submission. This drops straight
+                      into the current folder; the reviewer decides on its own whether a file this
+                      late is worth a fresh look (see feedback-agent's hand-in window). */}
+                  {canUpload && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setUploadOpen(true)}
+                      title="Add more to this folder without starting a new hand-in"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add files
+                    </Button>
+                  )}
                 </>
               }
             />
@@ -876,10 +906,11 @@ export default function ProjectDetailPage() {
                   <X className="h-4 w-4" />
                 </Dialog.Close>
                 <Dialog.Title className="text-base font-semibold text-text-primary">
-                  Upload asset
+                  Add files
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                  Add new media to this project.
+                  Adds straight into this folder - no new hand-in. A file matching an existing
+                  asset&apos;s name becomes a new version of it.
                 </Dialog.Description>
                 <div className="mt-4 space-y-4">
                   {pendingFiles.length === 0 ? (
@@ -891,16 +922,26 @@ export default function ProjectDetailPage() {
                           {pendingFiles.length} file{pendingFiles.length !== 1 ? "s" : ""} selected
                         </div>
                         <div className="max-h-40 overflow-y-auto divide-y divide-border">
-                          {pendingFiles.map((f, i) => (
-                            <div key={i} className="flex items-center justify-between px-3 py-1.5">
-                              <span className="text-sm text-text-primary truncate mr-2">{f.name}</span>
-                              <span className="text-xs text-text-tertiary shrink-0">
-                                {f.size < 1024 * 1024
-                                  ? `${(f.size / 1024).toFixed(0)} KB`
-                                  : `${(f.size / (1024 * 1024)).toFixed(1)} MB`}
-                              </span>
-                            </div>
-                          ))}
+                          {pendingFiles.map((f, i) => {
+                            const match = versionMatchFor(f);
+                            return (
+                              <div key={i} className="flex items-center justify-between px-3 py-1.5">
+                                <div className="min-w-0 mr-2">
+                                  <div className="text-sm text-text-primary truncate">{f.name}</div>
+                                  {/* Shown, not assumed - a name match is a guess, and the whole
+                                      point of this list is to catch a wrong one before it uploads. */}
+                                  <div className="text-xs text-text-tertiary truncate">
+                                    {match ? `→ new version of "${match.name}"` : "→ new file in this folder"}
+                                  </div>
+                                </div>
+                                <span className="text-xs text-text-tertiary shrink-0">
+                                  {f.size < 1024 * 1024
+                                    ? `${(f.size / 1024).toFixed(0)} KB`
+                                    : `${(f.size / (1024 * 1024)).toFixed(1)} MB`}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                       {pendingFiles.length === 1 && (
