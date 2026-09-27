@@ -33,7 +33,9 @@ from ..models.comment import Comment
 from ..models.folder import Folder
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.share import ShareLink, SharePermission
-from ..models.upload_request import UploadRequest
+from ..models.branding import ProjectBranding
+from ..services import s3_service
+from ..models.upload_request import RequestUpload, UploadRequest
 from ..models.user import GuestUser, User
 from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..services import review_bridge
@@ -73,6 +75,20 @@ def owner_status(bridge: Optional[dict]) -> dict:
     st = bridge.get("status")
     return {"status": st if st in ("reviewing", "held", "clear") else "clear",
             "open_must_fixes": int(bridge.get("openMustFixes") or 0)}
+
+
+def project_brand(db: Session, project: Project) -> str:
+    """The brand key Auto Review files this project's reviews and rules under.
+
+    A CUSTOMER's project is namespaced by its id - never by its name, which the customer types and
+    which could otherwise resolve onto a real client's brand ("Freiheit" -> freiheit-media) and
+    reach that client's rules. A staff workspace keeps its name-derived slug, which Auto Review
+    resolves against the roster. Never empty.
+    """
+    creator = db.query(User).filter(User.id == project.created_by).first()
+    if creator is not None and getattr(creator, "is_staff", True) is False:
+        return f"cust-{project.id.hex[:16]}"
+    return review_bridge.brand_slug(project.name) or f"cust-{project.id.hex[:16]}"
 
 
 # ── Owner ──────────────────────────────────────────────────────────────────────
@@ -125,7 +141,7 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
                      permission=SharePermission.comment, allow_download=True, visibility="public")
     db.add(link)
     db.flush()
-    brand = review_bridge.brand_slug(project.name)
+    brand = project_brand(db, project)
     excerpt = (body.brief_text or body.brief_url or ("PDF briefing" if body.brief_pdf_base64 else "")).strip()[:500] or None
     req = UploadRequest(
         token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,
@@ -181,7 +197,7 @@ def _brands_for(db: Session, user: User) -> Optional[list[str]]:
     ids = [m.project_id for m in db.query(ProjectMember).filter(
         ProjectMember.user_id == user.id, ProjectMember.deleted_at.is_(None)).all()]
     projects = db.query(Project).filter(Project.id.in_(ids or [uuid.uuid4()]), Project.deleted_at.is_(None)).all()
-    return sorted({review_bridge.brand_slug(p.name) for p in projects})
+    return sorted({project_brand(db, p) for p in projects})
 
 
 @router.get("/insights/time-saved")
@@ -201,7 +217,7 @@ def _project_brand(db: Session, project_id: uuid.UUID, user: User, role: Project
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, project_id, user, role)
-    return review_bridge.brand_slug(project.name)
+    return project_brand(db, project)
 
 
 @router.get("/insights/rules")
@@ -240,6 +256,11 @@ def _live_request(db: Session, token: str) -> UploadRequest:
     state = request_state(req, datetime.now(timezone.utc))
     if state != "live":
         raise HTTPException(status_code=410, detail="This link was closed by its owner." if state == "revoked" else "This link has expired.")
+    # A link into a deleted workspace or folder is closed too - uploads must never land in the bin.
+    project = db.query(Project).filter(Project.id == req.project_id, Project.deleted_at.is_(None)).first()
+    folder = db.query(Folder).filter(Folder.id == req.folder_id, Folder.deleted_at.is_(None)).first()
+    if project is None or folder is None:
+        raise HTTPException(status_code=410, detail="This link was closed by its owner.")
     return req
 
 
@@ -251,6 +272,7 @@ def view_request(token: str, db: Session = Depends(get_db)):
     return {
         "title": req.title,
         "brand": project.name if project else "",
+        "logo_url": _brand_logo(db, req.project_id),
         "brief_excerpt": req.brief_excerpt,
         "review_share_token": req.review_share_token,
         "assets": [{"id": str(a.id), "name": a.name} for a in assets],
@@ -284,6 +306,13 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
                       created_by=req.created_by, folder_id=req.folder_id)
         db.add(asset)
         db.flush()
+    # A retried upload must not leave dead "uploading" versions on top: they would become "the latest
+    # version" and hide the review. Anything of this asset still uploading after 10 minutes is dead.
+    stale_before = datetime.now(timezone.utc) - timedelta(minutes=10)
+    for dead in db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None),
+                                              AssetVersion.processing_status == ProcessingStatus.uploading,
+                                              AssetVersion.created_at < stale_before).all():
+        dead.processing_status = ProcessingStatus.failed
     last = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None)) \
         .order_by(AssetVersion.version_number.desc()).first()
     # The guest has no account; the version is filed under the request's owner, who asked for it.
@@ -299,6 +328,8 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
                      mime_type=body.mime_type, file_size_bytes=body.file_size_bytes, s3_key_raw=s3_key))
     req.last_uploader_name = body.name.strip()
     req.last_uploader_email = str(body.email).lower()
+    db.add(RequestUpload(request_id=req.id, asset_id=asset.id, version_number=version.version_number,
+                         uploader_name=body.name.strip(), uploader_email=str(body.email).lower()))
     db.commit()
     return {"upload_id": upload_id, "s3_key": s3_key, "asset_id": str(asset.id), "version_id": str(version.id),
             "version_number": version.version_number}
@@ -348,6 +379,18 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
     complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
+    # The size was CLAIMED at initiate; presigned parts do not enforce it. Measure the object and
+    # refuse (and delete) anything bigger than claimed - that is how the storage cap stays a cap.
+    media = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
+    try:
+        real = s3_service.get_s3_client().head_object(Bucket=settings.s3_bucket, Key=body.s3_key)["ContentLength"]
+    except Exception:  # noqa: BLE001 - cannot measure: treat as the claim, the guard already checked it
+        real = media.file_size_bytes if media else 0
+    if media and real > media.file_size_bytes * 1.01 + 1024:
+        s3_service.delete_object(body.s3_key)
+        version.processing_status = ProcessingStatus.failed
+        db.commit()
+        raise HTTPException(status_code=413, detail="The file is larger than announced. Upload it again.")
     version.processing_status = ProcessingStatus.processing
     db.commit()
     background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
@@ -375,7 +418,13 @@ def guest_review(token: str, db: Session = Depends(get_db)):
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
     out = []
     for a in db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.deleted_at.is_(None)).order_by(Asset.created_at).all():
-        v = db.query(AssetVersion).filter(AssetVersion.asset_id == a.id, AssetVersion.deleted_at.is_(None)) \
+        # Comments come from the newest READY version; the status shows the newest one still alive
+        # (uploading/processing), so a failed or abandoned retry never hides the review.
+        alive = db.query(AssetVersion).filter(AssetVersion.asset_id == a.id, AssetVersion.deleted_at.is_(None),
+                                              AssetVersion.processing_status != ProcessingStatus.failed) \
+            .order_by(AssetVersion.version_number.desc()).first()
+        v = db.query(AssetVersion).filter(AssetVersion.asset_id == a.id, AssetVersion.deleted_at.is_(None),
+                                          AssetVersion.processing_status == ProcessingStatus.ready) \
             .order_by(AssetVersion.version_number.desc()).first()
         comments = []
         if v and reviewer:
@@ -390,8 +439,8 @@ def guest_review(token: str, db: Session = Depends(get_db)):
             comments = [{"id": str(c.id), "t": c.timecode_start, "body": c.body.replace("Must fix — ", "", 1),
                          "must_fix": c.body.startswith("Must fix")} for c in rows]
         out.append({"asset_id": str(a.id), "name": a.name,
-                    "version": v.version_number if v else 0,
-                    "processing": (v.processing_status.value if v else "uploading"),
+                    "version": (alive or v).version_number if (alive or v) else 0,
+                    "processing": (alive.processing_status.value if alive else "uploading"),
                     "comments": comments})
     gate = owner_status(review_bridge.request_status([req.review_share_token]).get(req.review_share_token))
     return {"assets": out, "gate": gate, "review_share_token": req.review_share_token}
@@ -434,3 +483,57 @@ def guest_object(token: str, body: GuestObjection, db: Session = Depends(get_db)
     if r is None:
         raise HTTPException(status_code=503, detail="Could not reach the reviewer. Try again in a minute.")
     return r
+
+
+def _brand_logo(db: Session, project_id: uuid.UUID) -> Optional[str]:
+    """The brand's own logo, for a white-label request page. None = show the brand name."""
+    b = db.query(ProjectBranding).filter(ProjectBranding.project_id == project_id).first()
+    if not b or not b.logo_s3_key:
+        return None
+    try:
+        return s3_service.generate_presigned_get_url(b.logo_s3_key)
+    except Exception:  # noqa: BLE001 - a missing logo must never break the editor's page
+        return None
+
+
+def rank_editors(uploads: list[dict], stats: dict[str, dict]) -> list[dict]:
+    """People ranked by accuracy: the share of their videos with no must-fix on the first version.
+
+    One row per email. A video counts once (its first version is the one that shows how right the
+    editor got it); versions per video says how many rounds it took. Videos whose first review is
+    unknown are left out of the rate but still counted, so a small sample is visible as small.
+    """
+    people: dict[str, dict] = {}
+    for u in uploads:
+        p = people.setdefault(u["email"], {"email": u["email"], "name": u["name"], "assets": set()})
+        p["name"] = u["name"] or p["name"]
+        p["assets"].add(u["asset_id"])
+    out = []
+    for p in people.values():
+        known = [stats[a] for a in p["assets"] if a in stats and stats[a].get("v1MustFix") is not None]
+        clean = sum(1 for s in known if s["v1MustFix"] == 0)
+        versions = [stats[a]["versions"] for a in p["assets"] if a in stats]
+        out.append({
+            "email": p["email"], "name": p["name"], "videos": len(p["assets"]),
+            "rated": len(known),
+            "first_try_rate": round(clean / len(known), 3) if known else None,
+            "avg_versions": round(sum(versions) / len(versions), 2) if versions else None,
+            "open_must_fixes": sum(stats[a].get("openMustFix", 0) for a in p["assets"] if a in stats),
+        })
+    # Most accurate first; unknowns last; more videos breaks a tie (a 100% on 1 is not a 100% on 20).
+    out.sort(key=lambda r: (r["first_try_rate"] is None, -(r["first_try_rate"] or 0), -r["rated"], r["name"].lower()))
+    return out
+
+
+@router.get("/insights/editors")
+def editors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The owner's editors, most accurate first - everyone who handed in through their requests."""
+    q = db.query(RequestUpload, UploadRequest).join(UploadRequest, RequestUpload.request_id == UploadRequest.id)
+    if not current_user.is_superadmin:   # superadmins see every editor; everyone else, their own requests
+        member_projects = [m.project_id for m in db.query(ProjectMember).filter(
+            ProjectMember.user_id == current_user.id, ProjectMember.deleted_at.is_(None)).all()]
+        q = q.filter((UploadRequest.created_by == current_user.id) | (UploadRequest.project_id.in_(member_projects or [uuid.uuid4()])))
+    rows = q.limit(5000).all()
+    uploads = [{"email": u.uploader_email, "name": u.uploader_name, "asset_id": str(u.asset_id)} for u, _ in rows]
+    stats = review_bridge.asset_stats(sorted({u["asset_id"] for u in uploads}))
+    return {"editors": rank_editors(uploads, stats), "reviewed": bool(stats) or not uploads}

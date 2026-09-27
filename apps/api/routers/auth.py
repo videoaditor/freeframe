@@ -105,8 +105,9 @@ def _resolve_against_directory(db: Session, email: str, user: User | None) -> Us
 
 def _create_customer(db: Session, email: str) -> Optional[User]:
     """A self-signed-up customer account: verified by the magic code it is about to receive."""
+    # Stored as typed (trimmed), exactly like an invite, so the existing exact-match lookups find it.
     user = User(
-        email=email.strip().lower(),
+        email=email.strip(),
         name=email.split("@")[0][:255] or "New user",
         status=UserStatus.pending_verification,
         is_staff=False,
@@ -115,8 +116,9 @@ def _create_customer(db: Session, email: str) -> Optional[User]:
     try:
         db.commit()
     except IntegrityError:
+        # Someone else holds this address - never hand that account out from a signup path.
         db.rollback()
-        return get_user_by_email(db, email)
+        return None
     db.refresh(user)
     return user
 
@@ -133,14 +135,16 @@ def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
     Every outcome returns the same response, so this endpoint can't be used to
     enumerate registered emails.
     """
-    user = get_user_by_email(db, body.email)
+    existing = get_user_by_email(db, body.email)
+    user = existing
 
     if directory_service.is_configured():
         user = _resolve_against_directory(db, body.email, user)
 
-    # Platform v2: someone new may sign up as a CUSTOMER. Never staff - they see only what they
-    # create. Still answers exactly like every other outcome, so nothing becomes enumerable.
-    if not user and settings.self_signup_enabled:
+    # Platform v2: someone NEW may sign up as a CUSTOMER. Never staff - they see only what they
+    # create. Only when no account exists at all: an existing account the directory just refused
+    # stays refused, and is never "re-created". Answers like every other outcome (no enumeration).
+    if existing is None and user is None and settings.self_signup_enabled:
         user = _create_customer(db, body.email)
 
     if not user:

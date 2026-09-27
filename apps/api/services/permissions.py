@@ -102,6 +102,12 @@ def require_project_role(
 
 # ── Asset-level ────────────────────────────────────────────────────────────────
 
+def is_staff(user) -> bool:
+    """Platform v2: a self-signed-up customer is not staff. Anything that an account got for merely
+    existing - public projects, the people search - is staff-only from here on."""
+    return getattr(user, "is_staff", True) is not False
+
+
 def is_public_project(db: Session, project_id: uuid.UUID) -> bool:
     """Check if a project is public."""
     project = db.query(Project).filter(
@@ -130,8 +136,8 @@ def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     if direct:
         return True
 
-    # 4. Public project — any authenticated user can view
-    if is_public_project(db, asset.project_id):
+    # 4. Public project — any authenticated STAFF user can view (never a customer account)
+    if is_staff(user) and is_public_project(db, asset.project_id):
         return True
 
     return False

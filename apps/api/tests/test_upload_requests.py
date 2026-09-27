@@ -182,7 +182,7 @@ def test_self_signup_creates_a_customer_never_staff():
     db.add.side_effect = added.append
     _create_customer(db, "New@Brand.com")
     assert added[0].is_staff is False
-    assert added[0].email == "new@brand.com"
+    assert added[0].email == "New@Brand.com"   # stored as typed, like an invite, so exact-match lookups find it
 
 
 def test_self_signup_is_off_by_default():
@@ -203,3 +203,99 @@ def test_an_objection_about_another_folders_file_is_refused(monkeypatch):
         rq.guest_object("t", rq.GuestObjection(asset_id=uuid.uuid4(), text="The price is on screen at 0:14."), db)
     assert exc.value.status_code == 403
     assert called == []
+
+
+# ── Ranking editors by accuracy ───────────────────────────────────────────────
+
+def test_editors_are_ranked_by_first_try_accuracy():
+    from apps.api.routers.requests import rank_editors
+    uploads = [
+        {"email": "a@x.com", "name": "Alfredo", "asset_id": "1"},
+        {"email": "a@x.com", "name": "Alfredo", "asset_id": "1"},   # his v2 of the same video
+        {"email": "a@x.com", "name": "Alfredo", "asset_id": "2"},
+        {"email": "s@x.com", "name": "Sandra", "asset_id": "3"},
+        {"email": "n@x.com", "name": "New", "asset_id": "4"},
+    ]
+    stats = {
+        "1": {"versions": 2, "v1MustFix": 2, "openMustFix": 0},
+        "2": {"versions": 1, "v1MustFix": 0, "openMustFix": 0},
+        "3": {"versions": 1, "v1MustFix": 0, "openMustFix": 0},
+    }
+    r = rank_editors(uploads, stats)
+    assert [x["name"] for x in r] == ["Sandra", "Alfredo", "New"]
+    alfredo = r[1]
+    assert alfredo["videos"] == 2                    # a V2 is not a second video
+    assert alfredo["first_try_rate"] == 0.5
+    assert alfredo["avg_versions"] == 1.5
+    assert r[2]["first_try_rate"] is None            # not reviewed yet: ranked last, not as 0%
+
+
+def test_a_larger_sample_wins_a_tie():
+    from apps.api.routers.requests import rank_editors
+    uploads = [{"email": "one@x", "name": "One", "asset_id": "1"},
+               {"email": "many@x", "name": "Many", "asset_id": "2"}, {"email": "many@x", "name": "Many", "asset_id": "3"}]
+    stats = {k: {"versions": 1, "v1MustFix": 0, "openMustFix": 0} for k in "123"}
+    assert [x["name"] for x in rank_editors(uploads, stats)] == ["Many", "One"]
+
+
+# ── Review findings (2026-09-28) ──────────────────────────────────────────────
+
+def test_a_customer_brand_is_namespaced_never_its_typed_name():
+    from apps.api.routers.requests import project_brand
+    project = MagicMock()
+    project.id = uuid.uuid4()
+    project.name = "Freiheit"                      # would resolve onto freiheit-media by name
+    customer = MagicMock(is_staff=False)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = customer
+    assert project_brand(db, project) == f"cust-{project.id.hex[:16]}"
+
+
+def test_a_staff_workspace_keeps_its_name_and_is_never_empty():
+    from apps.api.routers.requests import project_brand
+    project = MagicMock()
+    project.id = uuid.uuid4()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = MagicMock(is_staff=True)
+    project.name = "Glow25"
+    assert project_brand(db, project) == "glow25"
+    project.name = "GmbH"
+    assert project_brand(db, project).startswith("cust-")
+
+
+def test_a_refused_staff_account_is_never_recreated_by_signup(monkeypatch):
+    from apps.api.routers import auth
+    staff = MagicMock(is_staff=True, is_superadmin=False)
+    monkeypatch.setattr(auth, "get_user_by_email", lambda db, e: staff)
+    monkeypatch.setattr(auth.directory_service, "is_configured", lambda: True)
+    monkeypatch.setattr(auth, "_resolve_against_directory", lambda db, e, u: None)   # roster says: gone
+    monkeypatch.setattr(auth.settings, "self_signup_enabled", True)
+    created = []
+    monkeypatch.setattr(auth, "_create_customer", lambda db, e: created.append(e))
+    monkeypatch.setattr(auth, "store_magic_code", lambda *a: pytest.fail("no code may be stored"))
+    auth.send_magic_code(auth.SendMagicCodeRequest(email="gone@aditor.ai"), MagicMock())
+    assert created == []
+
+
+def test_signup_never_hands_out_an_existing_account():
+    from sqlalchemy.exc import IntegrityError
+    from apps.api.routers.auth import _create_customer
+    db = MagicMock()
+    db.commit.side_effect = IntegrityError("dup", {}, Exception())
+    assert _create_customer(db, "taken@x.com") is None
+
+
+def test_a_customer_gets_no_people_directory():
+    from apps.api.routers.users import search_users
+    assert search_users(q="a", db=MagicMock(), current_user=MagicMock(is_staff=False)) == []
+
+
+def test_public_projects_are_a_staff_thing(monkeypatch):
+    from apps.api.services import permissions
+    monkeypatch.setattr(permissions, "is_public_project", lambda db, pid: True)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    asset = MagicMock(project_id=uuid.uuid4())
+    customer = MagicMock(is_staff=False, is_superadmin=False)
+    assert permissions.is_staff(customer) is False
+    assert permissions.is_staff(MagicMock(is_staff=True)) is True

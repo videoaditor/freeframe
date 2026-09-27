@@ -92,3 +92,10 @@ def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, 
         "share_token": share_token, "asset_id": asset_id, "comment_id": comment_id,
         "body": body, "text": text, "who": who,
     }, timeout=45)
+
+
+def asset_stats(asset_ids: list[str]) -> dict[str, dict]:
+    if not asset_ids:
+        return {}
+    r = _call("GET", "/api/v1/assets", params={"ids": ",".join(asset_ids[:200])})
+    return (r or {}).get("assets") or {}

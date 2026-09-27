@@ -28,6 +28,9 @@ def get_users_batch(
         raise HTTPException(status_code=400, detail="Invalid user ID format")
     if len(user_ids) > 100:
         raise HTTPException(status_code=400, detail="Max 100 user IDs per request")
+    if getattr(current_user, "is_staff", True) is False:
+        # A customer may resolve only itself - never browse the instance's people.
+        user_ids = [u for u in user_ids if u == current_user.id]
     users = db.query(User).filter(User.id.in_(user_ids), User.deleted_at.is_(None)).all()
     return users
 
@@ -39,6 +42,8 @@ def search_users(
     current_user: User = Depends(get_current_user),
 ):
     """Search users by name or email. Returns up to 10 matching users."""
+    if getattr(current_user, "is_staff", True) is False:
+        return []   # customers do not get a directory of everyone else's names and emails
     pattern = f"%{q}%"
     users = db.query(User).filter(
         User.deleted_at.is_(None),

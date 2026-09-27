@@ -14,7 +14,7 @@ from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
 from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
 from ..services.storage import project_storage_used_bytes
-from ..services.permissions import effective_project_role, implicit_project_role, higher_role
+from ..services.permissions import effective_project_role, implicit_project_role, higher_role, is_staff
 from ..config import settings
 from ..services import automation_share
 
@@ -162,13 +162,11 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
         projects = db.query(Project).filter(Project.deleted_at.is_(None)).all()
     else:
         # Get projects: user's memberships + all public projects
-        projects = db.query(Project).filter(
-            Project.deleted_at.is_(None),
-            or_(
-                Project.id.in_(member_project_ids) if member_project_ids else False,
-                Project.is_public == True,
-            ),
-        ).all()
+        # A customer sees only projects it is a member of - public ones are a staff convenience.
+        visible = [Project.id.in_(member_project_ids) if member_project_ids else False]
+        if is_staff(current_user):
+            visible.append(Project.is_public == True)
+        projects = db.query(Project).filter(Project.deleted_at.is_(None), or_(*visible)).all()
 
     all_project_ids = [p.id for p in projects]
     if not all_project_ids:
@@ -232,7 +230,7 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _get_project(db, project_id)
     role = effective_project_role(db, project_id, current_user)
-    if not role and not project.is_public:
+    if not role and not (project.is_public and is_staff(current_user)):
         raise HTTPException(status_code=403, detail="Not a project member")
     resp = ProjectResponse.model_validate(project)
     resp.poster_url = _resolve_poster_url(db, project)
@@ -261,6 +259,9 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
         _check_description_requirement(body.description)
         project.description = body.description
     if body.is_public is not None:
+        # A customer cannot publish a project to every account on the instance.
+        if body.is_public and not is_staff(current_user):
+            raise HTTPException(status_code=403, detail="Only staff can make a project public.")
         project.is_public = body.is_public
     if body.is_workspace is not None:
         # An admin marks a project as a brand workspace (or unmarks a junk one) - this is what the
