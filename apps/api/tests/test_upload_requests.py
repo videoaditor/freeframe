@@ -188,3 +188,18 @@ def test_self_signup_creates_a_customer_never_staff():
 def test_self_signup_is_off_by_default():
     from apps.api.config import Settings
     assert Settings.model_fields["self_signup_enabled"].default is False
+
+
+def test_an_objection_about_another_folders_file_is_refused(monkeypatch):
+    from apps.api.routers import requests as rq
+    req = _req()
+    monkeypatch.setattr(rq, "_live_request", lambda db, token: req)
+    asset = MagicMock(folder_id=uuid.uuid4())       # not this request's folder
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = asset
+    called = []
+    monkeypatch.setattr(rq.review_bridge, "object_to_note", lambda *a: called.append(a))
+    with pytest.raises(HTTPException) as exc:
+        rq.guest_object("t", rq.GuestObjection(asset_id=uuid.uuid4(), text="The price is on screen at 0:14."), db)
+    assert exc.value.status_code == 403
+    assert called == []

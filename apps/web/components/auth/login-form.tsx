@@ -12,6 +12,12 @@ import type { VerifyCodeResponse, AuthTokens } from '@/types'
 
 type Step = 'email' | 'code' | 'password' | 'classic'
 
+/** Where to land after signing in: the page that sent you here, else the v2 home. Same-origin paths only. */
+function afterLogin(): string {
+  const from = new URLSearchParams(window.location.search).get('from') || ''
+  return from.startsWith('/') && !from.startsWith('//') ? from : '/home'
+}
+
 // Build-time flag: NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=false removes the password
 // path from the UI entirely. Defaults to enabled so upstream behaviour is unchanged.
 const PASSWORD_LOGIN_ENABLED = process.env.NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED !== 'false'
@@ -20,6 +26,8 @@ export function LoginForm() {
   const router = useRouter()
   const [step, setStep] = useState<Step>(PASSWORD_LOGIN_ENABLED ? 'classic' : 'email')
   const [email, setEmail] = useState('')
+  // Prefilled when the front door sends someone here with the address they typed (?email=).
+  useEffect(() => { const e = new URLSearchParams(window.location.search).get('email'); if (e) setEmail(e) }, [])
   const [emailError, setEmailError] = useState('')
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [codeError, setCodeError] = useState('')
@@ -134,7 +142,7 @@ export function LoginForm() {
         setTokens(res.access_token, res.refresh_token)
         await useAuthStore.getState().fetchUser()
         const user = useAuthStore.getState().user
-        router.replace('/projects')
+        router.replace(afterLogin())
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -189,7 +197,7 @@ export function LoginForm() {
       setTokens(res.access_token, res.refresh_token)
       await useAuthStore.getState().fetchUser()
       const u = useAuthStore.getState().user
-      router.replace('/projects')
+      router.replace(afterLogin())
     } catch (err) {
       if (err instanceof ApiError) {
         setGeneralError(err.detail)
@@ -225,7 +233,7 @@ export function LoginForm() {
       setTokens(res.access_token, res.refresh_token)
       await useAuthStore.getState().fetchUser()
       const u = useAuthStore.getState().user
-      router.replace('/projects')
+      router.replace(afterLogin())
     } catch (err) {
       if (err instanceof ApiError) {
         setClassicError(err.detail)

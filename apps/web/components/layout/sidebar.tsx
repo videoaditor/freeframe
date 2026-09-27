@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
+  Home,
+  BookOpen,
+  Timer,
   Layers,
   Bell,
   Upload,
@@ -32,7 +35,12 @@ interface NavItem {
   icon: React.ElementType
 }
 
+// Platform v2 order (serial position): what came back, what is checked, what it saved, then the
+// raw projects underneath.
 const navItems: NavItem[] = [
+  { href: '/home', label: 'Home', icon: Home },
+  { href: '/rules', label: 'Brand rules', icon: BookOpen },
+  { href: '/insights', label: 'Time saved', icon: Timer },
   { href: '/projects', label: 'Projects', icon: Layers },
 ]
 

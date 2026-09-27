@@ -79,3 +79,16 @@ def import_rules(brand: str, text: str = "", url: str = "", pdf_base64: str = ""
     return _call("POST", "/api/v1/rules/import", json={
         "brand": brand, "text": text, "url": url, "pdf_base64": pdf_base64,
     }, timeout=90)
+
+
+def decide_suggestion(brand: str, suggestion_id: str, action: str, by: str) -> Optional[dict]:
+    return _call("POST", "/api/v1/rules/suggestion", json={
+        "brand": brand, "id": suggestion_id, "action": action, "by": by,
+    })
+
+
+def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, text: str, who: str) -> Optional[dict]:
+    return _call("POST", "/api/v1/objection", json={
+        "share_token": share_token, "asset_id": asset_id, "comment_id": comment_id,
+        "body": body, "text": text, "who": who,
+    }, timeout=45)

@@ -4,34 +4,43 @@
 
 :root,
 [data-theme="dark"] {
-  /* Background — dark theme */
-  --bg-primary: #0d0d10;
-  --bg-secondary: #16161a;
-  --bg-tertiary: #1e1e24;
-  --bg-elevated: #24242c;
-  --bg-hover: #2a2a34;
+  /* Aditor platform v2 (2026-09-28): dark-first, true-black base, one orange accent, glass.
+     Source: aditor-ops/knowledge/style-guides/aditor-design-guidelines.md. Values follow Apple's
+     dark system palette so the app reads native next to macOS/iOS. */
+  --bg-primary: #0a0a0b;
+  --bg-secondary: #141416;
+  --bg-tertiary: #1c1c1f;
+  --bg-elevated: #232326;
+  --bg-hover: #2a2a2e;
 
-  /* Borders */
-  --border-primary: #2e2e3a;
-  --border-secondary: #222230;
-  --border-focus: #5b8def;
+  /* Hairlines, not borders: 8% white reads as an edge without drawing a box. */
+  --border-primary: rgba(255, 255, 255, 0.09);
+  --border-secondary: rgba(255, 255, 255, 0.06);
+  --border-focus: #ff5b3a;
 
-  /* Text */
-  --text-primary: #eaeaed;
-  --text-secondary: #94949e;
-  --text-tertiary: #5e5e6e;
-  --text-inverse: #0d0d10;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #6e6e73;
+  /* Text ON the accent. Dark on orange is 6.8:1; white on this orange would be 3.1:1 and fail. */
+  --text-inverse: #0a0a0b;
 
-  /* Accent — blue */
-  --accent: #5b8def;
-  --accent-hover: #7aa3f5;
-  --accent-muted: #253556;
+  /* Accent — Aditor orange, used strategically: the one primary action, progress, focus. */
+  --accent: #ff5b3a;
+  --accent-hover: #ff7556;
+  --accent-muted: rgba(255, 91, 58, 0.14);
 
-  /* Status */
-  --status-success: #34d399;
-  --status-warning: #fbbf24;
-  --status-error: #f87171;
-  --status-info: #60a5fa;
+  /* Status — Apple system colours (dark) */
+  --status-success: #30d158;
+  --status-warning: #ffd60a;
+  --status-error: #ff453a;
+  --status-info: #64d2ff;
+
+  /* Glass */
+  --glass-bg: rgba(28, 28, 31, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --drop-border: rgba(255, 255, 255, 0.2);
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.8);
 
   /* Fonts.
      This is the fallback: next/font sets --font-sans to the real family on <body>
@@ -41,43 +50,59 @@
      back to its default serif - which is what shipped while this said
      var(--font-geist), a leftover naming a font this app does not use and never
      defines. The safety net was the thing that broke. */
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Motion (Emil Kowalski's curves) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* Spacing rhythm */
   --space-unit: 4px;
 
-  /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  /* Radius (iOS-like, generous) */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  color-scheme: dark;
 }
 
 [data-theme="light"] {
   --bg-primary: #ffffff;
-  --bg-secondary: #f8f8fa;
-  --bg-tertiary: #f0f0f4;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #ececf0;
   --bg-elevated: #ffffff;
-  --bg-hover: #eaeaef;
+  --bg-hover: #e8e8ed;
 
-  --border-primary: #e0e0e6;
-  --border-secondary: #d0d0d8;
-  --border-focus: #4a7de8;
+  --border-primary: rgba(0, 0, 0, 0.1);
+  --border-secondary: rgba(0, 0, 0, 0.06);
+  --border-focus: #d93a17;
 
-  --text-primary: #1a1a2e;
-  --text-secondary: #5a5a6e;
-  --text-tertiary: #8a8a9e;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #8e8e93;
   --text-inverse: #ffffff;
 
-  --accent: #4a7de8;
-  --accent-hover: #3a6dd8;
-  --accent-muted: #e8eef8;
+  /* Deeper orange in light: white text on it is 4.6:1. */
+  --accent: #d93a17;
+  --accent-hover: #c2320f;
+  --accent-muted: rgba(217, 58, 23, 0.1);
 
-  --status-success: #16a34a;
-  --status-warning: #ca8a04;
-  --status-error: #dc2626;
-  --status-info: #2563eb;
+  --status-success: #248a3d;
+  --status-warning: #b25000;
+  --status-error: #d70015;
+  --status-info: #0071a4;
+
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.6);
+  --drop-border: rgba(0, 0, 0, 0.2);
+  --shadow-lift: 0 24px 60px -28px rgba(0, 0, 0, 0.25);
+
+  color-scheme: light;
 }
 
 @layer base {
@@ -156,4 +181,98 @@
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* ── Platform v2: glass, press, motion ───────────────────────────────────────────────────────
+   Emil Kowalski's rules: transform + opacity only, ease-out curves, nothing from scale(0), UI
+   under 300ms, and the rare moments (an upload landing, a review arriving) may take longer.
+   Reduce Motion keeps the fades and drops every movement. */
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    backdrop-filter: saturate(180%) blur(24px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-lift);
+    border-radius: var(--radius-xl);
+  }
+  .hairline { border: 1px solid var(--border-primary); }
+
+  /* One text field for the whole v2 surface: 48px tall (HIG touch target), 17px (iOS body). */
+  .field {
+    display: block; width: 100%; height: 48px; padding: 0 16px; border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary); background: var(--bg-primary); color: var(--text-primary);
+    font-size: 17px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  textarea.field { height: auto; }
+  .field::placeholder { color: var(--text-tertiary); }
+  .field:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-muted); }
+
+  .press { transition: transform 160ms var(--ease-out), background-color 150ms ease, opacity 150ms ease; }
+  .press:active { transform: scale(0.97); }
+
+  .page-in { animation: v2-rise 320ms var(--ease-out) both; }
+  .sheet-in { animation: v2-sheet 360ms var(--ease-drawer) both; }
+  .fade-in { animation: v2-fade 240ms ease both; }
+
+  .stagger > * { animation: v2-rise 360ms var(--ease-out) both; }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(n+7) { animation-delay: 240ms; }
+
+  /* The upload bar: a linear fill (constant motion is the one place linear is right) with a soft
+     orange glow riding its leading edge. */
+  .progress-track { position: relative; height: 6px; border-radius: 999px; background: var(--bg-hover); overflow: hidden; }
+  .progress-fill {
+    position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent);
+    box-shadow: 0 0 16px 2px var(--accent-muted), 0 0 6px var(--accent);
+    transition: width 240ms linear;
+  }
+
+  /* Reviewing: a light sweeps the frame strip, the way a reader's eye scans. */
+  .scan { position: relative; overflow: hidden; }
+  .scan::after {
+    content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+    animation: v2-scan 1.6s var(--ease-in-out) infinite;
+  }
+
+  /* Must-fix: a red gradient ring (masked 1px) + faint glow. Premium, not a flat side stripe. */
+  .mustfix-ring { position: relative; border-radius: var(--radius-lg); }
+  .mustfix-ring::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(135deg, var(--status-error), rgba(255, 69, 58, 0.15) 60%, rgba(255, 69, 58, 0.4));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .mustfix-ring { box-shadow: 0 0 24px -12px rgba(255, 69, 58, 0.55); }
+
+  /* The drop target wakes up under a dragged file. */
+  .drop-idle { transition: transform 240ms var(--ease-out), border-color 200ms ease, background-color 200ms ease; }
+  .drop-hot { transform: scale(1.01); border-color: var(--accent) !important; background-color: var(--accent-muted); }
+  .folder-lift { transition: transform 360ms var(--ease-out); }
+  .drop-hot .folder-lift { transform: translateY(-6px) scale(1.04); }
+
+  .orange-halo {
+    background: radial-gradient(60% 50% at 50% 0%, rgba(255, 91, 58, 0.16), transparent 70%);
+  }
+}
+
+@keyframes v2-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes v2-sheet { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes v2-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v2-scan { to { transform: translateX(100%); } }
+
+/* Screen-to-screen: the View Transitions API crossfade (Chrome/Safari 18+); others just navigate. */
+::view-transition-old(root) { animation: 180ms ease both v2-fade reverse; }
+::view-transition-new(root) { animation: 240ms var(--ease-out) both v2-rise; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-in, .stagger > *, .sheet-in { animation: v2-fade 200ms ease both !important; }
+  .press:active, .drop-hot, .drop-hot .folder-lift { transform: none !important; }
+  .scan::after { animation: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }

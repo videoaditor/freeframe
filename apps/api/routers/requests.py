@@ -382,7 +382,12 @@ def guest_review(token: str, db: Session = Depends(get_db)):
             rows = db.query(Comment).filter(Comment.asset_id == a.id, Comment.version_id == v.id,
                                             Comment.guest_author_id == reviewer.id, Comment.parent_id.is_(None),
                                             Comment.deleted_at.is_(None)).order_by(Comment.timecode_start.asc().nullsfirst()).all()
-            comments = [{"t": c.timecode_start, "body": c.body.replace("Must fix — ", "", 1),
+            # A note the reviewer itself withdrew (after an objection) is no longer a finding.
+            withdrawn = {r.parent_id for r in db.query(Comment).filter(
+                Comment.asset_id == a.id, Comment.guest_author_id == reviewer.id, Comment.parent_id.isnot(None),
+                Comment.deleted_at.is_(None), Comment.body.like("You're right%")).all()}
+            rows = [c for c in rows if c.id not in withdrawn]
+            comments = [{"id": str(c.id), "t": c.timecode_start, "body": c.body.replace("Must fix — ", "", 1),
                          "must_fix": c.body.startswith("Must fix")} for c in rows]
         out.append({"asset_id": str(a.id), "name": a.name,
                     "version": v.version_number if v else 0,
@@ -390,3 +395,42 @@ def guest_review(token: str, db: Session = Depends(get_db)):
                     "comments": comments})
     gate = owner_status(review_bridge.request_status([req.review_share_token]).get(req.review_share_token))
     return {"assets": out, "gate": gate, "review_share_token": req.review_share_token}
+
+
+class SuggestionDecision(BaseModel):
+    project_id: uuid.UUID
+    suggestion_id: str
+    action: str = Field(pattern="^(accept|dismiss)$")
+
+
+@router.post("/insights/rules/suggestion")
+def decide_suggestion(body: SuggestionDecision, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    brand = _project_brand(db, body.project_id, current_user, ProjectRole.editor)
+    r = review_bridge.decide_suggestion(brand, body.suggestion_id, body.action, current_user.email)
+    if r is None:
+        raise HTTPException(status_code=503, detail="Auto Review could not save that right now.")
+    return r
+
+
+class GuestObjection(BaseModel):
+    asset_id: uuid.UUID
+    comment_id: str = ""
+    body: str = Field(default="", max_length=2000)
+    text: str = Field(min_length=3, max_length=1000)
+    name: str = Field(default="", max_length=255)
+
+
+@router.post("/r/{token}/object", dependencies=[Depends(rate_limit("request_object", 20, 600))])
+def guest_object(token: str, body: GuestObjection, db: Session = Depends(get_db)):
+    """The editor says a note is wrong. Auto Review judges it, biased toward the editor, and withdraws
+    it from the gate if they are right - the release valve that keeps a wrong must-fix from trapping
+    anyone. The asset must be in this request's folder."""
+    req = _live_request(db, token)
+    asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.deleted_at.is_(None)).first()
+    if not asset or asset.folder_id != req.folder_id:
+        raise HTTPException(status_code=403, detail="Not part of this request")
+    r = review_bridge.object_to_note(req.review_share_token, str(asset.id), body.comment_id, body.body,
+                                     body.text, body.name or req.last_uploader_name or "the editor")
+    if r is None:
+        raise HTTPException(status_code=503, detail="Could not reach the reviewer. Try again in a minute.")
+    return r

@@ -1,20 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans } from "next/font/google";
 import { ToastProvider } from "@/components/shared/toast";
 import { ThemeInitializer } from "@/components/shared/theme-initializer";
 import "./globals.css";
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
-  preload: true,
-});
-
+// SF Pro via the system font stack (--font-sans in globals.css), per the Aditor guidelines and
+// Apple's HIG: native type, no download, Dynamic Type friendly.
 export const metadata: Metadata = {
-  title: "FreeFrame",
-  description: "Collaborative media review and approval platform",
+  title: "Aditor Review",
+  description: "Request files, get instant feedback. Like WeTransfer, with a reviewer built in.",
 };
 
 export const viewport: Viewport = {
@@ -38,7 +31,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${dmSans.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <ThemeInitializer />
         <ToastProvider>{children}</ToastProvider>
       </body>
