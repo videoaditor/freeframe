@@ -124,7 +124,16 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 0
 
     # Reaper: uploads stuck in `uploading`/`failed` longer than this are reclaimed. Hours.
-    stale_upload_timeout_hours: int = 24
+    #
+    # 24h left a real client's folder showing 10 empty placeholder assets (from retried/failed
+    # uploads) for most of a day before this job ever touched them - and even once it runs, it
+    # only reclaims the storage under a stuck VERSION, never the Asset row itself, so a consumer
+    # listing a project's assets (e.g. our own review integration) keeps seeing the empty
+    # placeholder in the folder regardless. A shorter window doesn't fix that second part, but it
+    # does shrink how long wasted storage and folder clutter sit around from a failed upload that
+    # was never explicitly aborted (POST /upload/abort is a client-side call that never fires if
+    # the tab crashes or reloads instead of throwing a catchable JS error).
+    stale_upload_timeout_hours: int = 4
 
     # Retention GC: rows soft-deleted (deleted_at) longer than this are hard-deleted and their
     # S3 objects reclaimed. Days. 0 (or negative) DISABLES the sweep (matches the reaper convention).
