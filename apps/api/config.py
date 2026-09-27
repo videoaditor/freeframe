@@ -180,6 +180,17 @@ class Settings(BaseSettings):
     # Off (the default) changes no behaviour.
     instance_wide_project_access: bool = False
 
+    # Platform v2 (docs/superpowers/specs/2026-09-28-review-platform-v2-design.md).
+    #
+    # SELF_SIGNUP_ENABLED: a magic code sent to an unknown address creates a CUSTOMER account
+    # (is_staff = false) instead of silently doing nothing. Off by default.
+    self_signup_enabled: bool = False
+    # REVIEW_BRIDGE_URL / _SECRET: Auto Review's /api/v1/* contract (review.aditor.ai), called from
+    # this server only - the secret never reaches a browser. Unset = requests still work, they are
+    # just not reviewed, and the owner list shows every request as ready (fail open).
+    review_bridge_url: str = ""
+    review_bridge_secret: str = ""
+
     # Machine access. A caller presenting SERVICE_API_KEY in X-API-Key is treated
     # as the user named by SERVICE_API_KEY_EMAIL, so every existing per-project
     # permission check still applies - the key is an alternative credential for a

@@ -112,7 +112,10 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
     # Letting editors create projects produced per-card junk projects whose share link showed
     # nothing (the videos sat in a folder in a different project), which is what "the videos are not
     # in the folder" turned out to be. One workspace per brand; nobody spins up a per-card project.
-    if not getattr(current_user, "is_superadmin", False):
+    # Platform v2: a CUSTOMER (is_staff false) creates their own brand workspace - it is theirs
+    # alone, they are its only member. Staff editors still file into existing workspaces.
+    is_customer = getattr(current_user, "is_staff", True) is False
+    if not getattr(current_user, "is_superadmin", False) and not is_customer:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an admin can create a workspace. File your hand-in into an existing workspace instead.",
@@ -131,7 +134,8 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
     db.add(member)
     # A standing link for the automation, created WITH the project so nobody has to remember. Off
     # unless a webhook URL is configured. See services/automation_share.py.
-    link = automation_share.create_standing_link(db, project.id, current_user.id)
+    # Not for a customer's workspace: their hand-ins are file requests, each with its own link.
+    link = None if is_customer else automation_share.create_standing_link(db, project.id, current_user.id)
     db.commit()
     db.refresh(project)
     # Announce AFTER the commit: a webhook that fires for a project the database then rolls back

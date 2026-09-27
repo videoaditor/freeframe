@@ -5,6 +5,7 @@ import logging
 import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from ..database import get_db
 from ..schemas.auth import (
     LoginRequest, TokenResponse,
@@ -102,6 +103,24 @@ def _resolve_against_directory(db: Session, email: str, user: User | None) -> Us
     return user
 
 
+def _create_customer(db: Session, email: str) -> Optional[User]:
+    """A self-signed-up customer account: verified by the magic code it is about to receive."""
+    user = User(
+        email=email.strip().lower(),
+        name=email.split("@")[0][:255] or "New user",
+        status=UserStatus.pending_verification,
+        is_staff=False,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return get_user_by_email(db, email)
+    db.refresh(user)
+    return user
+
+
 @router.post("/send-magic-code", response_model=SendMagicCodeResponse, dependencies=[Depends(rate_limit("send_magic_code", 5, 600))])
 def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
     """
@@ -118,6 +137,11 @@ def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
 
     if directory_service.is_configured():
         user = _resolve_against_directory(db, body.email, user)
+
+    # Platform v2: someone new may sign up as a CUSTOMER. Never staff - they see only what they
+    # create. Still answers exactly like every other outcome, so nothing becomes enumerable.
+    if not user and settings.self_signup_enabled:
+        user = _create_customer(db, body.email)
 
     if not user:
         return SendMagicCodeResponse(

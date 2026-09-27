@@ -52,6 +52,10 @@ def implicit_project_role(user: User) -> ProjectRole | None:
     """
     if not settings.instance_wide_project_access:
         return None
+    # A customer account (self-signup, platform v2) is not staff: it holds only the roles its
+    # memberships give it. `is not False` so a legacy object without the attribute stays staff.
+    if getattr(user, "is_staff", True) is False and not user.is_superadmin:
+        return None
     return ProjectRole.owner if user.is_superadmin else ProjectRole.editor
 
 
