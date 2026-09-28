@@ -127,3 +127,12 @@ it('keeps PDF import behind a secondary action and preserves an unfinished quick
   fireEvent.click(screen.getByRole('button', { name: 'Close guidelines' }))
   expect(screen.getByRole('textbox', { name: 'Quick rule' })).toHaveValue('Keep the logo visible.')
 })
+
+
+it('shows a brand-specific QA example without the removed helper copy', async () => {
+  mount(); await openImport()
+  expect(screen.getByRole('textbox', { name: 'Quick rule' })).toHaveAttribute('placeholder', 'Always show the Northline logo on the end card.')
+  expect(screen.queryByText(/Write it how you’d say it/)).not.toBeInTheDocument()
+  fireEvent.change(screen.getByRole('combobox', { name: 'Brand' }), { target: { value: 'p2' } })
+  expect(await screen.findByPlaceholderText('Always show the Sunday Studio logo on the end card.')).toBeInTheDocument()
+})

@@ -78,15 +78,17 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
   }
 
   return <>
-    <section className="playbook-surface mt-6 p-4 sm:p-5" aria-label="Quick rules">
+    <section className="playbook-surface playbook-composer mt-6" aria-label="Quick rules">
+      <div className="playbook-composer-art" aria-hidden="true"><div className="playbook-book"><span className="playbook-book-spine" /><BookOpen size={38} strokeWidth={1.3} /><span className="playbook-book-line" /><span className="playbook-book-line short" /></div></div>
+      <div className="min-w-0 flex-1">
       <div className="flex items-center justify-between gap-3"><label htmlFor="quick-guideline" className="text-[1rem] font-semibold tracking-tight">Add a quick rule</label><button type="button" disabled={reading} onClick={() => { setImportError(''); setImportOpen(true) }} className="min-h-11 text-[0.75rem] text-text-secondary underline decoration-border underline-offset-4 hover:text-text-primary disabled:opacity-50">Import guidelines</button></div>
       <form onSubmit={e => { e.preventDefault(); if (text.trim() && !reading) void read(/^https?:\/\//i.test(text.trim()) ? { url: text.trim() } : { text: text.trim() }) }} className="mt-2 flex items-end gap-2 rounded-2xl border border-border bg-bg-secondary p-2 focus-within:ring-2 focus-within:ring-accent/60">
-        <textarea ref={quickInput} id="quick-guideline" value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={2} className="min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-[1rem] leading-relaxed outline-none disabled:opacity-50" placeholder="Don’t show that guy with a beard anymore…" aria-label="Quick rule" aria-describedby="quick-guideline-hint" />
+        <textarea ref={quickInput} id="quick-guideline" value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={2} className="min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-[1rem] leading-relaxed outline-none disabled:opacity-50" placeholder={`Always show the ${brandName} logo on the end card.`} aria-label="Quick rule" />
         <button type="submit" disabled={!text.trim() || reading} aria-label={reading ? 'Preparing rule…' : 'Add for approval'} title="Add for approval" className="press grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-text-inverse disabled:opacity-40"><ArrowUp size={20} /></button>
       </form>
-      <p id="quick-guideline-hint" className="mt-2 text-[0.75rem] text-text-secondary">Write it how you’d say it. You approve the suggested rule.</p>
       {reading && !importOpen && <p role="status" className="mt-3 text-[0.8125rem] text-text-secondary">Preparing your rule…</p>}
       {importError && !importOpen && <p role="alert" className="mt-3 text-[0.8125rem] text-text-secondary">{importError}</p>}
+      </div>
     </section>
     <p className="mt-3 text-[0.75rem] text-text-secondary">{data ? `${brandRules.length} active ${brandRules.length === 1 ? 'rule' : 'rules'} · ${required} must follow` : error ? 'Rules unavailable' : 'Loading your rules…'}</p>
     <p className="playbook-priority"><span>Briefing</span><ArrowRight size={12} /><span>Brand rules</span><ArrowRight size={12} /><span>Best practice</span><span className="ml-auto hidden sm:inline">In that order.</span></p>

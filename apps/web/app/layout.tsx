@@ -6,7 +6,8 @@ import "./globals.css";
 // SF Pro via the system font stack (--font-sans in globals.css), per the Aditor guidelines and
 // Apple's HIG: native type, no download, Dynamic Type friendly.
 export const metadata: Metadata = {
-  title: "Aditor Review",
+  title: "Autoreview",
+  icons: { icon: "/autoreview-icon.png", apple: "/autoreview-icon.png" },
   description: "Request files, get instant feedback. Like WeTransfer, with a reviewer built in.",
 };
 

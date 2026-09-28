@@ -86,30 +86,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           collapsed ? 'justify-center px-0' : 'px-4 gap-2.5',
         )}
       >
-        {/* Logo: theme-aware custom logo, or default FreeFrame icons */}
-        {customLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={customLogo}
-            alt={orgName}
-            className="h-7 w-7 shrink-0 object-contain rounded"
-          />
-        ) : (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-icon.png"
-              alt={orgName}
-              className="h-7 w-7 shrink-0 object-contain logo-dark"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-icon-dark.png"
-              alt={orgName}
-              className="h-7 w-7 shrink-0 object-contain logo-light"
-            />
-          </>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={customLogo || '/autoreview-icon.png'} alt={orgName} className="h-8 w-8 shrink-0 rounded-lg object-contain" />
         {!collapsed && (
           <span className="text-sm font-semibold text-text-primary tracking-tight">
             {orgName}
@@ -288,6 +266,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
 
+        <div className={cn('flex items-center gap-1.5 py-2 text-[10px] text-text-tertiary', collapsed ? 'justify-center' : 'px-2.5')} title="By Aditor">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/aditor-logo.png" alt="Aditor" className="h-4 w-4 object-contain opacity-70" />
+          {!collapsed && <span>by Aditor</span>}
+        </div>
         {/* Collapse toggle */}
         <button
           onClick={onToggle}

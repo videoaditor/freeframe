@@ -63,10 +63,10 @@ export default function FrontDoor() {
     <div className="min-h-screen bg-bg-primary">
       <div className="orange-halo pointer-events-none absolute inset-x-0 top-0 h-[520px]" aria-hidden="true" />
       <header className="relative mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Aditor Review">
+        <Link href="/" className="flex items-center gap-2.5" aria-label="Autoreview">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/aditor-logo.png" alt="" className="h-7 w-7" />
-          <span className="text-[15px] font-semibold tracking-tight text-text-primary">Aditor Review</span>
+          <img src="/autoreview-icon.png" alt="" className="h-7 w-7" />
+          <span className="text-[15px] font-semibold tracking-tight text-text-primary">Autoreview</span>
         </Link>
         <Link href="/login?from=/home" className="press inline-flex h-11 items-center rounded-full px-4 text-[15px] font-medium text-text-primary hover:bg-bg-hover">
           Sign in

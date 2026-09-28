@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 
 export const metadata: Metadata = {
-  title: 'Sign in – Aditor Review',
+  title: 'Sign in – Autoreview',
 }
 
 export default function AuthLayout({
@@ -20,14 +20,14 @@ export default function AuthLayout({
       {/* Logo */}
       <div className="relative mb-10 flex items-center gap-3">
         <Image
-          src="/aditor-logo.png"
+          src="/autoreview-icon.png"
           alt=""
           width={40}
           height={40}
           priority
           className="h-10 w-10 object-contain"
         />
-        <span className="text-xl font-semibold text-text-primary">Aditor Review</span>
+        <span className="text-xl font-semibold text-text-primary">Autoreview</span>
       </div>
 
       {/* Card */}

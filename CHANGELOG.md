@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The realtime event stream now renews its token instead of retrying a dead one** - `EventSource` cannot send an `Authorization` header, so the token rides in the query string, and `/events/{project_id}` answers an expired one with 403. Nothing in the reconnect loop renewed it, so a lapsed session turned into an open-ended 403 retry: production logs showed hours of reconnects all carrying a token that had expired that morning. Each attempt now renews first, and gives up after a few consecutive failures rather than reconnecting forever with nothing to authenticate.
 
 ### Changed
+- Autoreview app identity with a dedicated icon and subtle Aditor footer; brand quick rules regain the playbook artwork and use a brand-specific logo example. Existing custom branding is preserved.
 - Quick rules use an inline text composer on the rules page; infrequent PDF import is a secondary action. Suggestions still require owner approval.
 - Editor leaderboard uses compact expandable rows with initials and a first-place crown; the brand-guidelines reminder has a miniature playbook treatment.
 - Finished deliveries appear first in the project board; the overview's ready shortcut shows only ready requests.

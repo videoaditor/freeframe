@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 const headers = { 'Cache-Control': 'no-store' }
 const errors: Record<number, string> = {
-  401: 'Open Aditor Review inside Whop to sign in. If it is already open there, close the app and open it again.',
+  401: 'Open Autoreview inside Whop to sign in. If it is already open there, close the app and open it again.',
   403: 'Your Whop membership does not currently include access to this workspace. Check your access in Whop or contact support.',
   409: 'An account already exists for this identity. Contact support to connect it to Whop.',
   429: 'Too many sign-in attempts. Wait a minute, then try again.',

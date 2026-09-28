@@ -159,7 +159,7 @@ class Handler(BaseHTTPRequestHandler):
                 comments=[dict(id='note',t=0,body='Keep the end card visible for one more second.',must_fix=False)] if done else []
                 return self.send(dict(assets=[dict(asset_id='preview-asset',name='Morning ritual',version=1,processing='ready' if done else 'processing',comments=comments)],gate=dict(status='clear' if done else 'reviewing',open_must_fixes=0),review_share_token='preview'))
             r=next((r for r in REQUESTS if p.endswith(r['token'])),REQUESTS[0]); return self.send(dict(title=r['title'],brand=r['project_name'],logo_url=LOGOS.get(r['project_id']),assets=[dict(id='preview-asset',name='Morning ritual')],brief_excerpt=None,review_share_token='preview',expires_at=None))
-        routes={'/setup/status':dict(needs_setup=False),'/auth/me':USER,'/projects':PROJECTS,'/branding':dict(org_name='Aditor Review'),'/instance/settings':dict(storage_limit_bytes=0,storage_used_bytes=0),'/insights/rules':dict(brand='northline',rules=[],suggestions=[])}
+        routes={'/setup/status':dict(needs_setup=False),'/auth/me':USER,'/projects':PROJECTS,'/branding':dict(org_name='Autoreview'),'/instance/settings':dict(storage_limit_bytes=0,storage_used_bytes=0),'/insights/rules':dict(brand='northline',rules=[],suggestions=[])}
         if p.startswith('/notifications') or p.startswith('/me/'): return self.send([])
         return self.send(routes[p]) if p in routes else self.send({'detail':'Not available in this local preview'},404)
 if __name__ == '__main__':
