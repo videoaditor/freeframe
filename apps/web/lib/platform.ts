@@ -23,6 +23,7 @@ export interface FileRequest {
   title: string
   project_id: string
   project_name: string
+  review_share_token?: string | null
   folder_id?: string | null
   brief_excerpt: string | null
   last_uploader_name: string | null

@@ -4,7 +4,7 @@ import HomePage from '../page'
 import type { EditorStats } from '@/lib/platform'
 
 const state = vi.hoisted(() => ({ error: undefined as Error | undefined, reviewed: true, editors: [] as EditorStats[], requests: [
-  { id: '1', title: 'Launch cut', project_id: 'p', project_name: 'Studio', state: 'live', assets: 1, status: 'clear', url: 'https://example.test/r/1', open_must_fixes: 0 },
+  { id: '1', title: 'Launch cut', project_id: 'p', project_name: 'Studio', state: 'live', assets: 1, status: 'clear', review_share_token: 'delivery-1', url: 'https://example.test/r/1', open_must_fixes: 0 },
   { id: '2', title: 'Summer cut', project_id: 'p', project_name: 'Studio', state: 'live', assets: 2, status: 'held', url: 'https://example.test/r/2', open_must_fixes: 2 },
   { id: '3', title: 'Closed campaign', project_id: 'p', project_name: 'Studio', state: 'revoked', assets: 1, status: 'clear', url: 'https://example.test/r/3', open_must_fixes: 0 },
 ] }));
@@ -30,10 +30,12 @@ it('shows retry rather than a false empty account when requests fail', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('Could not load requests')
   expect(screen.queryByText('Request your first files')).not.toBeInTheDocument()
 })
-it('explains upload-link access and closes the share dialog with Escape', () => {
+it('shares the backend download link instead of upload-link access and closes the share dialog with Escape', () => {
   render(<HomePage />)
   fireEvent.click(screen.getByRole('button', { name: 'Share Launch cut' }))
-  expect(screen.getByRole('dialog')).toHaveTextContent('Anyone with this link can upload files.')
+  expect(screen.getByRole('dialog')).toHaveTextContent('Anyone with this link can view and download these files.')
+  expect(screen.getByRole('link', { name: 'Preview shared files' })).toHaveAttribute('href', `${window.location.origin}/share/delivery-1`)
+  expect(screen.queryByRole('link', { name: 'Open upload page' })).not.toBeInTheDocument()
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
@@ -99,4 +101,11 @@ it('uses one compact disclosure per editor and keeps extra metrics inside it', (
   expect(row).toHaveTextContent('1.1 versions per video')
   expect(screen.getByRole('button', { name: 'Invite via file request' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Never say the same thing twice/ })).toHaveAttribute('href', '/rules')
+})
+
+it('does not fall back to an upload link when a delivery token is missing', () => {
+  render(<HomePage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Share Summer cut' }))
+  expect(screen.getByRole('dialog')).toHaveTextContent('file-sharing link is unavailable')
+  expect(screen.queryByRole('link', { name: 'Open upload page' })).not.toBeInTheDocument()
 })

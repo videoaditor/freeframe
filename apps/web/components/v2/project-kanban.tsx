@@ -97,11 +97,12 @@ function ProjectCard({ request: r, stage, onShare }: { request: FileRequest; sta
   return <li className="kanban-card" data-request-id={r.id} data-stage={stage}>
     <div className="flex items-start justify-between gap-2">
       <div className="kanban-art" aria-hidden="true"><FolderArt size={48} label="" />{stage === 'review' && <span className="kanban-scan" />}{stage === 'corrections' && <PencilLine className="kanban-pencil" size={19} />}{stage === 'ready' && <span className="kanban-check"><CheckCheck size={13} /></span>}</div>
-      {r.state === 'live' && <button type="button" onClick={onShare} aria-label={`Share ${r.title}`} className="press kanban-share"><Share2 size={15} /></button>}
+      {r.state === 'live' && stage !== 'ready' && <button type="button" onClick={onShare} aria-label={`Share ${r.title}`} className="press kanban-share"><Share2 size={15} /></button>}
     </div>
     <Link href={`/projects/${r.project_id}${r.folder_id ? `?folder=${encodeURIComponent(r.folder_id)}` : ''}`} className="kanban-title">{r.title}</Link>
     <p className="kanban-brand">{r.project_name}</p>
     <div className="kanban-card-status"><span className="kanban-status-dot" aria-hidden="true" />{label}</div>
+    {stage === 'ready' && <div className="mt-3 flex gap-2"><Link href={`/projects/${r.project_id}${r.folder_id ? `?folder=${encodeURIComponent(r.folder_id)}` : ''}`} aria-label={`Preview ${r.title}`} className="press flex min-h-11 flex-1 items-center justify-center rounded-full border border-border text-[0.8125rem] font-medium hover:bg-bg-hover">Preview</Link><button type="button" onClick={onShare} aria-label={`Share ${r.title}`} className="press flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent-muted text-[0.8125rem] font-medium text-accent"><Share2 size={14} />Share</button></div>}
     <div className="kanban-card-footer"><span className="inline-flex items-center gap-1.5"><FileVideo size={13} />{r.assets} {r.assets === 1 ? 'file' : 'files'}</span>{r.last_uploader_name && <span className="kanban-editor" title={r.last_uploader_name}><span aria-hidden="true" className="kanban-avatar">{r.last_uploader_name.charAt(0)}</span><span>{r.last_uploader_name}</span></span>}</div>
   </li>
 }

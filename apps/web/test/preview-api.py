@@ -10,7 +10,7 @@ from urllib.parse import urlparse, parse_qs
 USER = dict(id='preview-owner', name='Alex Morgan', email='owner@example.test', is_staff=False, is_superadmin=False, preferences={})
 PROJECTS = [dict(id='p1', name='Northline', is_workspace=True, created_at='2026-09-01'), dict(id='p2', name='Sunday Studio', is_workspace=True, created_at='2026-09-01')]
 def request(i, title, status, count, editor, brand='Northline'):
-    return dict(id=str(i), token=f'tok{i}', url=f'http://localhost:3200/r/tok{i}', title=title, project_id='p2' if brand=='Sunday Studio' else 'p1', folder_id=f'f{i}', project_name=brand, state='live', assets=count, status=status, open_must_fixes=2 if status=='held' else 0, last_uploader_name=editor, created_at='2026-09-28')
+    return dict(id=str(i), token=f'tok{i}', review_share_token=f'delivery{i}', url=f'http://localhost:3200/r/tok{i}', title=title, project_id='p2' if brand=='Sunday Studio' else 'p1', folder_id=f'f{i}', project_name=brand, state='live', assets=count, status=status, open_must_fixes=2 if status=='held' else 0, last_uploader_name=editor, created_at='2026-09-28')
 REQUESTS = [request(1,'Autumn launch · Three hooks','held',3,'Jamie'), request(2,'Morning ritual · UGC','reviewing',1,'Robin'), request(3,'The everyday collection','clear',4,'Jamie','Sunday Studio'), request(4,'October brand story','clear',0,None)]
 EDITORS = [dict(email='robin@example.test',name='Robin',videos=24,rated=24,first_try_rate=.917,avg_versions=1.1,open_must_fixes=0), dict(email='jamie@example.test',name='Jamie',videos=38,rated=38,first_try_rate=.789,avg_versions=1.3,open_must_fixes=2)]
 EDITORS += [dict(email='kai@example.test', name='Kai', videos=8, rated=2, first_try_rate=.5, avg_versions=1.5, open_must_fixes=3), dict(email='sam@example.test', name='Sam', videos=1, rated=0, first_try_rate=None, avg_versions=None, open_must_fixes=0)]
@@ -44,7 +44,7 @@ def demo_assets():
             vid = f'{aid}-v1'
             media = dict(id=f'{aid}-file', version_id=vid, file_type='video', original_filename=f'Demo cut {index}.mp4',
                          mime_type='video/mp4', file_size_bytes=(FIXTURES / 'preview.mp4').stat().st_size,
-                         width=640, height=360, duration_seconds=3, fps=24, created_at=STAMP)
+                         width=360, height=640, duration_seconds=3, fps=24, created_at=STAMP)
             version = dict(id=vid, asset_id=aid, version_number=1, processing_status='ready',
                            created_by=USER['id'], created_at=STAMP, deleted_at=None, files=[media])
             result.append(dict(id=aid, project_id=request['project_id'], folder_id=request['folder_id'],
@@ -82,6 +82,14 @@ def project_preview_response(path, query):
         if parts[2]=='comments': return []
         if parts[2]=='metadata': return []
         if parts[2]=='stream': return dict(url='http://localhost:8100/demo-media/preview.mp4', asset_type='video', mime_type='video/mp4')
+    if parts[0]=='share' and len(parts)>=2:
+        request=next((r for r in REQUESTS if r['review_share_token']==parts[1]),None)
+        if not request: return None
+        assets=[a for a in demo_assets() if a['folder_id']==request['folder_id']]
+        if len(parts)==2: return dict(folder_id=request['folder_id'],folder_name=request['title'],title=request['title'],permission='comment',allow_download=True,visibility='public',show_versions=True)
+        if parts[2]=='assets': return dict(assets=[dict(id=a['id'],name=a['name'],asset_type='video',thumbnail_url=a['thumbnail_url'],file_size=a['latest_version']['files'][0]['file_size_bytes'],duration_seconds=3,comment_count=0,version_count=1,created_by_name=USER['name'],created_at=STAMP) for a in assets],subfolders=[],total=len(assets),page=1,per_page=500)
+        if parts[2]=='comments': return []
+        if parts[2]=='stream' and len(parts)==4 and any(a['id']==parts[3] for a in assets): return dict(url='http://localhost:8100/demo-media/preview.mp4',asset_type='video',mime_type='video/mp4')
     if path=='/users': return [dict(USER, avatar_url=None)]
     return None
 

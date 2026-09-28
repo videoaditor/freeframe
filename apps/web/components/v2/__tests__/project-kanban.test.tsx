@@ -73,6 +73,8 @@ it('puts finished deliveries first and opens their own request folder', () => {
     'Ready to go', 'Corrections', 'In review', 'With editor',
   ])
   expect(screen.getByRole('link', { name: 'Finished' })).toHaveAttribute('href', '/projects/p1?folder=delivery-3')
+  expect(screen.getByRole('link', { name: 'Preview Finished' })).toHaveAttribute('href', '/projects/p1?folder=delivery-3')
+  expect(screen.getByRole('button', { name: 'Share Finished' })).toHaveTextContent('Share')
 })
 
 it('the ready shortcut shows only ready deliveries, without empty other stages', () => {

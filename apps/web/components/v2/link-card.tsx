@@ -23,8 +23,8 @@ export function prettyUrl(url: string): { host: string; path: string } {
   try { const u = new URL(url); return { host: u.host, path: u.pathname + u.search } } catch { return { host: url, path: '' } }
 }
 
-export function LinkCard({ url, label = 'Here’s your link', hint = 'Tap to copy', copiedHint = 'Copied. Paste it to your editor.' }: {
-  url: string; label?: string; hint?: string; copiedHint?: string
+export function LinkCard({ url, label = 'Here’s your link', hint = 'Tap to copy', copiedHint = 'Copied. Paste it to your editor.', openLabel = 'Open upload page' }: {
+  url: string; label?: string; hint?: string; copiedHint?: string; openLabel?: string
 }) {
   const [error, setError] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
@@ -62,7 +62,7 @@ export function LinkCard({ url, label = 'Here’s your link', hint = 'Tap to cop
       {error && <p role="alert" className="break-all text-[13px] text-status-error">Could not copy. Select this link: {url}</p>}
       <div className="flex gap-2">
         <a href={url} target="_blank" rel="noreferrer" className="press inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-border text-[15px] font-medium text-text-primary hover:bg-bg-hover">
-          <ExternalLink className="h-4 w-4" /> Open as editor
+          <ExternalLink className="h-4 w-4" /> {openLabel}
         </a>
         {canShare && (
           <button type="button" onClick={() => navigator.share({ url }).catch(() => {})} className="press inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-border text-[15px] font-medium text-text-primary hover:bg-bg-hover">

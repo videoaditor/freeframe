@@ -495,7 +495,7 @@ button:not(:disabled), summary { cursor: pointer; }
 .playbook-brand-kit > section { padding: 20px; }
 .rule-grid { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--border-primary); }
 .rule-grid > li { min-width: 0; }
-.rule-card { display: flex; flex-direction: column; width: 100%; padding: 20px 4px; border-bottom: 1px solid var(--border-primary); text-align: left; overflow-wrap: anywhere; transition: background-color 160ms ease; }
+.rule-card { display: flex; flex-direction: column; width: 100%; padding: 12px 4px; border-bottom: 1px solid var(--border-primary); text-align: left; overflow-wrap: anywhere; transition: background-color 160ms ease; }
 .rule-card > div { width: 100%; }
 .rule-number { color: var(--text-secondary); font-size: 0.75rem; font-variant-numeric: tabular-nums; letter-spacing: 0.08em; }
 .rule-severity { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px; background: color-mix(in oklch, var(--text-secondary) 7%, transparent); color: var(--text-secondary); font-size: 0.75rem; line-height: 1.3; white-space: nowrap; }
@@ -539,3 +539,7 @@ button:not(:disabled), summary { cursor: pointer; }
   .playbook-composer .playbook-book-line { width: 28px; height: 2px; }
   .playbook-composer .playbook-book-line.short { width: 18px; margin-top: -5px; }
 }
+
+/* One focus indicator for the composite quick-rule field. */
+.quick-rule-input:focus-within { border-color: var(--text-secondary); }
+.quick-rule-input textarea:focus-visible { outline: none; }

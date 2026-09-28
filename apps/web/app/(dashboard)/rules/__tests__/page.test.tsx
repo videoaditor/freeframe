@@ -44,14 +44,14 @@ it('shows active brand rules and exposes complete long guidance in an accessible
   expect(screen.getByText('2 active rules · 1 must follow')).toBeInTheDocument()
 })
 
-it('filters by severity and searches rule content without losing the full library', async () => {
+it('groups by severity and searches rule content without losing the full library', async () => {
   mount()
   await screen.findByRole('button', { name: 'View rule: Protect the logo' })
-  fireEvent.click(screen.getByRole('button', { name: 'Guidance' }))
-  expect(screen.queryByRole('button', { name: 'View rule: Protect the logo' })).not.toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: 'Must follow rules' })).getByRole('button', { name: 'View rule: Protect the logo' })).toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: 'Guidance rules' })).getByRole('button', { name: 'View rule: Let the product breathe' })).toBeInTheDocument()
   fireEvent.change(screen.getByRole('textbox', { name: 'Search rules' }), { target: { value: 'no match' } })
   expect(screen.getByText('No matching rules')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Search rules' }), { target: { value: 'safe area' } })
   expect(screen.getByRole('button', { name: 'View rule: Protect the logo' })).toBeInTheDocument()
 })

@@ -17,7 +17,7 @@ const assetTypeIcons: Record<AssetType, React.ElementType> = {
 const aspectMap = {
   landscape: 'aspect-[16/10]',
   square: 'aspect-square',
-  portrait: 'aspect-[3/4]',
+  portrait: 'aspect-[9/16]',
 }
 
 interface AssetCardProps {
@@ -81,7 +81,7 @@ export function AssetCard({
   showFileSize = true,
   showUploader = true,
   titleLines = '1',
-  aspectRatio = 'landscape',
+  aspectRatio = 'portrait',
   thumbnailScale = 'fit',
   className,
 }: AssetCardProps) {
