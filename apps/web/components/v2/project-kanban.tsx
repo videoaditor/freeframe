@@ -1,0 +1,107 @@
+'use client'
+
+import * as React from 'react'
+import Link from 'next/link'
+import { CheckCheck, FileVideo, PencilLine, ScanLine, Share2, Upload } from 'lucide-react'
+import type { FileRequest } from '@/lib/platform'
+import { FolderArt } from './folder-art'
+
+const STAGES = [
+  { id: 'editor', label: 'With editor', icon: Upload },
+  { id: 'review', label: 'In review', icon: ScanLine },
+  { id: 'corrections', label: 'Corrections', icon: PencilLine },
+  { id: 'ready', label: 'Ready to go', icon: CheckCheck },
+] as const
+type Stage = typeof STAGES[number]['id']
+
+function stageOf(r: FileRequest): Stage | 'closed' {
+  if (r.state !== 'live') return 'closed'
+  if (!r.assets) return 'editor'
+  if (r.status === 'reviewing') return 'review'
+  return r.status === 'held' ? 'corrections' : 'ready'
+}
+
+type Position = { x: number; y: number; stage: string; width: number }
+
+export function ProjectKanban({ requests, paused, onShare, focusReady = false }: {
+  requests: FileRequest[]
+  paused: boolean
+  onShare: (request: FileRequest) => void
+  focusReady?: boolean
+}) {
+  const board = React.useRef<HTMLDivElement>(null)
+  const positions = React.useRef(new Map<string, Position>())
+  const animations = React.useRef<Animation[]>([])
+  const [announcement, setAnnouncement] = React.useState('')
+  const closed = requests.filter(r => r.state !== 'live')
+
+  React.useLayoutEffect(() => {
+    const root = board.current
+    if (!root) return
+    animations.current.forEach(a => a.cancel())
+    animations.current = []
+    const bounds = root.getBoundingClientRect()
+    const next = new Map<string, Position>()
+    const changes: string[] = []
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    root.querySelectorAll<HTMLElement>('[data-request-id]').forEach(card => {
+      const id = card.dataset.requestId!
+      const rect = card.getBoundingClientRect()
+      const position = { x: rect.left - bounds.left + root.scrollLeft, y: rect.top - bounds.top, stage: card.dataset.stage!, width: bounds.width }
+      const before = positions.current.get(id)
+      next.set(id, position)
+      if (!before || before.stage === position.stage) return
+      const request = requests.find(r => r.id === id)!
+      changes.push(`${request.title} moved to ${STAGES.find(s => s.id === position.stage)!.label}`)
+      if (!paused && !reduced && card.animate) {
+        // Coordinates are relative to the board so page/board scrolling cannot create false travel.
+        const sameWidth = before.width === position.width
+        animations.current.push(card.animate([
+          { transform: `translate(${sameWidth ? before.x - position.x : 0}px, ${sameWidth ? before.y - position.y : 0}px)`, opacity: 0.72 },
+          { transform: 'translate(0, 0)', opacity: 1 },
+        ], { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }))
+      }
+    })
+    positions.current = next
+    if (changes.length) setAnnouncement(changes.join('. '))
+  }, [requests, paused])
+
+  React.useEffect(() => () => animations.current.forEach(a => a.cancel()), [])
+  React.useEffect(() => {
+    if (focusReady) board.current?.querySelector('[data-lane="ready"]')?.scrollIntoView?.({ block: 'nearest', inline: 'end' })
+  }, [focusReady])
+
+  return <div className="project-kanban" data-paused={paused}>
+    <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
+    <div ref={board} className="kanban-scroll" role="group" aria-label="Project stages" tabIndex={0}>
+      {STAGES.map(({ id, label, icon: Icon }) => {
+        const items = requests.filter(r => stageOf(r) === id)
+        return <section key={id} aria-label={label} className="kanban-lane" data-lane={id}>
+          <div className="kanban-lane-heading"><span className="kanban-stage-icon"><Icon size={17} /></span><h3>{label}</h3><span className="kanban-count">{items.length}</span></div>
+          <ul aria-label={`${label} projects`} className="kanban-cards">
+            {items.map(r => <ProjectCard key={r.id} request={r} stage={id} onShare={() => onShare(r)} />)}
+          </ul>
+          {!items.length && <p className="kanban-empty">No projects here</p>}
+        </section>
+      })}
+    </div>
+    {!!closed.length && <details className="mt-4 rounded-2xl border border-border px-4">
+      <summary className="min-h-11 cursor-pointer py-3 text-[0.8125rem] text-text-secondary"><span>Closed requests</span> <span className="ml-1">{closed.length}</span></summary>
+      <ul className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">{closed.map(r => <ProjectCard key={r.id} request={r} stage="closed" onShare={() => onShare(r)} />)}</ul>
+    </details>}
+  </div>
+}
+
+function ProjectCard({ request: r, stage, onShare }: { request: FileRequest; stage: Stage | 'closed'; onShare: () => void }) {
+  const label = stage === 'editor' ? 'Waiting for files' : stage === 'review' ? 'Reviewing files' : stage === 'corrections' ? r.open_must_fixes > 0 ? `${r.open_must_fixes} ${r.open_must_fixes === 1 ? 'fix' : 'fixes'} to make` : 'With editor for updates' : stage === 'ready' ? 'Ready to go' : r.state === 'revoked' ? 'Closed' : 'Expired'
+  return <li className="kanban-card" data-request-id={r.id} data-stage={stage}>
+    <div className="flex items-start justify-between gap-2">
+      <div className="kanban-art" aria-hidden="true"><FolderArt size={48} label="" />{stage === 'review' && <span className="kanban-scan" />}{stage === 'corrections' && <PencilLine className="kanban-pencil" size={19} />}{stage === 'ready' && <span className="kanban-check"><CheckCheck size={13} /></span>}</div>
+      {r.state === 'live' && <button type="button" onClick={onShare} aria-label={`Share ${r.title}`} className="press kanban-share"><Share2 size={15} /></button>}
+    </div>
+    <Link href={`/projects/${r.project_id}`} className="kanban-title">{r.title}</Link>
+    <p className="kanban-brand">{r.project_name}</p>
+    <div className="kanban-card-status"><span className="kanban-status-dot" aria-hidden="true" />{label}</div>
+    <div className="kanban-card-footer"><span className="inline-flex items-center gap-1.5"><FileVideo size={13} />{r.assets} {r.assets === 1 ? 'file' : 'files'}</span>{r.last_uploader_name && <span className="kanban-editor" title={r.last_uploader_name}><span aria-hidden="true" className="kanban-avatar">{r.last_uploader_name.charAt(0)}</span><span>{r.last_uploader_name}</span></span>}</div>
+  </li>
+}

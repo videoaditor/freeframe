@@ -1,127 +1,155 @@
 'use client'
 
-/**
- * Home (platform v2). The owner's one question: what came back? One dominant action - Request
- * files - and the list of requests with where each one stands, in words.
- */
 import * as React from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import { ArrowUpRight, Check, Copy, Plus, Timer, BookOpen } from 'lucide-react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { ArrowUpRight, Plus, Timer, BookOpen, CheckCheck, Search, X, ArrowRight, Pause, Play, Trophy } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
-import { getTimeSaved, hours, listRequests, statusLabel, type FileRequest } from '@/lib/platform'
+import { editorAccuracy, getEditors, getTimeSaved, hours, listRequests, type FileRequest, type TimeSaved } from '@/lib/platform'
 import { RequestSheet } from '@/components/v2/request-sheet'
-import { StatusPill } from '@/components/v2/status-pill'
+import { ProjectKanban } from '@/components/v2/project-kanban'
 import { FolderArt } from '@/components/v2/folder-art'
-import { cn } from '@/lib/utils'
+import { LinkCard } from '@/components/v2/link-card'
 
-function greeting(): string {
-  const h = new Date().getHours()
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
-}
+type Filter = 'All' | 'Ready'
 
 export default function HomePage() {
-  usePageTitle('Home')
-  const user = useAuthStore((s) => s.user)
+  usePageTitle('Overview')
+  const user = useAuthStore(s => s.user)
   const [sheet, setSheet] = React.useState(false)
-  // Poll while anything is still being reviewed or fixed, so "Ready" appears without a reload.
-  const { data: requests, mutate, isLoading } = useSWR<FileRequest[]>('/requests', listRequests, {
-    refreshInterval: (d) => (d || []).some((r) => r.status !== 'clear' && r.assets > 0) ? 8000 : 30000,
+  const [sharing, setSharing] = React.useState<FileRequest | null>(null)
+  const [filter, setFilter] = React.useState<Filter>('All')
+  const [query, setQuery] = React.useState('')
+  const [motionPaused, setMotionPaused] = React.useState(false)
+  const { data: requests, error, mutate, isLoading } = useSWR('/requests', listRequests, {
+    refreshInterval: d => (d || []).some(r => r.state === 'live' && r.status === 'reviewing' && r.assets > 0) ? 5000 : 30000,
   })
-  const { data: saved } = useSWR('/insights/time-saved?30', () => getTimeSaved(30), { shouldRetryOnError: false })
-  const first = user?.name?.split(' ')[0]
+  const { data: saved, error: savedError } = useSWR('/insights/time-saved?30', () => getTimeSaved(30), { shouldRetryOnError: false })
+  const { data: performance, error: editorError, mutate: refreshEditors } = useSWR('/insights/editors', getEditors, { refreshInterval: 30000, shouldRetryOnError: false })
+  const live = (requests || []).filter(r => r.state === 'live')
+  const ready = live.filter(r => r.assets > 0 && r.status === 'clear')
+  const filtered = (filter === 'Ready' ? ready : requests || [])
+    .filter(r => `${r.title} ${r.project_name} ${r.last_uploader_name || ''}`.toLowerCase().includes(query.toLowerCase().trim()))
+  const editorUnavailable = !!editorError || performance?.reviewed === false
+  const editors = performance?.editors || []
+  const accuracy = editorAccuracy(editors)
+  const quality = accuracy.average === null ? '—' : `${Math.round(accuracy.average * 100)}%`
+
 
   return (
-    <div className="page-in mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-8 sm:pt-12">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="owner-overview mx-auto w-full max-w-[1320px] px-4 pb-12 pt-6 sm:px-8 lg:px-12 lg:pt-10">
+      <div className="flex flex-wrap items-center justify-between gap-5">
         <div>
-          <p className="text-[15px] text-text-secondary">{greeting()}{first ? `, ${first}` : ''}</p>
-          <h1 className="mt-1 text-[34px] font-bold leading-tight tracking-[-0.02em] text-text-primary">Your requests</h1>
+          <p className="text-[0.9375rem] text-text-secondary">Your creative work, in a good place.</p>
+          <h1 className="mt-1 text-[2.125rem] font-semibold leading-tight tracking-[-0.035em]">Overview<span className="text-accent">.</span></h1>
         </div>
-        <button type="button" onClick={() => setSheet(true)}
-          className="press inline-flex h-12 items-center gap-2 rounded-full bg-accent px-6 text-[17px] font-semibold text-text-inverse hover:bg-accent-hover">
-          <Plus className="h-5 w-5" strokeWidth={2.25} /> Request files
+        <button type="button" onClick={() => setSheet(true)} className="press inline-flex h-12 items-center gap-2 rounded-full bg-accent px-5 text-[0.9375rem] font-semibold text-text-inverse hover:bg-accent-hover">
+          <Plus size={18} /> Request files
         </button>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
-        <Link href="/insights" className="press glass group flex items-center gap-4 p-5">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-accent-muted text-accent"><Timer className="h-5 w-5" /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] text-text-secondary">Saved in the last 30 days</span>
-            <span className="block text-[22px] font-semibold tabular-nums tracking-tight text-text-primary">
-              {saved ? `${hours(saved.totalSec)} hours` : '—'}
-            </span>
-          </span>
-          <ArrowUpRight className="h-5 w-5 text-text-tertiary transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+      <section aria-label="At a glance" className="overview-metrics mt-8 grid gap-4">
+        <button type="button" onClick={() => { setFilter('Ready'); setQuery('') }} className="metric-card metric-ready text-left" aria-label="Show ready requests">
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[0.875rem] font-medium"><CheckCheck size={17} /> Ready to go</span><ArrowUpRight size={17} /></div>
+          <p className="metric-number mt-6">{requests ? ready.length.toString().padStart(2, '0') : '—'}</p>
+          <p className="mt-2 text-[0.8125rem]">{error ? 'Requests unavailable' : 'Open ready files'}</p>
+        </button>
+        <Link href="/insights" className="metric-card metric-time group relative overflow-hidden">
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[0.875rem] font-medium"><Timer size={17} /> Time saved</span><ArrowUpRight size={17} /></div>
+          <p className="relative z-10 mt-6 flex items-baseline gap-2"><strong className="metric-number">{saved ? hours(saved.totalSec) : '—'}</strong><span className="text-[1.125rem]">hours</span></p>
+          <p className="relative z-10 mt-2 text-[0.8125rem]">{savedError ? 'Temporarily unavailable' : 'Estimated · last 30 days'}</p>
+          <SavingsLine points={saved?.perDay || []} />
         </Link>
-        <Link href="/rules" className="press glass group flex items-center gap-4 p-5">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-bg-hover text-text-primary"><BookOpen className="h-5 w-5" /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] text-text-secondary">What the reviewer checks</span>
-            <span className="block text-[22px] font-semibold tracking-tight text-text-primary">Brand rules</span>
-          </span>
-          <ArrowUpRight className="h-5 w-5 text-text-tertiary transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-        </Link>
-      </div>
+        <a href="#editor-performance" className="metric-card metric-quality">
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[0.875rem] font-medium"><CheckCheck size={17} /> First-try pass rate</span><ArrowUpRight size={17} /></div>
+          <p className="mt-6 flex items-start gap-2">
+            <span className="metric-number">{editorUnavailable ? '—' : quality}</span>
+            {!editorUnavailable && accuracy.outliers.length > 0 && <span
+              aria-label={`${accuracy.outliers.length} ${accuracy.outliers.length === 1 ? 'editor stands' : 'editors stand'} out. See ranking.`}
+              className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[0.75rem] font-semibold tabular-nums text-text-inverse ring-2 ring-bg-secondary">
+              {accuracy.outliers.length}
+            </span>}
+          </p>
+          <p className="mt-2 text-[0.8125rem]">{editorUnavailable ? 'Temporarily unavailable' : accuracy.count ? `Average of ${accuracy.count} ${accuracy.count === 1 ? 'editor' : 'editors'} · all history` : performance ? 'No reviewed first versions yet' : 'Loading editor results…'}</p>
+        </a>
 
-      <section className="mt-10" aria-label="Requests">
-        {isLoading ? (
-          <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="skeleton-shimmer h-[76px] animate-shimmer rounded-[var(--radius-lg)]" />)}</div>
-        ) : !requests?.length ? (
-          <button type="button" onClick={() => setSheet(true)}
-            className="press flex w-full flex-col items-center gap-4 rounded-[var(--radius-xl)] border border-dashed border-border bg-bg-secondary/50 px-6 py-14 text-center hover:border-accent">
-            <FolderArt size={96} />
-            <span className="text-[20px] font-semibold tracking-tight text-text-primary">Request your first files</span>
-            <span className="max-w-sm text-[15px] text-text-secondary">Drop a briefing, get a link, send it to your editor. You only see the work once it is clean.</span>
-          </button>
-        ) : (
-          <ul className="stagger space-y-2">
-            {requests.map((r) => <RequestRow key={r.id} r={r} />)}
-          </ul>
-        )}
       </section>
 
+      <div className="mt-9 grid items-start gap-8">
+        <section aria-label="Project requests" className="min-w-0">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-[1.25rem] font-semibold tracking-tight">Projects <span className="ml-1 text-[0.875rem] font-normal text-text-secondary">{requests?.length ?? ''}</span></h2>
+            <Link href="/projects" className="inline-flex min-h-11 items-center gap-1.5 text-[0.8125rem] text-text-secondary hover:text-text-primary">All projects <ArrowUpRight size={14} /></Link>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {filter === 'Ready' && <button type="button" onClick={() => setFilter('All')} className="press inline-flex min-h-11 items-center gap-2 rounded-full bg-accent-muted px-3 text-[0.8125rem] font-medium text-accent">Ready to go <X size={14} /><span className="sr-only">Show all stages</span></button>}
+              <button type="button" aria-pressed={motionPaused} onClick={() => setMotionPaused(p => !p)} aria-label={motionPaused ? 'Resume motion' : 'Pause motion'} title={motionPaused ? 'Resume motion' : 'Pause motion'} className="press kanban-motion grid h-11 w-11 place-items-center rounded-full text-text-secondary hover:bg-bg-hover">{motionPaused ? <Play size={14} /> : <Pause size={14} />}</button>
+            </div>
+            <label className="flex h-11 w-full items-center gap-2 rounded-full border border-border bg-bg-secondary px-3 sm:w-44"><Search size={16} className="shrink-0 text-text-secondary" /><input aria-label="Search requests" value={query} onChange={e => setQuery(e.target.value)} placeholder="Find a project" className="min-w-0 w-full bg-transparent text-[0.8125rem] outline-none" /></label>
+          </div>
+          {error && <div role="alert" className="mt-4 rounded-2xl border border-border p-5 text-[0.9375rem]">Could not load requests. <button className="min-h-11 font-semibold text-accent" onClick={() => mutate()}>Retry</button></div>}
+          {isLoading ? <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Loading requests">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-64 animate-shimmer rounded-2xl" />)}</div> : !error && !requests?.length ? (
+            <button type="button" onClick={() => setSheet(true)} className="press mt-5 flex w-full flex-col items-center gap-3 rounded-3xl border border-dashed border-border bg-bg-secondary px-6 py-12 text-center">
+              <FolderArt size={88} /><span className="text-[1.25rem] font-semibold">Request your first files</span><span className="text-[0.9375rem] text-text-secondary">One link for your editor. Everything comes back here.</span>
+            </button>
+          ) : filtered.length ? (
+            <ProjectKanban requests={filtered} paused={motionPaused} onShare={setSharing} focusReady={filter === 'Ready'} />
+          ) : !error && <div className="mt-5 rounded-2xl border border-border p-8 text-center"><p className="text-[0.9375rem] text-text-secondary">No matching requests</p><button onClick={() => { setQuery(''); setFilter('All') }} className="mt-2 min-h-11 text-[0.875rem] font-medium text-accent">Clear filters</button></div>}
+
+        </section>
+
+        <aside className="grid items-start gap-4">
+          <section id="editor-performance" className="rounded-3xl border border-border bg-bg-secondary p-5 scroll-mt-6">
+            <div className="flex items-center justify-between gap-2"><h2 className="text-[1.062rem] font-semibold tracking-tight">Editor leaderboard</h2><Trophy size={18} className="text-text-secondary" /></div>
+            <p className="mt-1 text-[0.8125rem] text-text-secondary">Ranked by first versions without must-fixes</p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4"><p className="max-w-xl text-[0.8125rem] text-text-secondary">Share a file request. Editors enter their name and email and join after their first upload.</p><button type="button" onClick={() => setSheet(true)} className="inline-flex min-h-11 items-center gap-1.5 text-[0.8125rem] font-medium text-accent"><Plus size={14} />Invite via file request</button></div>
+            {editorUnavailable ? <div role="alert" className="mt-5 text-[0.8125rem] text-text-secondary">Editor results unavailable. <button onClick={() => refreshEditors()} className="min-h-11 font-medium text-accent">Retry</button></div> : !performance ? <div className="skeleton-shimmer mt-5 h-32 animate-shimmer rounded-xl" /> : !editors.length ? <p className="mt-6 text-[0.875rem] leading-relaxed text-text-secondary">Your editors appear here after their first upload.</p> : (
+              <ol aria-label="Editor accuracy ranking" className="mt-4 divide-y divide-border">{editors.map((editor, i) => {
+                const known = editor.first_try_rate !== null
+                const outlier = accuracy.outliers.find(o => o.email === editor.email)
+                return <li key={editor.email} className="py-3 first:pt-0">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <span className={`mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[0.8125rem] font-semibold tabular-nums ${known && i === 0 ? 'bg-accent-muted text-accent' : 'text-text-secondary'}`} aria-label={known ? `Rank ${i + 1}` : 'Unranked'}>{known ? i + 1 : '—'}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="min-w-0 break-words text-[0.9375rem] font-medium [overflow-wrap:anywhere]">{editor.name || editor.email}</p>
+                        {known ? <strong className="shrink-0 text-[1.25rem] font-semibold tabular-nums">{Math.round(editor.first_try_rate! * 100)}%</strong> : <span className="shrink-0 text-[0.75rem] text-text-secondary">Not reviewed yet</span>}
+                      </div>
+                      <p className="mt-1 text-[0.75rem] text-text-secondary">{editor.rated} of {editor.videos} reviewed{known && editor.rated < 5 && <span> · Small sample</span>}</p>
+                      {outlier && <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-bg-hover px-2 py-1 text-[0.75rem] font-medium"><span aria-hidden="true">{outlier.direction === 'above' ? '↑' : '↓'}</span>{outlier.direction === 'above' ? 'Above average' : 'Below average'}</p>}
+                      <details className="mt-1 text-[0.75rem] text-text-secondary"><summary className="flex min-h-11 cursor-pointer items-center gap-2 list-none">View details <span aria-hidden="true">＋</span></summary><div className="space-y-1 pb-2">
+                        {editor.name && <p className="break-words [overflow-wrap:anywhere]">{editor.email}</p>}
+                        <p>{editor.avg_versions === null ? 'Average versions unavailable' : `${editor.avg_versions.toFixed(1)} versions per video on average`}</p>
+                        <p>{editor.open_must_fixes} open {editor.open_must_fixes === 1 ? 'must-fix' : 'must-fixes'}</p>
+                      </div></details>
+                    </div>
+                  </div>
+                </li>
+              })}</ol>
+            )}
+            <details className="mt-5 border-t border-border pt-3 text-[0.75rem] leading-relaxed text-text-secondary"><summary className="min-h-11 cursor-pointer py-3">How this is measured</summary><p className="mt-2">Only reviewed first versions count. Pending or unavailable reviews are excluded. A new version is not a new video. Fewer than 5 reviewed videos is marked as a small sample. The overview averages each rated editor equally, over all available history. The notification marks editors at least 20 percentage points above or below that average. It appears only with at least 3 editors who each have 5 reviewed videos; smaller samples never receive a marker.</p></details>
+          </section>
+          <Link href="/rules" className="group flex items-center gap-3 rounded-2xl border border-border px-4 py-3 text-text-secondary hover:bg-bg-hover"><BookOpen size={18} className="shrink-0" /><div className="min-w-0 flex-1"><h2 className="text-[0.875rem] font-medium text-text-primary">Never say the same thing twice</h2><p className="mt-0.5 text-[0.8125rem]">Check your brand guidelines.</p></div><ArrowRight size={16} className="shrink-0" /></Link>
+        </aside>
+      </div>
+      <p className="mt-8 text-[0.75rem] text-text-secondary">{user?.name ? `${user.name.split(' ')[0]}’s workspace` : 'Your workspace'} <span className="px-1.5">·</span> A little less reviewing. A little more creating.</p>
       <RequestSheet open={sheet} onOpenChange={setSheet} onCreated={() => mutate()} />
+      <Dialog.Root open={!!sharing} onOpenChange={open => { if (!open) setSharing(null) }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" /><Dialog.Content className="owner-sheet sheet-in fixed inset-x-4 top-[15vh] z-50 mx-auto max-h-[75vh] max-w-lg overflow-y-auto rounded-3xl border border-border bg-bg-elevated p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-[1.375rem] font-semibold tracking-tight">Share request</Dialog.Title><Dialog.Description className="mt-1 text-[0.9375rem] text-text-secondary">{sharing?.title}</Dialog.Description></div><Dialog.Close aria-label="Close share dialog" className="press grid h-11 w-11 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div>
+        <div className="mt-6">{sharing && <LinkCard url={sharing.url} label="Link for your editor" hint="Anyone with this link can upload files." />}</div>
+      </Dialog.Content></Dialog.Portal></Dialog.Root>
     </div>
   )
 }
 
-function RequestRow({ r }: { r: FileRequest }) {
-  const [copied, setCopied] = React.useState(false)
-  const s = statusLabel(r)
-  const ready = s.tone === 'ok'
-  const copy = async () => {
-    await navigator.clipboard.writeText(r.url).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1600)
-  }
-  const body = (
-    <>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[17px] font-semibold tracking-tight text-text-primary">{r.title}</span>
-        <span className="mt-0.5 block truncate text-[13px] text-text-secondary">
-          {r.project_name}
-          {r.assets ? ` · ${r.assets} ${r.assets === 1 ? 'file' : 'files'}` : ''}
-          {r.last_uploader_name ? ` · from ${r.last_uploader_name}` : ''}
-        </span>
-      </span>
-      <StatusPill label={s.label} tone={s.tone} />
-    </>
-  )
-  return (
-    <li className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-bg-secondary pr-2 transition-colors hover:bg-bg-tertiary">
-      {ready ? (
-        // Ready opens the hand-in. Not-ready is not a link: the owner waits, the editor fixes.
-        <Link href={`/projects/${r.project_id}`} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-5">{body}</Link>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-5">{body}</div>
-      )}
-      <button type="button" onClick={copy} aria-label="Copy request link" title="Copy request link"
-        className={cn('press grid h-11 w-11 shrink-0 place-items-center rounded-full', copied ? 'text-status-success' : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary')}>
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-      </button>
-    </li>
-  )
+function SavingsLine({ points }: { points: TimeSaved['perDay'] }) {
+  if (points.length < 2 || !points.some(p => p.sec > 0)) return null
+  let cumulative = 0
+  const values = points.map(p => (cumulative += Math.max(0, p.sec)))
+  const max = Math.max(1, ...values)
+  const line = values.map((v, i) => `${i ? 'L' : 'M'}${i * 400 / (values.length - 1)},${68 - v / max * 58}`).join(' ')
+  return <svg viewBox="0 0 400 80" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full opacity-30" aria-hidden="true"><path d={`${line} L400,80 L0,80Z`} fill="currentColor" opacity="0.15" /><path d={line} stroke="currentColor" fill="none" strokeWidth="1.5" /></svg>
 }

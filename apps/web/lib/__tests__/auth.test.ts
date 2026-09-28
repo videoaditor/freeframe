@@ -209,3 +209,64 @@ describe('renewing a lapsed session', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+it('Whop entry clears tokens and customer-specific persisted data before exchanging identity', async () => {
+  const { resetWhopEntry } = await import('../auth')
+  localStorage.setItem('ff_access_token', 'old-owner')
+  localStorage.setItem('ff_refresh_token', 'old-refresh')
+  localStorage.setItem('ff-uploads', 'old-private-files')
+  localStorage.setItem('ff-branding', 'old-brand')
+  resetWhopEntry()
+  expect(getAccessToken()).toBeNull()
+  expect(getRefreshToken()).toBeNull()
+  expect(localStorage.getItem('ff-uploads')).toBeNull()
+  expect(localStorage.getItem('ff-branding')).toBeNull()
+  expect(localStorage.getItem('ff_auth_provider')).toBe('whop')
+})
+
+it('a successful ordinary login replaces a previous Whop sign-in method', () => {
+  localStorage.setItem('ff_auth_provider', 'whop')
+  document.cookie = 'ff_auth_provider=whop; path=/'
+  setTokens('staff-access', 'staff-refresh')
+  expect(localStorage.getItem('ff_auth_provider')).toBeNull()
+  expect(document.cookie).not.toContain('ff_auth_provider=whop')
+})
+
+it('refresh keeps a successful Whop session in the Whop sign-in lane', async () => {
+  localStorage.setItem('ff_auth_provider', 'whop')
+  localStorage.setItem('ff_refresh_token', 'whop-refresh')
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+    ok: true, json: async () => ({ access_token: 'renewed', refresh_token: 'renewed-refresh' }),
+  } as Response)
+  expect(await refreshAccessTokenQuietly()).toBe('renewed')
+  expect(localStorage.getItem('ff_auth_provider')).toBe('whop')
+  fetchMock.mockRestore()
+})
+
+it('a pending refresh cannot restore the previous owner after Whop entry clears it', async () => {
+  const { resetWhopEntry } = await import('../auth')
+  setTokens('old-access', 'old-refresh')
+  let complete!: (value: Response) => void
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
+  const refreshing = refreshAccessTokenQuietly()
+  resetWhopEntry()
+  complete({ ok: true, json: async () => ({ access_token: 'stale-access', refresh_token: 'stale-refresh' }) } as Response)
+  await refreshing
+  expect(getAccessToken()).toBeNull()
+  expect(getRefreshToken()).toBeNull()
+  fetchMock.mockRestore()
+})
+
+it('a stale refresh never supplies the new owner token for retrying an old mutation', async () => {
+  setTokens('old-access', 'old-refresh')
+  let complete!: (value: Response) => void
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
+  const refreshing = refreshAccessToken()
+  const newAccess = `header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`
+  setTokens(newAccess, 'new-owner-refresh', 'whop')
+  complete({ ok: true, json: async () => ({ access_token: 'stale-access', refresh_token: 'stale-refresh' }) } as Response)
+  expect(await refreshing).toBeNull()
+  expect(getAccessToken()).toBe(newAccess)
+  expect(getRefreshToken()).toBe('new-owner-refresh')
+  fetchMock.mockRestore()
+})

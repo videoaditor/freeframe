@@ -56,10 +56,17 @@ export function getLiveAccessToken(): string | null {
   return exp - EXPIRY_LEEWAY_SECONDS > Date.now() / 1000 ? token : null
 }
 
-export function setTokens(access: string, refresh: string): void {
+export function setTokens(access: string, refresh: string, provider: 'email' | 'whop' = 'email'): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(ACCESS_TOKEN_KEY, access)
   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+  if (provider === 'whop') {
+    localStorage.setItem('ff_auth_provider', 'whop')
+    document.cookie = 'ff_auth_provider=whop; path=/; max-age=604800; SameSite=Lax'
+  } else {
+    localStorage.removeItem('ff_auth_provider')
+    document.cookie = 'ff_auth_provider=; path=/; max-age=0'
+  }
   // Set cookies so middleware can check auth on server side
   document.cookie = `${ACCESS_TOKEN_KEY}=${access}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
   document.cookie = `${REFRESH_TOKEN_KEY}=${refresh}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
@@ -72,7 +79,19 @@ export function clearTokens(): void {
   // Clear auth cookies
   document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
   document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
-  window.location.href = '/login'
+  window.location.href = localStorage.getItem('ff_auth_provider') === 'whop' ? '/whop' : '/login'
+}
+
+/** Start a Whop identity exchange without inheriting a previous owner's session. */
+export function resetWhopEntry(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  localStorage.removeItem('ff-uploads')
+  localStorage.removeItem('ff-branding')
+  localStorage.setItem('ff_auth_provider', 'whop')
+  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
+  document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
+  document.cookie = 'ff_auth_provider=whop; path=/; max-age=604800; SameSite=Lax'
 }
 
 // Deduplicate concurrent refresh calls — when access token expires, multiple
@@ -106,8 +125,9 @@ export async function refreshAccessTokenQuietly(): Promise<string | null> {
  * needs an account anyway.
  */
 export async function refreshAccessToken(): Promise<string | null> {
+  const originalSession = getRefreshToken()
   const token = await refreshAccessTokenQuietly()
-  if (!token) clearTokens()
+  if (!token && getRefreshToken() === originalSession) clearTokens()
   return token
 }
 
@@ -135,13 +155,16 @@ async function _doRefresh(): Promise<string | null> {
       body: JSON.stringify({ refresh_token: refreshToken }),
     })
 
+    if (getRefreshToken() !== refreshToken) return null
     if (!response.ok) return null
 
     const data = await response.json()
+    // A Whop entry or another login may have replaced this session while we waited.
+    if (getRefreshToken() !== refreshToken) return null
     const newAccessToken: string = data.access_token
     const newRefreshToken: string = data.refresh_token ?? refreshToken
 
-    setTokens(newAccessToken, newRefreshToken)
+    setTokens(newAccessToken, newRefreshToken, localStorage.getItem('ff_auth_provider') === 'whop' ? 'whop' : 'email')
     return newAccessToken
   } catch {
     return null

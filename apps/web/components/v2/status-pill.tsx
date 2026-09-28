@@ -17,7 +17,7 @@ const DOT = {
 /** Status the Aditor way: a dot and words in a soft pill. Never colour alone (HIG). */
 export function StatusPill({ label, tone }: { label: string; tone: keyof typeof TONE }) {
   return (
-    <span className={cn('inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[13px] font-medium', TONE[tone])}>
+    <span data-tone={tone} className={cn('inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[13px] font-medium', TONE[tone])}>
       <span className={cn('h-1.5 w-1.5 rounded-full', DOT[tone])} aria-hidden="true" />
       {label}
     </span>

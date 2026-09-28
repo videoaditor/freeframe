@@ -5,36 +5,40 @@ import { Check, RotateCcw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatBytes } from '@/lib/platform'
 import { FolderArt } from './folder-art'
+import { ReviewWaiting } from './review-waiting'
 
 export type UploadPhase = 'uploading' | 'reviewing' | 'done' | 'error'
 
-/** The number counts up to the real value instead of jumping - the upload feels continuous. */
-function useEased(target: number) {
-  const [v, setV] = React.useState(target)
-  React.useEffect(() => {
-    let raf = 0
-    const tick = () => {
-      setV((cur) => {
-        const next = cur + (target - cur) * 0.18
-        if (Math.abs(target - next) < 0.2) return target
-        raf = requestAnimationFrame(tick)
-        return next
-      })
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [target])
-  return v
-}
-
 const PHASE_TEXT: Record<UploadPhase, string> = {
   uploading: 'Uploading',
-  reviewing: 'Reviewing, about a minute',
+  reviewing: 'Reviewing',
   done: 'Reviewed',
   error: 'Stopped',
 }
 
-export function UploadCard({ name, size, progress, phase, error, onRetry, onRemove, className }: {
+/** The file itself as the icon: its first frame (video) or the image. Real beats a symbol. */
+function Thumb({ file, done }: { file?: File; done: boolean }) {
+  const [url, setUrl] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    if (!file) return
+    const u = URL.createObjectURL(file)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [file])
+  if (!file || !url) return <FolderArt size={64} label={done ? 'DONE' : 'FILE'} />
+  return (
+    <span className="relative block h-16 w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] bg-black ring-1 ring-[var(--glass-border)]">
+      {file.type.startsWith('image/')
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={url} alt="" className="h-full w-full object-cover" />
+        : <video src={`${url}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-cover" />}
+      {done && <span className="absolute inset-0 grid place-items-center bg-black/45 fade-in"><Check className="h-6 w-6 text-status-success" /></span>}
+    </span>
+  )
+}
+
+export function UploadCard({ name, size, progress, phase, error, onRetry, onRemove, className, file }: {
+  file?: File
   name: string
   size: number
   progress: number
@@ -44,11 +48,11 @@ export function UploadCard({ name, size, progress, phase, error, onRetry, onRemo
   onRemove?: () => void
   className?: string
 }) {
-  const pct = useEased(Math.round(Math.min(1, Math.max(0, progress)) * 100))
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100)
   return (
-    <div className={cn('glass p-5 sm:p-6', phase === 'reviewing' && 'scan', className)} role="status" aria-live="polite">
+    <div className={cn('glass p-5 sm:p-6', className)} role="status" aria-live="polite">
       <div className="flex items-center gap-4">
-        <FolderArt size={64} label={phase === 'done' ? 'DONE' : 'FILE'} />
+        <Thumb file={file} done={phase === 'done'} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[17px] font-semibold tracking-tight text-text-primary">{name}</p>
           <p className="mt-0.5 text-[13px] text-text-secondary">{formatBytes(size)}</p>
@@ -59,7 +63,7 @@ export function UploadCard({ name, size, progress, phase, error, onRetry, onRemo
           </button>
         )}
       </div>
-      <div className="mt-5 rounded-[var(--radius-lg)] border border-border bg-bg-primary/40 px-4 py-3.5">
+      {phase === 'reviewing' ? <ReviewWaiting /> : <div className="mt-5 rounded-[var(--radius-lg)] border border-border bg-bg-primary/40 px-4 py-3.5">
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-2 text-[15px] text-text-primary">
             {phase === 'done' ? <Check className="h-4 w-4 text-status-success" /> :
@@ -76,13 +80,13 @@ export function UploadCard({ name, size, progress, phase, error, onRetry, onRemo
             </button>
           )}
         </div>
-        {(phase === 'uploading' || phase === 'reviewing') && (
-          <div className="progress-track mt-3">
-            <div className="progress-fill" style={{ width: phase === 'reviewing' ? '100%' : `${pct}%` }} />
+        {phase === 'uploading' && (
+          <div className="progress-track mt-3" role="progressbar" aria-label="Upload progress" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+            <div className="progress-fill" style={{ width: `${pct}%` }} />
           </div>
         )}
         {phase === 'error' && error && <p className="mt-2 text-[13px] text-status-error">{error}</p>}
-      </div>
+      </div>}
     </div>
   )
 }

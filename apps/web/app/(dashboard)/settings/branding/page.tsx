@@ -104,7 +104,7 @@ export default function BrandingPage() {
   }
 
   const isAdmin = user?.is_superadmin
-  const hasCustomBranding = orgName !== 'FreeFrame' || orgLogoDark !== null || orgLogoLight !== null
+  const hasCustomBranding = orgName !== 'Aditor Review' || orgLogoDark !== null || orgLogoLight !== null
 
   // Which logo is active right now
   const activeLogo = theme === 'light' ? (orgLogoLight ?? orgLogoDark) : (orgLogoDark ?? orgLogoLight)
@@ -218,7 +218,7 @@ export default function BrandingPage() {
             variant="ghost"
             size="sm"
             className="text-status-error hover:text-status-error hover:bg-status-error/10 gap-1.5"
-            onClick={() => { resetAll(); setNameValue('FreeFrame') }}
+            onClick={() => { resetAll(); setNameValue('Aditor Review') }}
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reset to defaults

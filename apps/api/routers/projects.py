@@ -120,7 +120,8 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an admin can create a workspace. File your hand-in into an existing workspace instead.",
         )
-    _check_description_requirement(body.description)
+    if not is_customer:
+        _check_description_requirement(body.description)
     project = Project(
         name=body.name,
         description=body.description,
@@ -256,7 +257,8 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
     if body.description is not None:
         # Closing the same door on the way out: a project that had to carry the link to be
         # created should not be able to drop it on the next edit.
-        _check_description_requirement(body.description)
+        if is_staff(current_user):
+            _check_description_requirement(body.description)
         project.description = body.description
     if body.is_public is not None:
         # A customer cannot publish a project to every account on the instance.

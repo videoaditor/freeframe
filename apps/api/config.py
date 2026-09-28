@@ -185,6 +185,9 @@ class Settings(BaseSettings):
     # SELF_SIGNUP_ENABLED: a magic code sent to an unknown address creates a CUSTOMER account
     # (is_staff = false) instead of silently doing nothing. Off by default.
     self_signup_enabled: bool = False
+    # Whop owner entry is disabled until both are configured. No signing secret is shared.
+    suite_url: str = ""
+    whop_app_id: str = ""
     # REVIEW_BRIDGE_URL / _SECRET: Auto Review's /api/v1/* contract (review.aditor.ai), called from
     # this server only - the secret never reaches a browser. Unset = requests still work, they are
     # just not reviewed, and the owner list shows every request as ready (fail open).

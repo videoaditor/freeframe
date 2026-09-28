@@ -3,12 +3,12 @@
 import { useEffect } from 'react'
 
 /**
- * Sets the browser tab title. Appends " – FreeFrame" suffix.
- * Pass null/undefined to reset to default "FreeFrame".
+ * Sets the browser tab title. Appends " – Aditor Review" suffix.
+ * Pass null/undefined to reset to default "Aditor Review".
  */
 export function usePageTitle(title: string | null | undefined) {
   useEffect(() => {
-    document.title = title ? `${title} – FreeFrame` : 'FreeFrame'
-    return () => { document.title = 'FreeFrame' }
+    document.title = title ? `${title} – Aditor Review` : 'Aditor Review'
+    return () => { document.title = 'Aditor Review' }
   }, [title])
 }

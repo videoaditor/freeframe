@@ -32,6 +32,29 @@ export interface FileRequest {
   created_at: string | null
 }
 
+export interface EditorStats {
+  email: string
+  name: string
+  videos: number
+  rated: number
+  first_try_rate: number | null
+  avg_versions: number | null
+  open_must_fixes: number
+}
+export interface EditorInsights { editors: EditorStats[]; reviewed: boolean }
+export const getEditors = () => api.get<EditorInsights>('/insights/editors')
+
+/** Equal weight per editor: uploaded assets may be attributed to multiple people. */
+export function editorAccuracy(editors: EditorStats[]) {
+  const rated = editors.filter((e): e is EditorStats & { first_try_rate: number } => e.rated > 0 && e.first_try_rate !== null)
+  const average = rated.length ? rated.reduce((sum, e) => sum + e.first_try_rate, 0) / rated.length : null
+  const established = rated.filter(e => e.rated >= 5)
+  const outliers = average === null || established.length < 3 ? [] : established
+    .filter(e => Math.abs(e.first_try_rate - average) >= .2 - Number.EPSILON)
+    .map(e => ({ email: e.email, direction: e.first_try_rate > average ? 'above' as const : 'below' as const }))
+  return { average, count: rated.length, outliers }
+}
+
 export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional' }
 
 export interface TimeSaved {
@@ -168,6 +191,40 @@ export const importRules = (body: { project_id: string; text?: string; url?: str
 export const decideSuggestion = (body: { project_id: string; suggestion_id: string; action: 'accept' | 'dismiss' }) =>
   api.post<{ ok: boolean }>('/insights/rules/suggestion', body)
 
+// ── Brand logo (white-label request pages) ────────────────────────────────────
+
+/** Any image → a square-bounded WebP (the branding bucket stores WebP), transparency kept. */
+export async function toWebp(file: File, max = 512): Promise<Blob> {
+  let bmp: ImageBitmap
+  try { bmp = await createImageBitmap(file) }
+  catch { throw new Error('Could not read that image. Choose a PNG, JPG or WebP file.') }
+  try {
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height))
+    const c = document.createElement('canvas')
+    c.width = Math.max(1, Math.round(bmp.width * scale))
+    c.height = Math.max(1, Math.round(bmp.height * scale))
+    const ctx = c.getContext('2d')
+    if (!ctx) throw new Error('Could not read that image. Try another browser.')
+    ctx.drawImage(bmp, 0, 0, c.width, c.height)
+    return await new Promise<Blob>((resolve, reject) => c.toBlob(blob => {
+      if (blob?.type === 'image/webp') resolve(blob)
+      else reject(new Error('Your browser could not create a WebP logo. Try another browser.'))
+    }, 'image/webp', 0.92))
+  } finally { bmp.close() }
+}
+
+export async function uploadBrandLogo(projectId: string, file: File): Promise<string | null> {
+  const body = await toWebp(file)
+  const { upload_url, key } = await api.post<{ upload_url: string; key: string }>(`/projects/${projectId}/branding/logo-upload`, {})
+  const put = await fetch(upload_url, { method: 'PUT', headers: { 'content-type': 'image/webp' }, body })
+  if (!put.ok) throw new Error('The logo did not upload. Try again.')
+  const b = await api.put<{ logo_url: string | null }>(`/projects/${projectId}/branding`, { logo_s3_key: key })
+  return b.logo_url
+}
+
+export const getBrandLogo = (projectId: string) =>
+  api.get<{ logo_url: string | null }>(`/projects/${projectId}/branding`).then((b) => b.logo_url)
+
 export interface RuleRow { id: string; name: string; what: string; scope: string; severity: string; active: boolean }
 export interface SuggestionRow { id: string; name?: string; what?: string; source?: string }
 
@@ -185,6 +242,7 @@ export function fileToBase64(file: File): Promise<string> {
 export interface RequestView {
   title: string
   brand: string
+  logo_url?: string | null
   brief_excerpt: string | null
   review_share_token: string
   assets: { id: string; name: string }[]
@@ -233,17 +291,31 @@ export async function uploadToRequest(
   const parts: { PartNumber: number; ETag: string }[] = []
   const total = Math.ceil(file.size / CHUNK)
   try {
-    for (let n = 1; n <= total; n++) {
-      const chunk = file.slice((n - 1) * CHUNK, Math.min(n * CHUNK, file.size))
-      const { presigned_url } = await pub<{ presigned_url: string }>('POST', `/r/${token}/upload/presign-part`,
-        { s3_key: init.s3_key, upload_id: init.upload_id, part_number: n })
-      // One retry per part: a dropped part costs 10 MB, not the whole file.
-      let put = await fetch(presigned_url, { method: 'PUT', body: chunk }).catch(() => null)
-      if (!put || !put.ok) put = await fetch(presigned_url, { method: 'PUT', body: chunk })
-      if (!put.ok) throw new Error('The upload stopped. Drop the file again.')
-      parts.push({ PartNumber: n, ETag: put.headers.get('ETag') ?? '' })
-      onProgress(n / total)
-    }
+    let next = 1, sent = 0
+    let failed = false
+    // Three in flight hide per-part network latency without flooding a laptop uplink.
+    // Wait for all workers before aborting: no part may still be writing after cleanup.
+    const results = await Promise.allSettled(Array.from({ length: Math.min(3, total) }, async () => {
+      while (next <= total && !failed) {
+        const n = next++
+        try {
+          const chunk = file.slice((n - 1) * CHUNK, Math.min(n * CHUNK, file.size))
+          const { presigned_url } = await pub<{ presigned_url: string }>('POST', `/r/${token}/upload/presign-part`,
+            { s3_key: init.s3_key, upload_id: init.upload_id, part_number: n })
+          let put = await fetch(presigned_url, { method: 'PUT', body: chunk }).catch(() => null)
+          if (!put || !put.ok) put = await fetch(presigned_url, { method: 'PUT', body: chunk })
+          if (!put.ok) throw new Error('The upload stopped. Drop the file again.')
+          const etag = put.headers.get('ETag')
+          if (!etag) throw new Error('The upload could not be verified. Try again.')
+          parts.push({ PartNumber: n, ETag: etag })
+          sent += chunk.size
+          onProgress(sent / file.size)
+        } catch (error) { failed = true; throw error }
+      }
+    }))
+    const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failure) throw failure.reason
+    parts.sort((a, b) => a.PartNumber - b.PartNumber)
     await pub('POST', `/r/${token}/upload/complete`, { s3_key: init.s3_key, upload_id: init.upload_id, parts })
   } catch (e) {
     await pub('POST', `/r/${token}/upload/abort`, { s3_key: init.s3_key, upload_id: init.upload_id, part_number: 1 }).catch(() => {})

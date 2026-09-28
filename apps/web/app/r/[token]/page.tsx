@@ -9,12 +9,13 @@
  */
 import * as React from 'react'
 import useSWR from 'swr'
-import { CheckCircle2, Clock, FileVideo } from 'lucide-react'
+import { CheckCircle2, FileVideo } from 'lucide-react'
 import { objectToNote, requestReview, uploadToRequest, viewRequest, type RequestReview } from '@/lib/platform'
 import { withViewTransition } from '@/lib/motion'
 import { DropZone } from '@/components/v2/drop-zone'
 import { UploadCard, type UploadPhase } from '@/components/v2/upload-card'
 import { ReviewList } from '@/components/v2/review-list'
+import { ReviewWaiting } from '@/components/v2/review-waiting'
 import { cn } from '@/lib/utils'
 
 interface Job { id: string; file: File; progress: number; phase: UploadPhase; error?: string; assetId?: string }
@@ -50,6 +51,7 @@ export default function RequestPage({ params }: { params: { token: string } }) {
       const r = await uploadToRequest(token, who, job.file, (p) => update(job.id, { progress: p }))
       previews.current[r.asset_id] = URL.createObjectURL(job.file)
       update(job.id, { phase: 'done', progress: 1, assetId: r.asset_id })
+      refreshReview()
     } catch (e) {
       update(job.id, { phase: 'error', error: e instanceof Error ? e.message : 'The upload stopped. Try again.' })
     }
@@ -93,10 +95,9 @@ export default function RequestPage({ params }: { params: { token: string } }) {
   const uploading = jobs.some((j) => j.phase === 'uploading')
 
   return (
-    <Shell brand={view.brand}>
+    <Shell brand={view.brand} logo={view.logo_url}>
       <div className="page-in mx-auto w-full max-w-3xl pb-24 pt-8 sm:pt-12">
-        <p className="text-[13px] font-medium uppercase tracking-[0.06em] text-accent">{view.brand} asks for</p>
-        <h1 className="mt-1 text-balance text-[34px] font-bold leading-tight tracking-[-0.02em] text-text-primary">{view.title}</h1>
+        <h1 className="text-balance text-[34px] font-bold leading-tight tracking-[-0.02em] text-text-primary">{view.title}</h1>
         {view.brief_excerpt && (
           <p className="mt-3 line-clamp-3 max-w-2xl text-[15px] leading-relaxed text-text-secondary">{view.brief_excerpt}</p>
         )}
@@ -123,7 +124,7 @@ export default function RequestPage({ params }: { params: { token: string } }) {
         {jobs.filter((j) => j.phase !== 'done').length > 0 && (
           <div className="mt-6 space-y-3">
             {jobs.filter((j) => j.phase !== 'done').map((j) => (
-              <UploadCard key={j.id} name={j.file.name} size={j.file.size} progress={j.progress} phase={j.phase} error={j.error}
+              <UploadCard key={j.id} file={j.file} name={j.file.name} size={j.file.size} progress={j.progress} phase={j.phase} error={j.error}
                 onRetry={() => upload(j)} onRemove={() => setJobs((js) => js.filter((x) => x.id !== j.id))} className="sheet-in" />
             ))}
           </div>
@@ -147,9 +148,7 @@ export default function RequestPage({ params }: { params: { token: string } }) {
                         className="aspect-[9/16] max-h-[60vh] w-full rounded-[var(--radius-xl)] bg-black object-contain md:sticky md:top-6" />
                     )}
                     {pending ? (
-                      <div className="glass scan flex items-center gap-3 p-5 text-[15px] text-text-secondary">
-                        <Clock className="h-4 w-4 text-accent" /> Reviewing, about a minute. You can leave this page open.
-                      </div>
+                      <p role="status" className="py-5 text-[15px] text-text-secondary">Feedback will appear here when the review is ready.</p>
                     ) : (
                       <ReviewList comments={a.comments} onSeek={src ? (t) => seek(a.asset_id, t) : undefined}
                         onObject={async (c, text) => {
@@ -189,21 +188,25 @@ function GateBanner({ status, open, brand }: { status: 'reviewing' | 'held' | 'c
     )
   }
   return (
-    <div className="glass scan fade-in mt-8 flex items-center gap-3 p-5" role="status">
-      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-text-tertiary border-t-accent" />
-      <p className="text-[17px] text-text-primary">Reviewing your files, about a minute each.</p>
-    </div>
+    <div className="glass mt-8"><ReviewWaiting compact /></div>
   )
 }
 
-function Shell({ children, brand }: { children: React.ReactNode; brand?: string }) {
+/**
+ * White-label: this page belongs to the BRAND, not to us. Its logo (uploaded under Brand rules), or
+ * its name set as a wordmark when there is none. No Aditor logo, no Aditor headline.
+ */
+function Shell({ children, brand, logo }: { children: React.ReactNode; brand?: string; logo?: string | null }) {
   return (
     <div className="min-h-screen bg-bg-primary">
       <div className="orange-halo pointer-events-none absolute inset-x-0 top-0 h-[420px]" aria-hidden="true" />
-      <header className="relative mx-auto flex h-16 max-w-5xl items-center gap-2.5 px-4 sm:px-6">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/aditor-logo.png" alt="" className="h-7 w-7" />
-        <span className="text-[15px] font-semibold tracking-tight text-text-primary">{brand ? `${brand} · Aditor Review` : 'Aditor Review'}</span>
+      <header className="relative mx-auto flex h-20 max-w-5xl items-center px-4 sm:px-6">
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logo} alt={brand || ''} className="h-9 max-w-[180px] object-contain fade-in" />
+        ) : brand ? (
+          <span className="text-[20px] font-bold tracking-tight text-text-primary">{brand}</span>
+        ) : null}
       </header>
       <main className="relative mx-auto max-w-5xl px-4 sm:px-6">{children}</main>
     </div>

@@ -47,7 +47,7 @@ export default function InsightsPage() {
       ) : (
         <>
           <section className="glass mt-8 p-6 sm:p-8">
-            <p className="text-[15px] text-text-secondary">Time you did not spend reviewing, last {data.days} days</p>
+            <p className="text-[15px] text-text-secondary">Estimated review time saved · last {data.days} days</p>
             <p className="mt-2 flex items-baseline gap-2">
               <span className="text-[64px] font-semibold leading-none tracking-[-0.03em] text-text-primary sm:text-[80px]">{hours(data.totalSec)}</span>
               <span className="text-[22px] font-medium text-text-secondary">hours</span>
@@ -59,7 +59,7 @@ export default function InsightsPage() {
             </div>
             <p className="mt-5 text-[13px] leading-relaxed text-text-tertiary">
               How we count: one full watch of every reviewed version, plus every word of feedback typed at {data.assumptions.wpm} words per minute.
-              Re-watching and scrubbing are not counted, so the real number is higher.
+              This estimates manual review effort; actual time saved varies.
             </p>
           </section>
 

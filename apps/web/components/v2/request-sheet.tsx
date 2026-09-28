@@ -9,14 +9,17 @@
  */
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
+import * as Select from '@radix-ui/react-select'
 import useSWR from 'swr'
-import { Check, Copy, FileText, Link2, X } from 'lucide-react'
+import { Check, ChevronDown, FileText, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
-import { createRequest, fileToBase64, type FileRequest } from '@/lib/platform'
+import { createRequest, type FileRequest } from '@/lib/platform'
 import type { Project } from '@/types'
-import { cn } from '@/lib/utils'
+import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
 import { DropZone } from './drop-zone'
+import { LinkCard } from './link-card'
+import { BrandLogo } from './brand-logo'
 
 export function RequestSheet({ open, onOpenChange, onCreated }: {
   open: boolean
@@ -37,18 +40,16 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
   const [title, setTitle] = React.useState('')
   const [briefFile, setBriefFile] = React.useState<File | null>(null)
   const [briefText, setBriefText] = React.useState('')
-  const [pasting, setPasting] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const [created, setCreated] = React.useState<FileRequest | null>(null)
-  const [copied, setCopied] = React.useState(false)
   const titleRef = React.useRef<HTMLInputElement>(null)
   const brandRef = React.useRef<HTMLInputElement>(null)
 
   // Sensible default (the only brand, or the first) - and a fresh form every time it opens.
   React.useEffect(() => {
     if (!open) return
-    setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError(''); setCopied(false); setPasting(false)
+    setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError('')
   }, [open])
   React.useEffect(() => { if (!projectId && brands.length) setProjectId(brands[0].id) }, [brands, projectId])
   // Only once the list has loaded - otherwise the brand-name field flashes up and steals focus.
@@ -65,19 +66,21 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
     if (!canSubmit) return
     setBusy(true); setError('')
     try {
+      const text = briefText.trim()
+      const file = briefFile ? await briefingFilePayload(briefFile) : {}
+      const isUrl = /^https?:\/\//i.test(text)
       let pid = projectId
       if (needsBrand) {
         const p = await api.post<Project>('/projects', { name: newBrand.trim(), project_type: 'team', is_workspace: true })
         pid = p.id
         await mutate()
       }
-      const text = briefText.trim()
       const r = await createRequest({
         project_id: pid,
         title: title.trim(),
-        brief_text: /^https?:\/\//i.test(text) ? '' : text,
-        brief_url: /^https?:\/\//i.test(text) ? text : '',
-        brief_pdf_base64: briefFile ? await fileToBase64(briefFile) : '',
+        brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'),
+        brief_url: isUrl ? text : '',
+        brief_pdf_base64: file.pdf_base64 || '',
       })
       setCreated(r)
       onCreated?.(r)
@@ -89,13 +92,6 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
     }
   }
 
-  const copy = async () => {
-    if (!created) return
-    await navigator.clipboard.writeText(created.url).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
-  }
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -103,14 +99,14 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
         <Dialog.Content
           // Focus the first thing to TYPE, not the first thing to tab to (the brand picker is prefilled).
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="glass sheet-in fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 outline-none sm:bottom-auto sm:top-[10vh] sm:rounded-[var(--radius-xl)] sm:p-7">
+          className="owner-sheet glass sheet-in fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 outline-none sm:bottom-auto sm:top-[10vh] sm:rounded-[var(--radius-xl)] sm:p-7">
           <div className="flex items-start justify-between gap-4">
             <div>
               <Dialog.Title className="text-[22px] font-semibold tracking-tight text-text-primary">
                 {created ? 'Your link is ready' : 'Request files'}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-[15px] text-text-secondary">
-                {created ? 'Send it to your editor. You see the work once it is clean.' : 'Your editor gets a link to upload to. No account needed.'}
+                {created ? 'Ready to share with your editor.' : 'One upload link. No editor account needed.'}
               </Dialog.Description>
             </div>
             <Dialog.Close className="press -mr-2 -mt-1 grid h-11 w-11 place-items-center rounded-full text-text-secondary hover:bg-bg-hover" aria-label="Close">
@@ -120,18 +116,10 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
 
           {created ? (
             <div className="mt-6 space-y-4 fade-in">
-              <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-bg-primary/50 p-2 pl-4">
-                <Link2 className="h-4 w-4 shrink-0 text-text-tertiary" />
-                <input readOnly value={created.url} onFocus={(e) => e.currentTarget.select()} aria-label="Request link"
-                  className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary outline-none" />
-                <button type="button" onClick={copy}
-                  className={cn('press inline-flex h-11 items-center gap-2 rounded-full px-5 text-[15px] font-semibold',
-                    copied ? 'bg-[rgba(48,209,88,0.14)] text-status-success' : 'bg-accent text-text-inverse hover:bg-accent-hover')}>
-                  {copied ? <><Check className="h-4 w-4" /> Copied</> : <><Copy className="h-4 w-4" /> Copy</>}
-                </button>
-              </div>
+              <LinkCard url={created.url} />
+              <BrandLogo projectId={created.project_id} brandName={created.project_name} />
               <p className="text-[13px] text-text-tertiary">
-                Every upload is reviewed in about a minute. Must-fixes go back to the editor first; you will see it here as Ready.
+                Share this link with your editor. They enter their name and email before uploading and appear in your leaderboard after their first upload.
               </p>
               <Dialog.Close className="press h-11 w-full rounded-full border border-border text-[15px] font-medium text-text-primary hover:bg-bg-hover">
                 Done
@@ -144,16 +132,17 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
                   <input ref={brandRef} value={newBrand} onChange={(e) => setNewBrand(e.target.value)} placeholder="e.g. Glow25"
                     className="field" aria-label="Brand name" />
                 ) : (
-                  <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="field" aria-label="Brand">
-                    {brands.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  <Select.Root value={projectId} onValueChange={setProjectId} disabled={busy || !brands.length}>
+                    <Select.Trigger aria-label="Brand" className="field flex items-center justify-between gap-3 text-left"><Select.Value placeholder="Loading brands…" /><Select.Icon><ChevronDown size={16} className="text-text-secondary" /></Select.Icon></Select.Trigger>
+                    <Select.Portal><Select.Content position="popper" sideOffset={6} className="owner-sheet z-[60] max-h-64 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-2xl border border-border bg-bg-elevated p-1.5 shadow-xl"><Select.Viewport>{brands.map(p => <Select.Item key={p.id} value={p.id} className="relative flex min-h-11 cursor-pointer items-center gap-3 rounded-xl py-2 pl-3 pr-10 text-[0.9375rem] outline-none data-[highlighted]:bg-accent-muted data-[highlighted]:text-accent"><Select.ItemText>{p.name}</Select.ItemText><Select.ItemIndicator className="absolute right-3"><Check size={16} /></Select.ItemIndicator></Select.Item>)}</Select.Viewport></Select.Content></Select.Portal>
+                  </Select.Root>
                 )}
               </Field>
-              <Field label="What is it?">
+              <Field label="Project name">
                 <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UraVia 48 · 3 hooks"
                   className="field" aria-label="Title" />
               </Field>
-              <Field label="Briefing" hint="Optional. The review checks the cut against it.">
+              <Field label="Briefing" hint="Optional">
                 {briefFile ? (
                   <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-bg-primary/50 p-3 pl-4">
                     <FileText className="h-5 w-5 text-accent" />
@@ -162,18 +151,13 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                ) : pasting ? (
-                  <textarea value={briefText} onChange={(e) => setBriefText(e.target.value)} rows={4} autoFocus
-                    placeholder="Paste the script, or a Google Doc / Notion / Trello link"
-                    className="field min-h-[112px] resize-y py-3 leading-relaxed" aria-label="Briefing text or link" />
                 ) : (
-                  <DropZone compact accept="application/pdf" onFiles={([f]) => setBriefFile(f)} title="Drop the briefing PDF" hint="or click to choose" />
+                  <DropZone compact disabled={busy} accept={BRIEFING_ACCEPT} onFiles={([f]) => { setBriefFile(f); setError('') }} title="Drop a briefing" hint="PDF, Markdown or text · up to 10 MB" />
                 )}
-                {!briefFile && (
-                  <button type="button" onClick={() => setPasting((v) => !v)} className="mt-2 text-[13px] font-medium text-accent hover:underline">
-                    {pasting ? 'Drop a PDF instead' : 'Paste text or a link instead'}
-                  </button>
-                )}
+                <textarea value={briefText} onChange={(e) => setBriefText(e.target.value)} rows={2} disabled={busy}
+                  placeholder="Paste a Google Docs link, another link, or your briefing…"
+                  className="field mt-3 min-h-[88px] resize-y py-3 leading-relaxed" aria-label="Briefing text or link" />
+                <p className="mt-2 text-[0.75rem] text-text-secondary">For links, enable access for anyone with the link.</p>
               </Field>
               {error && <p className="text-[13px] text-status-error" role="alert">{error}</p>}
               <button type="submit" disabled={!canSubmit}

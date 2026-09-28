@@ -13,6 +13,9 @@ interface HeaderProps {
 }
 
 const LABEL_MAP: Record<string, string> = {
+  home: 'Overview',
+  insights: 'Time saved',
+  rules: 'Brand rules',
   projects: 'Projects',
   notifications: 'Notifications',
   settings: 'Settings',
@@ -60,7 +63,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
   const breadcrumbs = [...urlCrumbs, ...extraCrumbs.map((c) => ({ label: c.label, href: c.href ?? '' }))]
 
   return (
-    <header className="sticky top-0 z-20 flex h-11 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4">
+    <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4 sm:px-8">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1 text-[13px]">
         {breadcrumbs.map((crumb, index) => {
@@ -89,10 +92,12 @@ export function Header({ onSearchOpen }: HeaderProps) {
 
       {/* Right side actions */}
       <div className="flex items-center gap-1.5">
+        <Link href="/settings/profile" className="grid h-11 w-11 place-items-center rounded-full border border-border text-[12px] text-text-secondary md:hidden" aria-label="Account settings">You</Link>
         {/* Search trigger */}
         <button
+          aria-label="Search workspace"
           onClick={onSearchOpen}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary/60 px-2.5 py-1 text-xs text-text-tertiary hover:border-border-focus hover:text-text-secondary transition-colors"
+          className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-border bg-bg-secondary/60 px-2.5 py-1 text-xs text-text-tertiary hover:border-border-focus hover:text-text-secondary transition-colors"
         >
           <Search className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Search</span>
@@ -102,7 +107,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
         </button>
 
         {/* Panel toggle — only on project detail pages, not the listing */}
-        {pathname !== '/projects' && (
+        {/^\/projects\/[^/]+$/.test(pathname) && (
           <button
             onClick={toggleRightPanel}
             className={cn(

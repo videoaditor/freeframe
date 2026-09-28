@@ -960,8 +960,8 @@ export function FolderShareViewer({
 
   // Set page title
   React.useEffect(() => {
-    document.title = title ? `${title} – FreeFrame` : 'FreeFrame'
-    return () => { document.title = 'FreeFrame' }
+    document.title = title ? `${title} – Aditor Review` : 'Aditor Review'
+    return () => { document.title = 'Aditor Review' }
   }, [title])
   const [selectedAsset, setSelectedAsset] = React.useState<FolderShareAssetItem | null>(null)
 

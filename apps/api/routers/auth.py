@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import logging
@@ -15,6 +15,7 @@ from ..schemas.auth import (
     AcceptInviteRequest, InviteInfoResponse,
     ChangePasswordRequest,
 )
+from ..services.whop_auth import exchange_whop_token, resolve_customer, store_owner_session, require_customer_entitlement
 from ..services.auth_service import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -288,6 +289,21 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/whop", response_model=TokenResponse, dependencies=[Depends(rate_limit("whop_signin", 300, 60))])
+def whop_session(request: Request, db: Session = Depends(get_db)):
+    token = request.headers.get("x-whop-user-token")
+    if not token:
+        raise HTTPException(401, "Open Aditor Review from Whop to sign in")
+    owner = exchange_whop_token(token)
+    user = resolve_customer(db, owner)
+    store_owner_session(user, owner)
+    return TokenResponse(
+        access_token=create_access_token(str(user.id), token_version=user.token_version),
+        refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
+        needs_password=False,
+    )
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
     payload = decode_token(body.refresh_token)
@@ -296,6 +312,7 @@ def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
     user = get_user_by_id(db, uuid.UUID(payload["sub"]))
     if not user or user.status == UserStatus.deactivated:
         raise HTTPException(status_code=401, detail="User not found")
+    require_customer_entitlement(user)
     if payload.get("ver", 1) != user.token_version:
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     return TokenResponse(

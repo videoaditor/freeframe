@@ -92,6 +92,7 @@ export default function FrontDoor() {
                 />
               ) : (
                 <UploadCard
+                  file={state.file}
                   name={state.file.name}
                   size={state.file.size}
                   progress={state.progress}
