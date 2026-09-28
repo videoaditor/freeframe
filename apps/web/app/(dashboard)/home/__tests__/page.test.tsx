@@ -85,3 +85,18 @@ it('hides outlier notifications when review data is unavailable', () => {
   render(<HomePage />)
   expect(screen.queryByLabelText(/editors stand out/)).not.toBeInTheDocument()
 })
+
+
+it('uses one compact disclosure per editor and keeps extra metrics inside it', () => {
+  state.editors = [{ email: 'robin@example.test', name: 'Robin', videos: 24, rated: 24, first_try_rate: .92, avg_versions: 1.1, open_must_fixes: 0 }]
+  render(<HomePage />)
+  const row = within(screen.getByRole('list', { name: 'Editor accuracy ranking' })).getByRole('listitem')
+  const summary = row.querySelector('summary')!
+  expect(summary).toHaveTextContent('Robin')
+  expect(summary).toHaveTextContent('92%')
+  expect(summary).not.toHaveTextContent('versions per video')
+  expect(row.querySelector('details')).not.toHaveAttribute('open')
+  expect(row).toHaveTextContent('1.1 versions per video')
+  expect(screen.getByRole('button', { name: 'Invite via file request' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Never say the same thing twice/ })).toHaveAttribute('href', '/rules')
+})

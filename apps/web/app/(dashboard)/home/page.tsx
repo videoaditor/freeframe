@@ -4,13 +4,14 @@ import * as React from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
-import { ArrowUpRight, Plus, Timer, BookOpen, CheckCheck, Search, X, ArrowRight, Pause, Play, Trophy } from 'lucide-react'
+import { ArrowUpRight, Plus, Timer, BookOpen, CheckCheck, Search, X, ArrowRight, Pause, Play, Trophy, Crown, ChevronDown } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { editorAccuracy, getEditors, getTimeSaved, hours, listRequests, type FileRequest, type TimeSaved } from '@/lib/platform'
 import { RequestSheet } from '@/components/v2/request-sheet'
 import { ProjectKanban } from '@/components/v2/project-kanban'
 import { FolderArt } from '@/components/v2/folder-art'
+import { Avatar } from '@/components/shared/avatar'
 import { LinkCard } from '@/components/v2/link-card'
 
 type Filter = 'All' | 'Ready'
@@ -103,36 +104,36 @@ export default function HomePage() {
 
         <aside className="grid items-start gap-4">
           <section id="editor-performance" className="rounded-3xl border border-border bg-bg-secondary p-5 scroll-mt-6">
-            <div className="flex items-center justify-between gap-2"><h2 className="text-[1.062rem] font-semibold tracking-tight">Editor leaderboard</h2><Trophy size={18} className="text-text-secondary" /></div>
-            <p className="mt-1 text-[0.8125rem] text-text-secondary">Ranked by first versions without must-fixes</p>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4"><p className="max-w-xl text-[0.8125rem] text-text-secondary">Share a file request. Editors enter their name and email and join after their first upload.</p><button type="button" onClick={() => setSheet(true)} className="inline-flex min-h-11 items-center gap-1.5 text-[0.8125rem] font-medium text-accent"><Plus size={14} />Invite via file request</button></div>
+            <div className="flex items-center justify-between gap-3">
+              <div><h2 className="flex items-center gap-2 text-[1.062rem] font-semibold tracking-tight"><Trophy size={17} className="text-accent" />Editor leaderboard</h2><p className="mt-1 text-[0.8125rem] text-text-secondary">First-try accuracy</p></div>
+              <button type="button" aria-label="Invite via file request" onClick={() => setSheet(true)} className="press inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 text-[0.8125rem] font-medium text-accent hover:bg-accent-muted"><Plus size={14} />Invite<span className="hidden sm:inline"> editor</span></button>
+            </div>
             {editorUnavailable ? <div role="alert" className="mt-5 text-[0.8125rem] text-text-secondary">Editor results unavailable. <button onClick={() => refreshEditors()} className="min-h-11 font-medium text-accent">Retry</button></div> : !performance ? <div className="skeleton-shimmer mt-5 h-32 animate-shimmer rounded-xl" /> : !editors.length ? <p className="mt-6 text-[0.875rem] leading-relaxed text-text-secondary">Your editors appear here after their first upload.</p> : (
-              <ol aria-label="Editor accuracy ranking" className="mt-4 divide-y divide-border">{editors.map((editor, i) => {
+              <ol aria-label="Editor accuracy ranking" className="leaderboard-list mt-3">{editors.map((editor, i) => {
                 const known = editor.first_try_rate !== null
                 const outlier = accuracy.outliers.find(o => o.email === editor.email)
-                return <li key={editor.email} className="py-3 first:pt-0">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <span className={`mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[0.8125rem] font-semibold tabular-nums ${known && i === 0 ? 'bg-accent-muted text-accent' : 'text-text-secondary'}`} aria-label={known ? `Rank ${i + 1}` : 'Unranked'}>{known ? i + 1 : '—'}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="min-w-0 break-words text-[0.9375rem] font-medium [overflow-wrap:anywhere]">{editor.name || editor.email}</p>
-                        {known ? <strong className="shrink-0 text-[1.25rem] font-semibold tabular-nums">{Math.round(editor.first_try_rate! * 100)}%</strong> : <span className="shrink-0 text-[0.75rem] text-text-secondary">Not reviewed yet</span>}
-                      </div>
-                      <p className="mt-1 text-[0.75rem] text-text-secondary">{editor.rated} of {editor.videos} reviewed{known && editor.rated < 5 && <span> · Small sample</span>}</p>
-                      {outlier && <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-bg-hover px-2 py-1 text-[0.75rem] font-medium"><span aria-hidden="true">{outlier.direction === 'above' ? '↑' : '↓'}</span>{outlier.direction === 'above' ? 'Above average' : 'Below average'}</p>}
-                      <details className="mt-1 text-[0.75rem] text-text-secondary"><summary className="flex min-h-11 cursor-pointer items-center gap-2 list-none">View details <span aria-hidden="true">＋</span></summary><div className="space-y-1 pb-2">
-                        {editor.name && <p className="break-words [overflow-wrap:anywhere]">{editor.email}</p>}
-                        <p>{editor.avg_versions === null ? 'Average versions unavailable' : `${editor.avg_versions.toFixed(1)} versions per video on average`}</p>
-                        <p>{editor.open_must_fixes} open {editor.open_must_fixes === 1 ? 'must-fix' : 'must-fixes'}</p>
-                      </div></details>
+                return <li key={editor.email}>
+                  <details className="leaderboard-row" data-leader={known && i === 0}>
+                    <summary className="leaderboard-summary">
+                      <span className="text-center text-[0.75rem] tabular-nums text-text-secondary" aria-label={known ? `Rank ${i + 1}` : 'Unranked'}>{known ? i + 1 : '—'}</span>
+                      <span className="relative inline-flex" aria-hidden="true"><Avatar name={editor.name || editor.email} />{known && i === 0 && <Crown size={13} className="leaderboard-crown" />}</span>
+                      <span className="min-w-0 break-words text-[0.875rem] font-medium [overflow-wrap:anywhere]">{editor.name || editor.email}{known && editor.rated < 5 && <span className="ml-1.5 text-[0.6875rem] font-normal text-text-secondary" title="Fewer than 5 reviewed videos">Small sample</span>}</span>
+                      <span className="inline-flex items-center gap-1.5">{outlier && <span className="text-accent" title={outlier.direction === 'above' ? 'Above average' : 'Below average'}><span aria-hidden="true">{outlier.direction === 'above' ? '↑' : '↓'}</span><span className="sr-only">{outlier.direction === 'above' ? 'Above average' : 'Below average'}</span></span>}{known ? <strong className="text-base font-semibold tabular-nums">{Math.round(editor.first_try_rate! * 100)}%</strong> : <span className="text-[0.75rem] text-text-secondary" aria-label="Not reviewed yet">—<span className="sr-only">Not reviewed yet</span></span>}</span>
+                      <ChevronDown size={14} className="leaderboard-chevron text-text-secondary" />
+                    </summary>
+                    <div className="leaderboard-detail space-y-1 text-[0.75rem] leading-relaxed text-text-secondary">
+                      {editor.name && <p className="break-words [overflow-wrap:anywhere]">{editor.email}</p>}
+                      <p>{editor.rated} of {editor.videos} reviewed</p>
+                      <p>{editor.avg_versions === null ? 'Average versions unavailable' : `${editor.avg_versions.toFixed(1)} versions per video on average`}</p>
+                      <p>{editor.open_must_fixes} open {editor.open_must_fixes === 1 ? 'must-fix' : 'must-fixes'}</p>
                     </div>
-                  </div>
+                  </details>
                 </li>
               })}</ol>
             )}
-            <details className="mt-5 border-t border-border pt-3 text-[0.75rem] leading-relaxed text-text-secondary"><summary className="min-h-11 cursor-pointer py-3">How this is measured</summary><p className="mt-2">Only reviewed first versions count. Pending or unavailable reviews are excluded. A new version is not a new video. Fewer than 5 reviewed videos is marked as a small sample. The overview averages each rated editor equally, over all available history. The notification marks editors at least 20 percentage points above or below that average. It appears only with at least 3 editors who each have 5 reviewed videos; smaller samples never receive a marker.</p></details>
+            <details className="mt-2 border-t border-border text-[0.75rem] leading-relaxed text-text-secondary"><summary className="min-h-11 cursor-pointer py-3">How this is measured</summary><p className="mt-2">Share a file request. Editors enter their name and email and join after their first upload.</p><p className="mt-2">Only reviewed first versions count. Pending or unavailable reviews are excluded. A new version is not a new video. Fewer than 5 reviewed videos is marked as a small sample. The overview averages each rated editor equally, over all available history. The notification marks editors at least 20 percentage points above or below that average. It appears only with at least 3 editors who each have 5 reviewed videos; smaller samples never receive a marker.</p></details>
           </section>
-          <Link href="/rules" className="group flex items-center gap-3 rounded-2xl border border-border px-4 py-3 text-text-secondary hover:bg-bg-hover"><BookOpen size={18} className="shrink-0" /><div className="min-w-0 flex-1"><h2 className="text-[0.875rem] font-medium text-text-primary">Never say the same thing twice</h2><p className="mt-0.5 text-[0.8125rem]">Check your brand guidelines.</p></div><ArrowRight size={16} className="shrink-0" /></Link>
+          <Link href="/rules" className="guidelines-nudge press group"><span className="guidelines-book" aria-hidden="true"><BookOpen size={23} /></span><div className="min-w-0 flex-1"><p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-accent">Your playbook</p><h2 className="mt-1 text-[0.9375rem] font-semibold leading-snug tracking-tight">Never say the same thing twice</h2><p className="mt-1 text-[0.75rem] text-text-secondary">Check your brand guidelines.</p></div><ArrowRight size={17} className="shrink-0 text-accent" /></Link>
         </aside>
       </div>
       <p className="mt-8 text-[0.75rem] text-text-secondary">{user?.name ? `${user.name.split(' ')[0]}’s workspace` : 'Your workspace'} <span className="px-1.5">·</span> A little less reviewing. A little more creating.</p>
