@@ -37,7 +37,6 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
   const [importOpen, setImportOpen] = React.useState(false)
   const [reading, setReading] = React.useState(false)
   const [text, setText] = React.useState('')
-  const [pasting, setPasting] = React.useState(false)
   const [importError, setImportError] = React.useState('')
   const [approvalsOpen, setApprovalsOpen] = React.useState(false)
   const [pending, setPending] = React.useState<string | null>(null)
@@ -56,7 +55,7 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
       const result = await importRules({ project_id: projectId, ...body })
       if (!mounted.current) return
       toast.success(result.drafted ? `${result.drafted} rules ready for your approval.` : 'No new rules found. Your existing rules are unchanged.')
-      setText(''); setPasting(false); setImportOpen(false); setApprovalsOpen(true)
+      setText(''); setImportOpen(false); setApprovalsOpen(true)
       void mutate()
     } catch (e) {
       if (mounted.current) setImportError(e instanceof Error ? e.message : 'Could not read that guide. Please try again.')
@@ -93,7 +92,13 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
       <aside className="playbook-brand-kit min-w-0"><BrandLogo projectId={projectId} brandName={brandName} /><div className="mt-5 px-1"><p className="text-[0.8125rem] font-medium">A playbook that grows with you.</p><p className="mt-2 text-[0.8125rem] leading-relaxed text-text-secondary">Add a PDF, paste your guidance, or bring a link. New rules always come to you for approval.</p></div></aside>
     </div>
     <Dialog.Root open={importOpen} onOpenChange={setImportOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" /><Dialog.Content className="owner-sheet playbook-dialog sheet-in"><div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-2xl font-semibold tracking-tight">Add guidelines</Dialog.Title><Dialog.Description className="mt-2 text-[0.9375rem] text-text-secondary">For {brandName}. You approve every suggested rule.</Dialog.Description></div><Dialog.Close aria-label="Close guidelines" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div><div className="mt-6">
-      {pasting ? <><textarea value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={7} autoFocus className="field min-h-[160px] py-3 text-[1rem] leading-relaxed" placeholder="Your guidelines, or a link to them…" aria-label="Brand guide text or link" /><div className="mt-4 flex justify-end gap-2"><button type="button" disabled={reading} onClick={() => setPasting(false)} className="press min-h-11 rounded-full px-4 text-[0.875rem] text-text-secondary disabled:opacity-50">Back</button><button type="button" disabled={!text.trim() || reading} onClick={() => read(/^https?:\/\//i.test(text.trim()) ? { url: text.trim() } : { text: text.trim() })} className="press min-h-11 rounded-full bg-accent px-5 text-[0.875rem] font-semibold text-text-inverse disabled:opacity-50">{reading ? 'Reading…' : 'Find rules'}</button></div></> : <><DropZone compact accept="application/pdf" disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Drop your brand guide'} hint="PDF · drop it here or choose a file" /><button type="button" disabled={reading} onClick={() => setPasting(true)} className="press mt-3 min-h-11 rounded-full px-3 text-[0.875rem] font-medium text-accent disabled:opacity-50">Paste text or a link</button></>}
+      <form onSubmit={e => { e.preventDefault(); if (text.trim() && !reading) void read(/^https?:\/\//i.test(text.trim()) ? { url: text.trim() } : { text: text.trim() }) }}>
+        <label htmlFor="quick-guideline" className="mb-2 block text-[0.875rem] font-medium">A quick instruction or a link</label>
+        <textarea id="quick-guideline" value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={3} autoFocus className="field min-h-[104px] resize-y py-3 text-[1rem] leading-relaxed" placeholder="e.g. Don’t show that guy with a beard anymore." aria-label="Brand guide text or link" aria-describedby="quick-guideline-hint" />
+        <p id="quick-guideline-hint" className="mt-2 text-[0.75rem] leading-relaxed text-text-secondary">One sentence is enough. Or paste a link to your guidelines.</p>
+        <div className="mt-4 flex justify-end"><button type="submit" disabled={!text.trim() || reading} className="press min-h-11 rounded-full bg-accent px-5 text-[0.875rem] font-semibold text-text-inverse disabled:opacity-50">{reading ? 'Reading…' : 'Suggest rules'}</button></div>
+      </form>
+      <DropZone compact className="mt-5 gap-1 px-4 py-4 [&>.folder-lift]:hidden" accept="application/pdf" disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Or upload a brand guide'} hint="PDF · drop it here or choose a file" />
       {reading && <p role="status" className="mt-4 text-[0.875rem] text-text-secondary">Finding the details that matter…</p>}{importError && <p role="alert" className="mt-4 text-[0.875rem] text-text-secondary">{importError}</p>}
     </div></Dialog.Content></Dialog.Portal></Dialog.Root>
   </>

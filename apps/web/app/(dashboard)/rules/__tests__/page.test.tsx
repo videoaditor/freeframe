@@ -30,7 +30,6 @@ beforeEach(() => {
 function mount() { return render(<SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false, dedupingInterval: 0 }}><ToastProvider><RulesPage /></ToastProvider></SWRConfig>) }
 async function openImport() {
   fireEvent.click(await screen.findByRole('button', { name: 'Add guidelines' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Paste text or a link' }))
 }
 
 it('shows active brand rules and exposes complete long guidance in an accessible sheet', async () => {
@@ -81,10 +80,10 @@ it('keeps text after a failed import and sends a URL with the right project', as
   vi.mocked(importRules).mockRejectedValueOnce(new Error('Could not read this guide.'))
   mount(); await openImport()
   fireEvent.change(screen.getByRole('textbox', { name: 'Brand guide text or link' }), { target: { value: 'https://example.test/guide' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Find rules' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest rules' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not read this guide')
   expect(screen.getByRole('textbox', { name: 'Brand guide text or link' })).toHaveValue('https://example.test/guide')
-  fireEvent.click(screen.getByRole('button', { name: 'Find rules' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest rules' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(importRules).toHaveBeenLastCalledWith({ project_id: 'p1', url: 'https://example.test/guide' })
 })
@@ -94,7 +93,7 @@ it('isolates late imports and rule dialogs when the brand changes', async () => 
   vi.mocked(importRules).mockImplementation(() => new Promise(resolve => { finish = resolve }))
   mount(); await openImport()
   fireEvent.change(screen.getByRole('textbox', { name: 'Brand guide text or link' }), { target: { value: 'Keep the logo visible.' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Find rules' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest rules' }))
   expect(screen.getByRole('button', { name: 'Reading…' })).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'Close guidelines' }))
   fireEvent.change(screen.getByRole('combobox', { name: 'Brand' }), { target: { value: 'p2' } })
@@ -103,4 +102,18 @@ it('isolates late imports and rule dialogs when the brand changes', async () => 
   expect(screen.queryByText('1 rules ready for your approval.')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'View rule: Protect the logo' })).not.toBeInTheDocument()
   expect(importRules).toHaveBeenCalledWith({ project_id: 'p1', text: 'Keep the logo visible.' })
+})
+
+
+it('accepts a quick instruction immediately without switching input modes', async () => {
+  mount(); await openImport()
+  const input = screen.getByRole('textbox', { name: 'Brand guide text or link' })
+  const submit = screen.getByRole('button', { name: 'Suggest rules' })
+  expect(submit).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Or upload a brand guide' })).toBeInTheDocument()
+  fireEvent.change(input, { target: { value: "  Don’t show that guy with a beard anymore.  " } })
+  fireEvent.click(submit)
+  await waitFor(() => expect(importRules).toHaveBeenCalledWith({ project_id: 'p1', text: 'Don’t show that guy with a beard anymore.' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(decideSuggestion).not.toHaveBeenCalled()
 })

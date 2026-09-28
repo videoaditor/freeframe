@@ -44,3 +44,8 @@ Empty and populated layouts inspected in the browser. Full rule text, search/no-
 Full check results and screenshots are recorded in `owner-overview-verification.md`. Physical screen-reader and 200% text-zoom checks remain unverified.
 
 Sources: Apple HIG disclosure controls, sheets and existing local skill numbers; Emil design engineering motion/press guidance; UI UX Pro Max accessibility, contrast and responsive guidance.
+
+## Quick-input refinement — September 28
+The Add guidelines sheet opens directly to a labeled, three-row text field (autofocus) for a short instruction or link. Example: “Don’t show that guy with a beard anymore.” Primary action: Suggest rules. A compact PDF drop target remains below; no mode switch or Back button. Preserve draft text on errors/close; successful import still opens the approval area, never silently activates a rule. Reuse existing controls and semantic tokens; minimum 44px buttons, responsive sheet scroll, disabled inputs while importing. Browser check at 697px and 375px plus existing failed-import, URL and brand-isolation tests.
+
+Quick-input verification: 405 frontend tests pass; production build, TypeScript and lint pass (existing warnings). Browser: initial autofocus, one-line text → pending suggestion, unchanged active-rule count, reopening with empty successful draft, 697px light/dark and 375px dark. Mobile sheet fits x=16..359 and y=65..572; no document overflow. Synthetic API only; no live rule activation or AI-compilation claim. Screenshots: `screenshots/quick-guideline-light.png`, `screenshots/quick-guideline-mobile.png`.
