@@ -66,3 +66,19 @@ it('keeps reduced-motion updates instantaneous', () => {
   HTMLElement.prototype.animate = original
   vi.unstubAllGlobals()
 })
+
+it('puts finished deliveries first and opens their own request folder', () => {
+  render(<ProjectKanban requests={[request('Finished', { status: 'clear', folder_id: 'delivery-3' })]} paused={false} onShare={vi.fn()} />)
+  expect(screen.getAllByRole('region').map(region => region.getAttribute('aria-label'))).toEqual([
+    'Ready to go', 'Corrections', 'In review', 'With editor',
+  ])
+  expect(screen.getByRole('link', { name: 'Finished' })).toHaveAttribute('href', '/projects/p1?folder=delivery-3')
+})
+
+it('the ready shortcut shows only ready deliveries, without empty other stages', () => {
+  render(<ProjectKanban requests={[request('Finished', { status: 'clear' }), request('Waiting', { assets: 0 })]} paused={false} onShare={vi.fn()} focusReady />)
+  expect(screen.getAllByRole('region')).toHaveLength(1)
+  expect(screen.getByRole('region', { name: 'Ready to go' })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Waiting' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Finished' })).toHaveAttribute('href', '/projects/p1')
+})

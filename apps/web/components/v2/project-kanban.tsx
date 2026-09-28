@@ -7,10 +7,10 @@ import type { FileRequest } from '@/lib/platform'
 import { FolderArt } from './folder-art'
 
 const STAGES = [
-  { id: 'editor', label: 'With editor', icon: Upload },
-  { id: 'review', label: 'In review', icon: ScanLine },
-  { id: 'corrections', label: 'Corrections', icon: PencilLine },
   { id: 'ready', label: 'Ready to go', icon: CheckCheck },
+  { id: 'corrections', label: 'Corrections', icon: PencilLine },
+  { id: 'review', label: 'In review', icon: ScanLine },
+  { id: 'editor', label: 'With editor', icon: Upload },
 ] as const
 type Stage = typeof STAGES[number]['id']
 
@@ -68,13 +68,13 @@ export function ProjectKanban({ requests, paused, onShare, focusReady = false }:
 
   React.useEffect(() => () => animations.current.forEach(a => a.cancel()), [])
   React.useEffect(() => {
-    if (focusReady) board.current?.querySelector('[data-lane="ready"]')?.scrollIntoView?.({ block: 'nearest', inline: 'end' })
+    if (focusReady) board.current?.querySelector('[data-lane="ready"]')?.scrollIntoView?.({ block: 'nearest', inline: 'start' })
   }, [focusReady])
 
-  return <div className="project-kanban" data-paused={paused}>
+  return <div className="project-kanban" data-paused={paused} data-focus-ready={focusReady}>
     <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
     <div ref={board} className="kanban-scroll" role="group" aria-label="Project stages" tabIndex={0}>
-      {STAGES.map(({ id, label, icon: Icon }) => {
+      {STAGES.filter(stage => !focusReady || stage.id === 'ready').map(({ id, label, icon: Icon }) => {
         const items = requests.filter(r => stageOf(r) === id)
         return <section key={id} aria-label={label} className="kanban-lane" data-lane={id}>
           <div className="kanban-lane-heading"><span className="kanban-stage-icon"><Icon size={17} /></span><h3>{label}</h3><span className="kanban-count">{items.length}</span></div>
@@ -99,7 +99,7 @@ function ProjectCard({ request: r, stage, onShare }: { request: FileRequest; sta
       <div className="kanban-art" aria-hidden="true"><FolderArt size={48} label="" />{stage === 'review' && <span className="kanban-scan" />}{stage === 'corrections' && <PencilLine className="kanban-pencil" size={19} />}{stage === 'ready' && <span className="kanban-check"><CheckCheck size={13} /></span>}</div>
       {r.state === 'live' && <button type="button" onClick={onShare} aria-label={`Share ${r.title}`} className="press kanban-share"><Share2 size={15} /></button>}
     </div>
-    <Link href={`/projects/${r.project_id}`} className="kanban-title">{r.title}</Link>
+    <Link href={`/projects/${r.project_id}${r.folder_id ? `?folder=${encodeURIComponent(r.folder_id)}` : ''}`} className="kanban-title">{r.title}</Link>
     <p className="kanban-brand">{r.project_name}</p>
     <div className="kanban-card-status"><span className="kanban-status-dot" aria-hidden="true" />{label}</div>
     <div className="kanban-card-footer"><span className="inline-flex items-center gap-1.5"><FileVideo size={13} />{r.assets} {r.assets === 1 ? 'file' : 'files'}</span>{r.last_uploader_name && <span className="kanban-editor" title={r.last_uploader_name}><span aria-hidden="true" className="kanban-avatar">{r.last_uploader_name.charAt(0)}</span><span>{r.last_uploader_name}</span></span>}</div>

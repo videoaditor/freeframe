@@ -47,3 +47,11 @@ Search/no-match/clear, share-sheet opening and Escape, pause/resume, ready metri
 Build, typecheck, full test suite and lint results are recorded in owner-overview-verification.md. Physical screen-reader and 200% text zoom remain unverified.
 
 Sources: Apple HIG local motion mirror and existing overview handoff; Emil design engineering transform/opacity and WAAPI guidance.
+
+## Ready-first correction (2026-09-28)
+Owner priority is finished deliveries: Ready to go → Corrections → In review → With editor.
+The ready metric opens a single ready-only lane. Request titles navigate to the request's own
+folder (`folder_id` from the existing backend contract); legacy responses without it fall back
+to the project. No extra navigation or controls. Validate card → correct folder → playable demo
+file, as well as each empty/waiting folder, in the local preview. Preview fixtures must return
+real API collection shapes and 404 for unsupported reads instead of success-shaped empty objects.

@@ -54,3 +54,11 @@ The repository's documented `pnpm --filter web ...` commands currently only warn
 - Frontend: 385 tests passed across 57 files; production build, standalone TypeScript and lint passed (existing unrelated lint warnings). `git diff --check` clean. No production backend changes.
 - Screenshots inspected in light/dark on desktop and 375px mobile. Document width equals 375px on phone. Mobile reading sheet measured x=16..359, y=65..636 within 375×812 viewport. Temporary viewport override reset.
 - Saved in `/Users/alansimon/Downloads/aditor-overview/`: `brand-playbook-light.png`, `rules-mobile-light.png`, `rules-mobile-dark.png`. Preview uses fictional sample rules and brands. Nothing deployed.
+
+## Ready-first navigation correction — September 28
+- Ready → Corrections → In review → With editor. The top ready metric opens a ready-only lane; request cards use the API's folder ID to open the matching delivery.
+- Root cause of the preview crash: unsupported project reads returned `{}` where the real API returns arrays. Added matching synthetic folders, asset collections, versions and a locally generated three-second test clip; unsupported reads now return 404. Production API errors are not hidden by a UI fallback.
+- Browser checked at 697×954 and 375×812: finished card → correct Sunday Studio folder → four demo files → video playback; waiting card → empty October brand story folder; direct `/projects/p1` → three folders without a crash. Ready-only phone document width is 375px with no document overflow. Viewport reset after inspection.
+- Frontend: 403 tests pass; preview HTTP/contract checks: 4 pass. Production build, TypeScript and lint pass (existing hook warnings). Build used a fresh temporary source copy with its own offline-installed dependencies, preserving the running dev server. Backend unchanged since the preceding 302-pass / 45-skip run.
+- Screenshots: `screenshots/ready-first-board.png`, `screenshots/ready-only-board.png`, `screenshots/ready-demo-player.png`. Synthetic media only; no live Whop/storage/review acceptance is claimed.
+- Existing project breadcrumb client navigation can retain a selected folder until reload; direct project and request-card entry were verified. The older project toolbar also overflows at phone widths; neither is claimed as refined by this focused correction.
