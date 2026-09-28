@@ -29,7 +29,7 @@ beforeEach(() => {
 })
 function mount() { return render(<SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false, dedupingInterval: 0 }}><ToastProvider><RulesPage /></ToastProvider></SWRConfig>) }
 async function openImport() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Add guidelines' }))
+  await screen.findByRole('textbox', { name: 'Quick rule' })
 }
 
 it('shows active brand rules and exposes complete long guidance in an accessible sheet', async () => {
@@ -79,11 +79,11 @@ it('retains failed suggestions for retry and applies only a confirmed decision',
 it('keeps text after a failed import and sends a URL with the right project', async () => {
   vi.mocked(importRules).mockRejectedValueOnce(new Error('Could not read this guide.'))
   mount(); await openImport()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Brand guide text or link' }), { target: { value: 'https://example.test/guide' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Suggest rules' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Quick rule' }), { target: { value: 'https://example.test/guide' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add for approval' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not read this guide')
-  expect(screen.getByRole('textbox', { name: 'Brand guide text or link' })).toHaveValue('https://example.test/guide')
-  fireEvent.click(screen.getByRole('button', { name: 'Suggest rules' }))
+  expect(screen.getByRole('textbox', { name: 'Quick rule' })).toHaveValue('https://example.test/guide')
+  fireEvent.click(screen.getByRole('button', { name: 'Add for approval' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(importRules).toHaveBeenLastCalledWith({ project_id: 'p1', url: 'https://example.test/guide' })
 })
@@ -92,10 +92,9 @@ it('isolates late imports and rule dialogs when the brand changes', async () => 
   let finish!: (value: { drafted: number; found: number }) => void
   vi.mocked(importRules).mockImplementation(() => new Promise(resolve => { finish = resolve }))
   mount(); await openImport()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Brand guide text or link' }), { target: { value: 'Keep the logo visible.' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Suggest rules' }))
-  expect(screen.getByRole('button', { name: 'Reading…' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: 'Close guidelines' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Quick rule' }), { target: { value: 'Keep the logo visible.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add for approval' }))
+  expect(screen.getByRole('button', { name: 'Preparing rule…' })).toBeDisabled()
   fireEvent.change(screen.getByRole('combobox', { name: 'Brand' }), { target: { value: 'p2' } })
   await screen.findByText('Make it unmistakably Sunday Studio.')
   await act(async () => { finish({ drafted: 1, found: 1 }) })
@@ -107,13 +106,24 @@ it('isolates late imports and rule dialogs when the brand changes', async () => 
 
 it('accepts a quick instruction immediately without switching input modes', async () => {
   mount(); await openImport()
-  const input = screen.getByRole('textbox', { name: 'Brand guide text or link' })
-  const submit = screen.getByRole('button', { name: 'Suggest rules' })
+  const input = screen.getByRole('textbox', { name: 'Quick rule' })
+  const submit = screen.getByRole('button', { name: 'Add for approval' })
   expect(submit).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Or upload a brand guide' })).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Drop your brand guide' })).not.toBeInTheDocument()
   fireEvent.change(input, { target: { value: "  Don’t show that guy with a beard anymore.  " } })
   fireEvent.click(submit)
   await waitFor(() => expect(importRules).toHaveBeenCalledWith({ project_id: 'p1', text: 'Don’t show that guy with a beard anymore.' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(decideSuggestion).not.toHaveBeenCalled()
+})
+
+
+it('keeps PDF import behind a secondary action and preserves an unfinished quick rule', async () => {
+  mount(); await openImport()
+  fireEvent.change(screen.getByRole('textbox', { name: 'Quick rule' }), { target: { value: 'Keep the logo visible.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Import guidelines' }))
+  expect(screen.getByRole('dialog')).toHaveTextContent('PDF')
+  fireEvent.click(screen.getByRole('button', { name: 'Close guidelines' }))
+  expect(screen.getByRole('textbox', { name: 'Quick rule' })).toHaveValue('Keep the logo visible.')
 })

@@ -23,8 +23,8 @@ export function RuleLibrary({ rules, brandName, onAdd }: { rules: RuleRow[]; bra
     {!rules.length ? <div className="playbook-empty mt-5">
       <div className="playbook-empty-icon" aria-hidden="true"><BookOpen size={28} /></div>
       <h3 className="mt-5 text-xl font-semibold tracking-tight">Make it unmistakably {brandName}.</h3>
-      <p className="mx-auto mt-2 max-w-sm text-[0.9375rem] leading-relaxed text-text-secondary">Bring your guide. Turn the details that matter into rules for every cut.</p>
-      <button type="button" onClick={onAdd} className="press mt-5 min-h-11 rounded-full bg-accent px-5 text-[0.875rem] font-semibold text-text-inverse">Add your first guidelines</button>
+      <p className="mx-auto mt-2 max-w-sm text-[0.9375rem] leading-relaxed text-text-secondary">Start with one sentence. What should every editor know?</p>
+      <button type="button" onClick={onAdd} className="press mt-5 min-h-11 rounded-full bg-accent px-5 text-[0.875rem] font-semibold text-text-inverse">Write your first rule</button>
     </div> : visible.length ? <ul className="rule-grid mt-5" aria-label="Active brand rules">{visible.map(r => <li key={r.id}>
       <button type="button" onClick={() => setSelected(r)} className="rule-card" data-required={r.severity === 'blocker'} aria-label={`View rule: ${r.name}`}>
         <div className="flex items-center justify-between gap-3"><span className="rule-number">{String(rules.indexOf(r) + 1).padStart(2, '0')}</span><RuleSeverity rule={r} /></div>

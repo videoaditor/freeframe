@@ -3,7 +3,7 @@
 import * as React from 'react'
 import useSWR from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
-import { ArrowRight, BookOpen, Check, ChevronDown, Plus, Sparkles, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Check, ChevronDown, ArrowUp, Sparkles, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -37,6 +37,7 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
   const [importOpen, setImportOpen] = React.useState(false)
   const [reading, setReading] = React.useState(false)
   const [text, setText] = React.useState('')
+  const quickInput = React.useRef<HTMLTextAreaElement>(null)
   const [importError, setImportError] = React.useState('')
   const [approvalsOpen, setApprovalsOpen] = React.useState(false)
   const [pending, setPending] = React.useState<string | null>(null)
@@ -55,7 +56,8 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
       const result = await importRules({ project_id: projectId, ...body })
       if (!mounted.current) return
       toast.success(result.drafted ? `${result.drafted} rules ready for your approval.` : 'No new rules found. Your existing rules are unchanged.')
-      setText(''); setImportOpen(false); setApprovalsOpen(true)
+      if (!(payload instanceof File)) setText('')
+      setImportOpen(false); setApprovalsOpen(true)
       void mutate()
     } catch (e) {
       if (mounted.current) setImportError(e instanceof Error ? e.message : 'Could not read that guide. Please try again.')
@@ -76,29 +78,30 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
   }
 
   return <>
-    <section className="playbook-cover mt-8" aria-label={`${brandName} playbook`}>
-      <div className="relative z-10 min-w-0"><p className="text-[0.75rem] font-medium uppercase tracking-[0.15em] opacity-80">The brand playbook</p><h2 className="mt-3 break-words text-[1.75rem] font-semibold leading-tight tracking-[-0.035em]">{brandName}</h2><p className="mt-2 text-[0.875rem] opacity-85">{data ? `${brandRules.length} active ${brandRules.length === 1 ? 'rule' : 'rules'} · ${required} must follow` : error ? 'Rules unavailable' : 'Loading your rules…'}</p><button type="button" disabled={reading} onClick={() => setImportOpen(true)} className="press mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-[0.875rem] font-semibold text-[oklch(0.35_0.15_260)] disabled:opacity-60"><Plus size={16} />{reading ? 'Reading guide…' : 'Add guidelines'}</button></div>
-      <div className="playbook-book" aria-hidden="true"><span className="playbook-book-spine" /><BookOpen size={38} strokeWidth={1.3} /><span className="playbook-book-line" /><span className="playbook-book-line short" /></div>
+    <section className="playbook-surface mt-6 p-4 sm:p-5" aria-label="Quick rules">
+      <div className="flex items-center justify-between gap-3"><label htmlFor="quick-guideline" className="text-[1rem] font-semibold tracking-tight">Add a quick rule</label><button type="button" disabled={reading} onClick={() => { setImportError(''); setImportOpen(true) }} className="min-h-11 text-[0.75rem] text-text-secondary underline decoration-border underline-offset-4 hover:text-text-primary disabled:opacity-50">Import guidelines</button></div>
+      <form onSubmit={e => { e.preventDefault(); if (text.trim() && !reading) void read(/^https?:\/\//i.test(text.trim()) ? { url: text.trim() } : { text: text.trim() }) }} className="mt-2 flex items-end gap-2 rounded-2xl border border-border bg-bg-secondary p-2 focus-within:ring-2 focus-within:ring-accent/60">
+        <textarea ref={quickInput} id="quick-guideline" value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={2} className="min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-[1rem] leading-relaxed outline-none disabled:opacity-50" placeholder="Don’t show that guy with a beard anymore…" aria-label="Quick rule" aria-describedby="quick-guideline-hint" />
+        <button type="submit" disabled={!text.trim() || reading} aria-label={reading ? 'Preparing rule…' : 'Add for approval'} title="Add for approval" className="press grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-text-inverse disabled:opacity-40"><ArrowUp size={20} /></button>
+      </form>
+      <p id="quick-guideline-hint" className="mt-2 text-[0.75rem] text-text-secondary">Write it how you’d say it. You approve the suggested rule.</p>
+      {reading && !importOpen && <p role="status" className="mt-3 text-[0.8125rem] text-text-secondary">Preparing your rule…</p>}
+      {importError && !importOpen && <p role="alert" className="mt-3 text-[0.8125rem] text-text-secondary">{importError}</p>}
     </section>
+    <p className="mt-3 text-[0.75rem] text-text-secondary">{data ? `${brandRules.length} active ${brandRules.length === 1 ? 'rule' : 'rules'} · ${required} must follow` : error ? 'Rules unavailable' : 'Loading your rules…'}</p>
     <p className="playbook-priority"><span>Briefing</span><ArrowRight size={12} /><span>Brand rules</span><ArrowRight size={12} /><span>Best practice</span><span className="ml-auto hidden sm:inline">In that order.</span></p>
     <div className="mt-8 grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-8">
         {error && <div role="alert" className="playbook-surface p-5 text-[0.9375rem]">Could not load rules. <button type="button" onClick={() => mutate()} className="min-h-11 px-2 font-medium text-accent">Retry</button></div>}
         {!data && !error && <div className="grid gap-4 sm:grid-cols-2" aria-label="Loading rules">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-56 animate-shimmer rounded-3xl" />)}</div>}
         {!!data?.suggestions.length && <details open={approvalsOpen} onToggle={e => setApprovalsOpen(e.currentTarget.open)} className="playbook-suggestions" aria-label="Suggested rules"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-2"><Sparkles size={17} className="text-accent" /><h2 className="text-[1.0625rem] font-semibold">For your approval</h2><span className="ml-auto text-[0.8125rem] text-text-secondary">{data.suggestions.length}</span><ChevronDown size={16} className="text-text-secondary" /></summary><p className="mt-1 text-[0.8125rem] text-text-secondary">Suggestions only. You decide what becomes a rule.</p><ul className="mt-4 divide-y divide-border">{data.suggestions.map(s => <li key={s.id} className="py-4 first:pt-0 last:pb-0"><h3 className="break-words text-[0.9375rem] font-semibold">{s.name || 'Suggested rule'}</h3>{s.what && <p className="mt-2 whitespace-pre-wrap break-words text-[0.875rem] leading-relaxed text-text-secondary [overflow-wrap:anywhere]">{s.what}</p>}{s.source === 'owner-comment' && <p className="mt-2 text-[0.75rem] text-text-secondary">From your feedback</p>}<div className="mt-3 flex justify-end gap-2"><button type="button" disabled={!!pending} onClick={() => decide(s.id, 'dismiss')} aria-label={`Dismiss ${s.name || 'suggested rule'}`} className="press min-h-11 rounded-full px-4 text-[0.8125rem] text-text-secondary hover:bg-bg-hover disabled:opacity-50">Dismiss</button><button type="button" disabled={!!pending} onClick={() => decide(s.id, 'accept')} aria-label={`Use rule: ${s.name || 'suggested rule'}`} className="press inline-flex min-h-11 items-center gap-1.5 rounded-full bg-accent-muted px-4 text-[0.8125rem] font-semibold text-accent disabled:opacity-50"><Check size={15} />{pending === s.id ? 'Saving…' : 'Use rule'}</button></div>{decisionError?.id === s.id && <p role="alert" className="mt-2 text-[0.875rem] text-text-secondary">{decisionError.message}</p>}</li>)}</ul></details>}
-        {data && <RuleLibrary rules={brandRules} brandName={brandName} onAdd={() => setImportOpen(true)} />}
+        {data && <RuleLibrary rules={brandRules} brandName={brandName} onAdd={() => quickInput.current?.focus()} />}
         {!!houseRules.length && <details className="playbook-surface p-5"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-3"><BookOpen size={18} className="text-text-secondary" /><span className="font-medium">Best practice</span><span className="text-[0.8125rem] text-text-secondary">{houseRules.length}</span><ChevronDown size={16} className="ml-auto" /></summary><p className="mt-1 text-[0.8125rem] text-text-secondary">The baseline beneath your brand rules.</p><ul className="mt-4 divide-y divide-border">{houseRules.map(r => <li key={r.id} className="py-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{r.name}</h3><RuleSeverity rule={r} /></div><p className="mt-2 whitespace-pre-wrap break-words text-[0.875rem] leading-relaxed text-text-secondary [overflow-wrap:anywhere]">{r.what}</p></li>)}</ul></details>}
       </div>
-      <aside className="playbook-brand-kit min-w-0"><BrandLogo projectId={projectId} brandName={brandName} /><div className="mt-5 px-1"><p className="text-[0.8125rem] font-medium">A playbook that grows with you.</p><p className="mt-2 text-[0.8125rem] leading-relaxed text-text-secondary">Add a PDF, paste your guidance, or bring a link. New rules always come to you for approval.</p></div></aside>
+      <aside className="playbook-brand-kit min-w-0"><BrandLogo projectId={projectId} brandName={brandName} /><div className="mt-5 px-1"><p className="text-[0.8125rem] font-medium">A playbook that grows with you.</p><p className="mt-2 text-[0.8125rem] leading-relaxed text-text-secondary">Add a quick note whenever something changes. Each suggestion comes to you for approval.</p></div></aside>
     </div>
-    <Dialog.Root open={importOpen} onOpenChange={setImportOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" /><Dialog.Content className="owner-sheet playbook-dialog sheet-in"><div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-2xl font-semibold tracking-tight">Add guidelines</Dialog.Title><Dialog.Description className="mt-2 text-[0.9375rem] text-text-secondary">For {brandName}. You approve every suggested rule.</Dialog.Description></div><Dialog.Close aria-label="Close guidelines" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div><div className="mt-6">
-      <form onSubmit={e => { e.preventDefault(); if (text.trim() && !reading) void read(/^https?:\/\//i.test(text.trim()) ? { url: text.trim() } : { text: text.trim() }) }}>
-        <label htmlFor="quick-guideline" className="mb-2 block text-[0.875rem] font-medium">A quick instruction or a link</label>
-        <textarea id="quick-guideline" value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={3} autoFocus className="field min-h-[104px] resize-y py-3 text-[1rem] leading-relaxed" placeholder="e.g. Don’t show that guy with a beard anymore." aria-label="Brand guide text or link" aria-describedby="quick-guideline-hint" />
-        <p id="quick-guideline-hint" className="mt-2 text-[0.75rem] leading-relaxed text-text-secondary">One sentence is enough. Or paste a link to your guidelines.</p>
-        <div className="mt-4 flex justify-end"><button type="submit" disabled={!text.trim() || reading} className="press min-h-11 rounded-full bg-accent px-5 text-[0.875rem] font-semibold text-text-inverse disabled:opacity-50">{reading ? 'Reading…' : 'Suggest rules'}</button></div>
-      </form>
-      <DropZone compact className="mt-5 gap-1 px-4 py-4 [&>.folder-lift]:hidden" accept="application/pdf" disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Or upload a brand guide'} hint="PDF · drop it here or choose a file" />
+    <Dialog.Root open={importOpen} onOpenChange={setImportOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" /><Dialog.Content className="owner-sheet playbook-dialog sheet-in"><div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-2xl font-semibold tracking-tight">Import guidelines</Dialog.Title><Dialog.Description className="mt-2 text-[0.9375rem] text-text-secondary">For {brandName}. You approve every suggested rule.</Dialog.Description></div><Dialog.Close aria-label="Close guidelines" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div><div className="mt-6">
+      <DropZone compact accept="application/pdf" disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Drop your brand guide'} hint="PDF · drop it here or choose a file" />
       {reading && <p role="status" className="mt-4 text-[0.875rem] text-text-secondary">Finding the details that matter…</p>}{importError && <p role="alert" className="mt-4 text-[0.875rem] text-text-secondary">{importError}</p>}
     </div></Dialog.Content></Dialog.Portal></Dialog.Root>
   </>
