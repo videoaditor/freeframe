@@ -26,6 +26,7 @@ pytestmark = pytest.mark.skipif(
 
 VERSIONS_DIR = Path(__file__).parents[1] / "alembic" / "versions"
 MIGRATION_PATH = next(VERSIONS_DIR.glob("*_version_n8n_feedback_events.py"))
+CARD_MIGRATION_PATH = next(VERSIONS_DIR.glob("*_append_card_to_n8n_feedback_events.py"))
 
 
 @pytest.fixture(autouse=True)
@@ -77,7 +78,13 @@ def test_postgres_exposes_the_versioned_column_and_trigger_contract(real_db):
         )
     ).scalars().all()
 
-    assert tuple(feedback_columns) == migration.FEEDBACK_EVENT_COLUMNS
+    # The migrated database carries the v1 contract followed by the appended card columns.
+    spec = importlib.util.spec_from_file_location("n8n_feedback_card_migration", CARD_MIGRATION_PATH)
+    card_migration = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(card_migration)
+    assert tuple(feedback_columns) == card_migration.FEEDBACK_EVENT_COLUMNS
+    assert tuple(feedback_columns)[: len(migration.FEEDBACK_EVENT_COLUMNS)] == migration.FEEDBACK_EVENT_COLUMNS
     assert tuple(share_columns) == migration.SHARE_LINK_COLUMNS
 
     triggers = dict(

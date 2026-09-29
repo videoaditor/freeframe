@@ -133,6 +133,7 @@ Read this section before writing backend code or tests.
 - The live baseline was captured read-only from `/opt/freeframe-integration/schema.sql`.
   That host file is historical evidence and must not be rerun after the Alembic migration adds columns.
 - The first 21 columns of `n8n_feedback_events` and all eight columns of `n8n_share_links` are compatibility contracts for existing automation.
+- `3b8e1d6c9f20` appends `folder_id`, `folder_name`, `trello_card_id` to `n8n_feedback_events` by wrapping the v1 SELECT (loaded from the migration that owns it) - extend the same way, never by editing the v1 SQL.
   Append compatible event metadata instead of renaming, reordering, or changing those columns.
 - `event_id` and `comment_id` are stable source identifiers.
   Active comments retain their original `created_at`, while consumers that ingest comment edits and soft deletions cursor on `event_occurred_at` and version evidence from `source_event_kind`, never from a row disappearing.
