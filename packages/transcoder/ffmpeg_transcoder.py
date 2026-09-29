@@ -243,6 +243,46 @@ class FFmpegTranscoder(BaseTranscoder):
                     )
                     uploaded_keys.append(s3_key)
 
+            # 4.5. Remux the lowest rendition into one small MP4 for AI review clients.
+            #
+            # An AI reader (an external review integration; see docs/integrations) needs the
+            # PIXELS, not streaming quality - it samples at ~1fps regardless of source
+            # resolution. Today the only single-file option such a client can fetch is the RAW
+            # ORIGINAL (?download=1), because the HLS output above is segmented (.ts + .m3u8),
+            # which most simple HTTP clients cannot read as one file. That forces every review
+            # to upload the full original - often 10-50x the bytes a 360p copy would need - for
+            # no quality benefit the reader can use.
+            #
+            # The 360p rendition is ALREADY FULLY ENCODED above; this is a container remux
+            # (`-c copy`), not a re-encode, so it costs a few seconds even on a multi-minute
+            # source, not a second transcode pass. Best-effort and additive: on any failure here
+            # the asset is still `ready` with its normal HLS renditions - a missing proxy just
+            # means a caller falls back to the original, same as before this existed.
+            try:
+                smallest_q = min(qualities, key=lambda q: int(QUALITY_MAP[q][0].split(":")[1]))
+                playlist = hls_dir / smallest_q / "playlist.m3u8"
+                if playlist.exists():
+                    proxy_path = work_dir / "ai_proxy.mp4"
+                    remux_cmd = [
+                        "ffmpeg", "-y",
+                        "-i", str(playlist),
+                        "-c", "copy",
+                        "-movflags", "+faststart",
+                        str(proxy_path),
+                    ]
+                    self._run(remux_cmd, timeout=300, label="ffmpeg")
+                    if proxy_path.exists():
+                        proxy_key = f"{job.output_s3_prefix}/ai_proxy.mp4"
+                        self.s3.upload_file(
+                            str(proxy_path), self.bucket, proxy_key,
+                            ExtraArgs={"ContentType": "video/mp4", "CacheControl": "max-age=86400"},
+                        )
+            except Exception as proxy_exc:
+                logger.warning(
+                    "ai_proxy remux failed for %s, continuing without it: %s",
+                    job.output_s3_prefix, proxy_exc,
+                )
+
             # 5. Generate and upload thumbnail (using streaming URL).
             # Best-effort: the HLS renditions are already uploaded, so a poster
             # failure must never fail the whole asset (which would mark it
