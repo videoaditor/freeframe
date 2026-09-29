@@ -40,7 +40,7 @@ from ..services.permissions import (
     validate_asset_in_share, _is_descendant_of,
 )
 from ..services.redis_service import create_share_session
-from ..services.s3_service import generate_presigned_get_url, build_download_filename
+from ..services.s3_service import generate_presigned_get_url, build_download_filename, object_exists
 from ..services.crypto_service import encrypt_password, decrypt_password
 from .hls_proxy import create_hls_token
 from ..models.project import Project, ProjectRole
@@ -1425,6 +1425,41 @@ def get_share_stream_url(
         "thumbnail_url": thumb_url,
         "duration_seconds": media_file.duration_seconds,
     }
+
+
+@router.get("/share/{token}/stream/{asset_id}/ai-proxy")
+def get_share_ai_proxy_url(
+    token: str,
+    asset_id: uuid.UUID,
+    share_session: Optional[str] = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """A single small MP4 for an automated reader that samples frames rather than streaming for
+    a human - about 10-50x smaller than the original, at no quality cost for that use case (see
+    packages/transcoder/ffmpeg_transcoder.py, step 4.5).
+
+    404 whenever the proxy doesn't exist - a video asset transcoded before this endpoint shipped,
+    a non-video asset, or a remux that failed best-effort at transcode time. The caller's own
+    fallback to GET .../stream/{asset_id}?download=1 (the original) is what makes this additive:
+    an old client, or any asset without a proxy, behaves exactly as before this endpoint existed.
+    """
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
+    asset = _get_asset(db, asset_id)
+    validate_asset_in_share(db, link, asset)
+
+    if asset.asset_type != AssetType.video:
+        raise HTTPException(status_code=404, detail="No AI proxy for a non-video asset")
+
+    media_file = _get_latest_media_file(db, asset.id)
+    if not media_file or not media_file.s3_key_processed:
+        raise HTTPException(status_code=404, detail="No ready media file found")
+
+    proxy_key = f"{media_file.s3_key_processed}/ai_proxy.mp4"
+    if not object_exists(proxy_key):
+        raise HTTPException(status_code=404, detail="No AI proxy for this asset yet")
+
+    return {"url": generate_presigned_get_url(proxy_key)}
 
 
 @router.get("/share/{token}/thumbnail/{asset_id}")

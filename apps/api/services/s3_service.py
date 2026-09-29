@@ -324,6 +324,18 @@ def generate_presigned_get_url(s3_key: str, expires_in: int = 3600, download_fil
         ExpiresIn=expires_in,
     )
 
+def object_exists(s3_key: str) -> bool:
+    """Cheap existence check (HEAD, no body transfer) - used for best-effort derived files like
+    the AI-review proxy, which may not exist on an older asset transcoded before it was added."""
+    from botocore.exceptions import ClientError
+    s3 = get_s3_client()
+    try:
+        s3.head_object(Bucket=settings.s3_bucket, Key=s3_key)
+        return True
+    except ClientError:
+        return False
+
+
 def put_object(s3_key: str, body: bytes, content_type: str | None = None, cache_control: str | None = None) -> None:
     """Upload a small object directly (for processed files like thumbnails)."""
     s3 = get_s3_client()
