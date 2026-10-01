@@ -11,8 +11,18 @@ from ..services.auth_service import decode_token, get_user_by_id, get_user_by_em
 from ..models.user import User, UserStatus
 from ..config import settings
 
-bearer_scheme = HTTPBearer(auto_error=False)
-optional_bearer_scheme = HTTPBearer(auto_error=False)
+class ProxySafeBearer(HTTPBearer):
+    """Keep JWT authentication working through Whop's Authorization-stripping proxy."""
+    async def __call__(self, request: Request) -> Optional[HTTPAuthorizationCredentials]:
+        credentials = await super().__call__(request)
+        if request.headers.get('authorization'):
+            return credentials
+        token = request.headers.get('x-freeframe-token')
+        return HTTPAuthorizationCredentials(scheme='Bearer', credentials=token) if token else None
+
+
+bearer_scheme = ProxySafeBearer(auto_error=False, scheme_name='HTTPBearer')
+optional_bearer_scheme = ProxySafeBearer(auto_error=False, scheme_name='HTTPBearer')
 
 def _service_key_user(request: Request, db: Session) -> Optional[User]:
     """Resolve a read-only service principal from the X-API-Key header.
@@ -88,4 +98,3 @@ def get_optional_user(
         return user
     except Exception:
         return None
-

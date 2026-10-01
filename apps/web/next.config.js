@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  async redirects() {
+    return [{ source: '/o', destination: '/whop', permanent: false }]
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

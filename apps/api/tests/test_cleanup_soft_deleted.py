@@ -419,9 +419,11 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
         "collection_shares", "share_link_items", "share_link_activity", "watermark_settings",
         "project_members", "project_brandings", "activity_logs", "annotations", "comment_attachments",
         "comment_reactions", "mentions", "notifications",
+        "upload_requests", "request_uploads",
     }
     # (referencing_table, referencing_column) confirmed handled by a _purge_* helper.
     KNOWN_HANDLED = {
+        ("request_uploads", "request_id"),
         ("request_uploads", "asset_id"), ("upload_requests", "folder_id"), ("upload_requests", "project_id"),
         # -> projects.id
         ("assets", "project_id"), ("folders", "project_id"), ("share_links", "project_id"),

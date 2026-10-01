@@ -1,3 +1,4 @@
+import { authHeaders } from '@/lib/auth-headers'
 import { getAccessToken } from './auth'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -30,7 +31,7 @@ export async function exportComments(opts: {
   if (opts.includeResolved === false) params.set('include_resolved', 'false')
 
   const res = await fetch(`${API_URL}/assets/${opts.assetId}/comments/export?${params}`, {
-    headers: { Authorization: `Bearer ${getAccessToken()}` },
+    headers: authHeaders(getAccessToken()),
   })
 
   if (res.status === 422) {

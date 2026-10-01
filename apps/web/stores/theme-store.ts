@@ -1,3 +1,4 @@
+import { authHeaders } from '@/lib/auth-headers'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -35,7 +36,7 @@ async function saveToServer(theme: Theme) {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     await fetch(`${API_URL}/auth/me/preferences`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
       body: JSON.stringify({ theme }),
     })
   } catch {}

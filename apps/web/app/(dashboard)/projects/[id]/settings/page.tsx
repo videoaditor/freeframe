@@ -1,5 +1,8 @@
 'use client'
 
+import { authHeaders } from '@/lib/auth-headers'
+import { getAccessToken } from '@/lib/auth'
+
 import * as React from 'react'
 import { useParams } from 'next/navigation'
 import useSWR, { mutate as globalMutate } from 'swr'
@@ -131,9 +134,7 @@ function BrandingTab({ projectId }: { projectId: string }) {
         {
           method: 'POST',
           body: fd,
-          headers: {
-            Authorization: `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] ?? ''}`,
-          },
+          headers: authHeaders(getAccessToken()),
         },
       )
       setLogoFile(null)

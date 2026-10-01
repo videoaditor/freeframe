@@ -1,5 +1,7 @@
 "use client";
 
+import { authHeaders } from '@/lib/auth-headers'
+
 import React, {
   createContext,
   useCallback,
@@ -99,7 +101,7 @@ export function ReviewProvider({
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const headers: Record<string, string> = {};
         const t = getLiveAccessToken();
-        if (t) headers["Authorization"] = `Bearer ${t}`;
+        Object.assign(headers, authHeaders(t));
         const streamRes = await fetch(
           `${API_URL}/share/${shareToken}/stream/${assetId}?_=1${shareSessionParam}`,
           { headers },
@@ -171,7 +173,7 @@ export function ReviewProvider({
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const headers: Record<string, string> = {};
         const t = getLiveAccessToken();
-        if (t) headers["Authorization"] = `Bearer ${t}`;
+        Object.assign(headers, authHeaders(t));
         try {
           const vres = await fetch(
             `${API_URL}/share/${shareToken}/assets/${assetId}/versions?_=1${shareSessionParam}`,
@@ -279,7 +281,7 @@ export function ReviewProvider({
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     const headers: Record<string, string> = {};
     const t = getLiveAccessToken();
-    if (t) headers["Authorization"] = `Bearer ${t}`;
+    Object.assign(headers, authHeaders(t));
     fetch(
       `${API_URL}/share/${shareToken}/stream/${assetId}?version_id=${currentVersionId}${shareSessionParam}`,
       { headers },
@@ -308,7 +310,7 @@ export function ReviewProvider({
           "Content-Type": "application/json",
         };
         const t = await getUsableAccessToken();
-        if (t) headers["Authorization"] = `Bearer ${t}`;
+        Object.assign(headers, authHeaders(t));
         // Include guest identity if available (for non-authenticated users)
         const guestFields: Record<string, string> = {};
         try {
