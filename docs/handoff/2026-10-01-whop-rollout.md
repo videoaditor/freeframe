@@ -1,8 +1,36 @@
 # Whop launch rollout — 2026-10-01
 
-Status: Phase 1 verified locally; **STOP 1, no merge or production mutation performed**.
+Status: **Phase 2 rolled back and stopped on 2026-10-01, after Alan's go.**
+PR #31 is merged, but production ingress again serves the exact prelaunch images.
+Whop remains on `/o`; Suite/Whop and the review bridge remain disabled in FreeFrame.
 The user explicitly confirms there is no test server. All new processes below run on the
 existing live host and database. Whop stays on `https://review.aditor.ai/o` until STOP 2.
+
+## Actual Phase 2 outcome
+
+- Backup: `/var/backups/freeframe/whop-20261001T071757Z/postgres.dump`, **1,589,518 bytes**;
+  custom dump archive verified with `pg_restore --list` before merge.
+- PR #31 merged at 07:18:06 UTC as `828812f2d624c255d849f1d9a841616df9bfc53f`.
+  Build succeeded; bounded migration reached `c9d0e1f2a3b4`; all 27 existing accounts remain staff.
+- Candidate existing-staff magic-code verification, `/auth/me`, `/projects`, existing share API/page:
+  **200**. Public HTTPS health, login, hand-in and Whop page: **200**. Missing-header session POST:
+  **401** with readable recovery text; synthetic header reached disabled API and returned **503**.
+- Ten-minute log check found a new startup error at 07:21:20 UTC:
+  `Control server error: [Errno 13] Permission denied: '/home/appuser'`.
+  The image installs unpinned Gunicorn and creates `appuser` with `--no-create-home`.
+  Per the requested fail-on-any-error rule, ingress was immediately restored from `nginx.before`;
+  candidate API/web stopped. No further rollout or Phase 3 configuration performed.
+- Rollback confirmed by 07:23:49 UTC: public health OK, login/hand-in **200**, original API/web
+  running with the baseline image IDs below. Database was not restored or downgraded, preserving
+  live editor writes; additive migration remains. Hook **664631355 remains paused** to prevent
+  an automatic deployment of the failed build. Old workers remain running.
+
+Screenshots are saved locally under `/Users/alansimon/Downloads/freeframe-whop-20261001/`:
+`login.jpg`, `whop-recovery.jpg` (candidate checks), `rollback-login.jpg` (restored production).
+Render's Suite environment page showed `WHOP_ADITOR_REVIEW_APP_API_KEY` configured and masked;
+no value revealed or changed. Real Whop login and full owner acceptance remain untested.
+Next: fix the startup root cause, verify the built container has no startup errors, then retry
+Phase 2 only after Alan explicitly resumes the stopped rollout.
 
 ## Read-only live baseline
 
