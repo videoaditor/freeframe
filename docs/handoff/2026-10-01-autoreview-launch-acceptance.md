@@ -33,7 +33,7 @@ All screenshots below use **synthetic local data**, a real native video player a
 
 | URL / case | Expected and observed | Evidence |
 | --- | --- | --- |
-| `http://localhost:3146/r/launch-check?state=held&theme=light` | Video + exact current feedback, explicit revision action, readable mobile layout | [desktop](images/autoreview-launch-20261001/editor-desktop-light.jpg), [phone light](images/autoreview-launch-20261001/editor-mobile-light.jpg), [phone dark](images/autoreview-launch-20261001/editor-mobile-dark.jpg) |
+| `http://localhost:3146/r/launch-check?state=held&theme=light` | Video + exact current feedback, explicit revision action, readable mobile layout | [desktop light](images/autoreview-launch-20261001/editor-desktop-light.jpg), [desktop dark / corrected contrast](images/autoreview-launch-20261001/editor-desktop-dark.jpg), [phone light](images/autoreview-launch-20261001/editor-mobile-light.jpg), [phone dark](images/autoreview-launch-20261001/editor-mobile-dark.jpg) |
 | `?state=board&theme=light` | Unavailable stays in In review; correct folder URL retained; Ready and human approval explained | [owner board](images/autoreview-launch-20261001/owner-unavailable-desktop-light.jpg) |
 | Same fixture, v1 history selected | Historic media/notes identified as reference; current v2 notes do not appear | [history](images/autoreview-launch-20261001/editor-history-desktop.jpg) |
 | Revision action | Opens uploader for selected asset despite changed filename; returns to prior feedback | [revision + corrected dark accent contrast](images/autoreview-launch-20261001/revision-mobile-dark.jpg) |
