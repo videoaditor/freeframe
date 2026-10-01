@@ -1,12 +1,122 @@
 # Whop launch rollout — 2026-10-01
 
-Status: **Phase 2 rolled back and stopped on 2026-10-01, after Alan's go.**
-PR #31 is merged, but production ingress again serves the exact prelaunch images.
-Whop remains on `/o`; Suite/Whop and the review bridge remain disabled in FreeFrame.
+Status: **Phase 4 first login failed; app-ID typo corrected in runtime; real-account acceptance pending.**
+PR #31 and startup fix #35 are merged. Production ingress serves the configured candidates.
+Whop was switched; corrected candidates now serve ingress on API 3195 / web 3196. Real-account acceptance and canonical convergence are pending.
 The user explicitly confirms there is no test server. All new processes below run on the
 existing live host and database. Whop stays on `https://review.aditor.ai/o` until STOP 2.
 
+## Phase 4 correction
+
+The initial configured `WHOP_APP_ID=app_xSpqlhgkn1AX2J` was wrong: Whop's actual
+Review dashboard links to `app_xSpqIhgkn1AX2J` (capital I). A real iframe diagnostic
+proved header present, unexpired token, Suite exchange 200 and entitlement success;
+only the mismatched FreeFrame audience preflight denied login. Ingress was first
+rolled back to disabled 3190/3191. Corrected candidates were created with the exact
+dashboard ID and the existing bridge credential, without rebuilding or changing auth code.
+
+Current serving pair: `freeframe-whop-api-corrected` (3195) and
+`freeframe-whop-web-corrected` (3196). Staff magic-code login, refresh, me, projects,
+existing share API/page: 200. Public health/login/handin/whop: 200. Missing header: 401.
+Ten-minute API/web error markers: zero. Correct audience preflight passes; the typo
+is denied. Diagnostic route removed. Actual browser completion pending: Mac locked.
+Whop Base URL/app path must be `https://feedback.aditor.ai` and `/whop`; the current
+`/o/` app path redirects via middleware. Alan owns the Whop settings switch.
+The Phase 3 rollback remains the saved `nginx.phase2` file below; DB is never downgraded.
+
 ## Actual Phase 2 outcome
+
+### Worker secret confirmed; STOP 2
+
+Alan reported `Success! Uploaded secret FREEFRAME_BRIDGE_SECRET`.
+Read-only verification from the serving FreeFrame API confirmed the authenticated Worker
+`GET /api/v1/requests/status` returns **200** with the expected `status` object. An initial
+wrong-key request still saw **503** during propagation; the follow-up on one HTTP client
+confirmed **200 / 401 unauthorised / 200** for correct/wrong/correct credentials.
+No existing credentials were rotated and no secret value was printed or saved in source files.
+The bridge is now configured on both sides; no request/upload/review acceptance is claimed yet.
+STOP 2 instructions given to Alan: switch Whop Review app URL from `https://review.aditor.ai/o`
+to `https://feedback.aditor.ai/whop`, inspect desktop and phone. Reverting to `/o` is immediate
+Whop-side rollback. Keep the automatic deploy hook paused and retained baseline containers
+until real-account acceptance and canonical convergence are complete.
+
+### Successful retry and Phase 3 configuration, 12:09–12:13 UTC
+
+Alan explicitly resumed the rollout. Fresh verified backup:
+`/var/backups/freeframe/whop-retry-20261001T120921Z/postgres.dump`, **1,607,511 bytes**.
+The fixed production-image startup check passed. Corrected public baseline and candidate
+checks passed before switching; public candidate checks then passed after switching:
+existing-staff magic-code login, refresh, `/auth/me`, `/projects`, existing share API/page,
+health, login, hand-in and Whop page **200**; missing-header Whop session **401** with readable
+message; synthetic header **503** while Suite disabled. API/web ten-minute logs had **zero
+error markers**. Frame headers remain non-blocking. Screenshots: `phase2-live-whop.jpg`,
+`phase2-live-login.jpg` in the Downloads evidence directory.
+
+Render service `srv-d9fliddaeets73cb2qd0` Review app key was verified present and masked.
+FreeFrame API is now configured with `SUITE_URL=https://aditor-suite.onrender.com`,
+`WHOP_APP_ID=app_xSpqlhgkn1AX2J`, `REVIEW_BRIDGE_URL=https://review.aditor.ai`.
+The Worker first returned `503 bridge-disabled`, confirming no existing bridge key to rotate.
+One new 32-byte hex bridge secret was generated with OpenSSL and passed directly into the new
+API container's environment. No value was printed or written to a source/config/temporary file.
+
+Serving containers: `freeframe-whop-api-enabled` (localhost **3192**) and
+`freeframe-whop-web-enabled` (localhost **3193**, internal API points to the enabled API).
+Their images are the already tested API `97f88a070a01cf90b62b0c49a64e213b6436ae184b68bc16db64995333f43bcf`
+and web `be4f5fab48b6292df2cb1aa68afc2013a593e4fcffff4aec63d157bd3dbdbc00`.
+Candidates were started and checked before nginx switched, preserving active editor traffic.
+Configured internal AND public staff login/refresh/me/projects and existing share API/page
+returned **200**; public missing-header Whop **401**; API/web logs **zero error markers**.
+A structurally valid synthetic Whop token with an invalid signature reached configured Suite
+and was denied **401**. This is not a real-owner login acceptance claim.
+
+Authenticated Worker bridge still returns expected **503 bridge-disabled**, pending Alan's
+explicitly assigned secret entry. His command captures the FreeFrame container value through
+SSH and pipes it directly into the installed Wrangler 3.114.17 `secret put` stdin, without
+displaying it. Installed CLI source confirms protected stdin and no local-code upload for
+this secret operation. Production target is `feedback-submission-production` on `review.aditor.ai`.
+Then verify authenticated bridge **200** before giving STOP 2 Whop URL-switch instructions.
+
+Canonical original containers on 3090/3091 remain running for immediate rollback; phase2
+disabled candidates on 3190/3191 also remain available. Hook **664631355 is still paused**.
+`.env.prod` is unchanged; runtime credential/config has not yet been converged into canonical
+deployment. Rollback to prelaunch: restore `whop-20261001T071757Z/nginx.before`, nginx test/reload.
+Rollback just Phase 3: restore `whop-retry-20261001T120921Z/nginx.phase2`, nginx test/reload.
+Do not restore/downgrade DB or rotate the generated bridge credential on continuation.
+Current screenshot: `phase3-live-login.jpg`. Original handoff is not marked accepted/live yet.
+
+### Authorized retry, 11:34–11:44 UTC
+
+The startup regression was reproduced against Gunicorn 26.2.0 with a real WSGI process:
+HTTP succeeded but the log contained the same permission error. Removing `--no-create-home`
+creates the appuser-owned home without changing the non-root runtime. The built-image check
+then passed; backend **321 passed / 45 skipped**; independent review found no issues.
+PR #35 merged at 11:36:56 UTC as `c62db661f6eda3e0ccf3efc6680f19accd4adf71`.
+CI now runs `apps/api/tests/check_prod_image.py` against the production image.
+
+Fresh verified backup: `/var/backups/freeframe/whop-retry-20261001T113730Z/postgres.dump`,
+**1,606,475 bytes**. The backup-only restrictive umask was accidentally retained for the
+subsequent root checkout, making the new smoke script unreadable in the image. Its host mode
+was corrected to 644 and the rebuilt image passed. Future runbooks must scope `umask 077`
+to the backup commands rather than subsequent source checkout/build commands.
+
+Fixed candidates passed existing-staff login, refresh, `/auth/me`, `/projects`, existing share
+API/page (**200**), missing-header Whop **401**, disabled Whop header forwarding **503**, and
+API/web ten-minute logs (**zero error markers**). After switching ingress, the public Python
+login probe returned **403**. The ERR trap immediately restored original ingress and stopped
+the candidates. No Phase 3 configuration was performed.
+
+Read-only diagnosis proved the same public probe against restored production also returns
+Cloudflare **1010**, before reaching the API. A normal curl User-Agent reaches API validation
+(422 for intentionally invalid input); the corrected probe then completed real staff login,
+refresh, `/auth/me`, `/projects`, existing share API/page via public HTTPS with **200** on the
+restored baseline. This is a probe incompatibility with the existing Cloudflare policy, not
+a candidate application regression. No Cloudflare/security policy was changed.
+
+Production again serves the original images below, health/login/hand-in **200**; hook remains
+paused. Screenshot: `retry-rollback-login.jpg` in the same Downloads evidence directory.
+Render Review app key was rechecked as present and masked; no credential was revealed or changed.
+Awaiting explicit resume per the user's fail-and-stop rule. Use the corrected public probe on
+candidates before switching ingress on the next retry.
 
 - Backup: `/var/backups/freeframe/whop-20261001T071757Z/postgres.dump`, **1,589,518 bytes**;
   custom dump archive verified with `pg_restore --list` before merge.

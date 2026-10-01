@@ -1,8 +1,7 @@
 # Whop launch: implementation and acceptance
 
-Status: implemented locally, **not deployed and not announcement-ready**. Alan authorized Codex
-("übernimm") to take over the missing backend integration. The current Whop app still opens
-`review.aditor.ai/o`, the older Worker owner page, not the new FreeFrame workspace.
+Status: **deployed with corrected Whop app ID; Phase 4 acceptance remains pending; not announcement-ready**.
+Alan authorized the production rollout with explicit go messages. Whop was switched to the new FreeFrame origin. Its first real login failed; see the correction below.
 
 ## Implemented path
 
@@ -55,7 +54,7 @@ a caller could point their own logo at another project's storage object).
 | FreeFrame API | `SUITE_URL` | `https://aditor-suite.onrender.com` |
 | FreeFrame API | `REVIEW_BRIDGE_URL` | `https://review.aditor.ai` (currently empty; enable in Phase 3) |
 | FreeFrame API | `REVIEW_BRIDGE_SECRET` | New shared bridge credential; configure only in Phase 3 without printing it |
-| FreeFrame API | `WHOP_APP_ID` | `app_xSpqlhgkn1AX2J` (Review app, verified from Worker handshake spec) |
+| FreeFrame API | `WHOP_APP_ID` | `app_xSpqIhgkn1AX2J` (capital I after q; verified from the actual Whop dashboard on 2026-10-01) |
 | FreeFrame Next | `API_INTERNAL_URL` | `http://api:8000` in production compose; absolute API URL outside Docker |
 | Suite | `WHOP_ADITOR_REVIEW_APP_API_KEY` | Existing Review app key must be configured; do not generate/rotate or print it |
 | Whop app | application target | `https://feedback.aditor.ai/whop`; Alan switches only at STOP 2; keep old `/o` beforehand |
@@ -95,8 +94,41 @@ and the subsequent stale-request replay finding, were fixed and rechecked with n
 
 ## 2026-10-01 launch continuation
 
-No test server exists. Phase 1 is prepared in a fresh worktree; main, the live box and Whop
-remain unchanged. The current user request supersedes the earlier test-target requirement
-and authorizes a live rollout only after STOP 1 approval. See
+No test server exists. Alan approved rollout after Phase 1. PR #31 and the Gunicorn startup
+fix #35 are merged; additive migrations are live, and all existing accounts remain staff.
+Configured candidates serve FreeFrame with Suite/Whop settings and the shared Review bridge.
+Render Review app key was checked masked. Alan set the Worker bridge secret; authenticated
+bridge returns **200**, wrong-key access **401**. Staff login/refresh and existing share
+routes were tested internally and through public HTTPS, with no new API/web log errors.
+Whop still needs Alan's STOP 2 URL switch, followed by all real-account Phase 4 checks.
+The earlier no-merge/draft-only statement is historical and was superseded by this explicit
+approved live rollout request. No acceptance or announcement is claimed.
+Original containers remain available, automatic deploy is paused, and canonical deployment
+convergence is pending after acceptance. See
 [verified rollout and rollback runbook](2026-10-01-whop-rollout.md) for fresh counts,
 header evidence, the corrected single migration chain and the automatic-deploy gate.
+
+## Phase 4 app-ID correction, 2026-10-01
+
+The first actual Whop login failed with 401. Ingress was returned to the disabled
+3190/3191 pair and Alan was instructed to restore the old Whop URL. A bounded, server-only
+diagnostic confirmed the injected header arrived, the token was unexpired, Suite owner
+exchange returned 200 and owner entitlement passed. FreeFrame's app-audience preflight
+rejected it. The configured ID had lowercase l (`app_xSpqlhgkn1AX2J`); the actual Whop
+Review app ID is uppercase I (`app_xSpqIhgkn1AX2J`), verified from its dashboard link.
+No authentication check was removed and no token/credential value was logged.
+
+Corrected runtime candidates are `freeframe-whop-api-corrected` on 3195 and
+`freeframe-whop-web-corrected` on 3196; nginx currently serves them. They use the same
+tested images and unchanged bridge credential. Staff login/refresh/me/projects and
+existing share API/page pass (200); public health/login/handin/whop pass (200);
+missing-header session remains 401; API/web ten-minute error markers are zero.
+The configured audience check accepts the correct ID and rejects the lowercase-l typo.
+The temporary diagnostic route was removed.
+
+Whop dashboard currently has Base URL `https://feedback.aditor.ai/whop` and app path
+`/o/`; the proxy therefore opens `/o/` and middleware redirects to `/whop`. The intended
+settings are Base URL `https://feedback.aditor.ai` and app path `/whop`. Alan performs
+the Whop settings change. Real desktop login/home/reload, phone, upload/review, second-owner
+isolation and expired-membership acceptance remain pending. Browser access was unavailable
+because the Mac was locked. Automatic deployment remains paused until final convergence.

@@ -79,7 +79,7 @@ current SDK, so don't blindly copy that snippet or install an SDK based on an ol
   and target surface, not new-member authentication or plan access. No membership, app settings,
   credentials, billing, or permissions were changed.
 - The Worker spec `2026-09-03-review-iframe-handshake.md` identifies the Review app as
-  `app_xSpqlhgkn1AX2J` and records its separate Suite owner-session handshake.
+  `app_xSpqIhgkn1AX2J` (uppercase I; corrected against the Whop dashboard on 2026-10-01) and records its separate Suite owner-session handshake.
 
 ## Next action clarified after opening Whop
 
