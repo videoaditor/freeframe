@@ -17,7 +17,7 @@ type Stage = typeof STAGES[number]['id']
 function stageOf(r: FileRequest): Stage | 'closed' {
   if (r.state !== 'live') return 'closed'
   if (!r.assets) return 'editor'
-  if (r.status === 'reviewing') return 'review'
+  if (r.status === 'reviewing' || r.status === 'unavailable') return 'review'
   return r.status === 'held' ? 'corrections' : 'ready'
 }
 
@@ -85,6 +85,7 @@ export function ProjectKanban({ requests, paused, onShare, focusReady = false }:
         </section>
       })}
     </div>
+    <p className="mt-3 text-sm text-text-secondary">Ready to go means the current videos passed review with no required changes. Brand approval is a separate decision in FreeFrame.</p>
     {!!closed.length && <details className="mt-4 rounded-2xl border border-border px-4">
       <summary className="min-h-11 cursor-pointer py-3 text-[0.8125rem] text-text-secondary"><span>Closed requests</span> <span className="ml-1">{closed.length}</span></summary>
       <ul className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">{closed.map(r => <ProjectCard key={r.id} request={r} stage="closed" onShare={() => onShare(r)} />)}</ul>
@@ -93,7 +94,7 @@ export function ProjectKanban({ requests, paused, onShare, focusReady = false }:
 }
 
 function ProjectCard({ request: r, stage, onShare }: { request: FileRequest; stage: Stage | 'closed'; onShare: () => void }) {
-  const label = stage === 'editor' ? 'Waiting for files' : stage === 'review' ? 'Reviewing files' : stage === 'corrections' ? r.open_must_fixes > 0 ? `${r.open_must_fixes} ${r.open_must_fixes === 1 ? 'fix' : 'fixes'} to make` : 'With editor for updates' : stage === 'ready' ? 'Ready to go' : r.state === 'revoked' ? 'Closed' : 'Expired'
+  const label = r.status === 'unavailable' ? 'Review unavailable' : stage === 'editor' ? 'Waiting for files' : stage === 'review' ? 'Reviewing files' : stage === 'corrections' ? r.open_must_fixes > 0 ? `${r.open_must_fixes} ${r.open_must_fixes === 1 ? 'fix' : 'fixes'} to make` : 'With editor for updates' : stage === 'ready' ? 'Ready to go' : r.state === 'revoked' ? 'Closed' : 'Expired'
   return <li className="kanban-card" data-request-id={r.id} data-stage={stage}>
     <div className="flex items-start justify-between gap-2">
       <div className="kanban-art" aria-hidden="true"><FolderArt size={48} label="" />{stage === 'review' && <span className="kanban-scan" />}{stage === 'corrections' && <PencilLine className="kanban-pencil" size={19} />}{stage === 'ready' && <span className="kanban-check"><CheckCheck size={13} /></span>}</div>

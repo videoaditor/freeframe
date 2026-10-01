@@ -423,8 +423,8 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
     }
     # (referencing_table, referencing_column) confirmed handled by a _purge_* helper.
     KNOWN_HANDLED = {
-        ("request_uploads", "asset_id"), ("request_uploads", "request_id"),
-        ("upload_requests", "folder_id"), ("upload_requests", "project_id"),
+        ("request_uploads", "request_id"),
+        ("request_uploads", "asset_id"), ("upload_requests", "folder_id"), ("upload_requests", "project_id"),
         # -> projects.id
         ("assets", "project_id"), ("folders", "project_id"), ("share_links", "project_id"),
         ("project_brandings", "project_id"), ("watermark_settings", "project_id"),
@@ -512,6 +512,7 @@ def test_run_cleanup_skips_when_advisory_lock_held(real_db, monkeypatch):
     finally:
         other.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": ct._PURGE_ADVISORY_LOCK_KEY})
         other.close()
+
 
 def test_purge_folder_removes_request_uploads_and_request(real_db):
     from apps.api.models.upload_request import UploadRequest, RequestUpload

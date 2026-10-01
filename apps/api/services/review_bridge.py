@@ -5,7 +5,7 @@ lives here and never reaches a browser.
 
 FAIL OPEN, everywhere. A review service that is down, slow or unconfigured must never stop an
 owner creating a request or an editor handing in: every call returns None on any failure, and
-callers treat None as "not reviewed" - which the owner sees as ready.
+callers treat None as "not reviewed" - which the owner sees as unavailable while files remain accessible.
 """
 import logging
 import re
@@ -63,7 +63,9 @@ def request_status(share_tokens: list[str]) -> dict[str, dict]:
     statuses = {}
     for start in range(0, len(share_tokens), 50):
         r = _call("GET", "/api/v1/requests/status", params={"tokens": ",".join(share_tokens[start:start + 50])})
-        statuses.update((r or {}).get("status") or {})
+        values = r.get("status") if isinstance(r, dict) else None
+        if isinstance(values, dict):
+            statuses.update({key: value for key, value in values.items() if key in share_tokens and isinstance(value, dict)})
     return statuses
 
 
@@ -90,10 +92,10 @@ def decide_suggestion(brand: str, suggestion_id: str, action: str, by: str) -> O
     })
 
 
-def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, text: str, who: str) -> Optional[dict]:
+def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, text: str, who: str, version_id: Optional[str] = None) -> Optional[dict]:
     return _call("POST", "/api/v1/objection", json={
         "share_token": share_token, "asset_id": asset_id, "comment_id": comment_id,
-        "body": body, "text": text, "who": who,
+        "body": body, "text": text, "who": who, "version_id": version_id,
     }, timeout=45)
 
 
@@ -103,5 +105,7 @@ def asset_stats(asset_ids: list[str]) -> dict[str, dict]:
     assets = {}
     for start in range(0, len(asset_ids), 200):
         r = _call("GET", "/api/v1/assets", params={"ids": ",".join(asset_ids[start:start + 200])})
-        assets.update((r or {}).get("assets") or {})
+        values = r.get("assets") if isinstance(r, dict) else None
+        if isinstance(values, dict):
+            assets.update({key: value for key, value in values.items() if key in asset_ids and isinstance(value, dict)})
     return assets

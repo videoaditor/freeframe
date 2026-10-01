@@ -1,8 +1,9 @@
+from ..models.upload_request import UploadRequest, RequestUpload
 import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from .celery_app import celery_app
 from ..database import SessionLocal
@@ -18,7 +19,6 @@ from ..models.folder import Folder
 from ..models.metadata import MetadataField, AssetMetadata, Collection, CollectionShare
 from ..models.branding import ProjectBranding, WatermarkSettings
 from ..models.activity import Mention, ActivityLog, Notification
-from ..models.upload_request import UploadRequest, RequestUpload
 from ..services.s3_service import (
     list_stale_multipart_uploads, abort_multipart_upload, delete_object, delete_prefix, list_keys,
 )
@@ -129,7 +129,7 @@ def _purge_share_link(db, share_link_id, counts: PurgeCounts) -> None:
     db.flush()
 
 
-def _purge_requests(db, request_ids) -> None:
+def _purge_requests(db, request_ids):
     db.query(RequestUpload).filter(RequestUpload.request_id.in_(request_ids)).delete(synchronize_session=False)
     db.query(UploadRequest).filter(UploadRequest.id.in_(request_ids)).delete(synchronize_session=False)
 
@@ -249,6 +249,12 @@ def _reap_stale_uploads(db) -> int:
         AssetVersion.processing_status.in_([ProcessingStatus.uploading, ProcessingStatus.failed]),
         AssetVersion.deleted_at.is_(None),
         AssetVersion.created_at < cutoff,
+        # Request failures and ambiguous old attempts must remain current evidence.
+        # Explicit abort hides canceled versions; retention GC reclaims deleted requests.
+        ~select(UploadRequest.id).join(Asset, Asset.folder_id == UploadRequest.folder_id).where(
+            Asset.id == AssetVersion.asset_id,
+            Asset.project_id == UploadRequest.project_id,
+        ).exists(),
     ).all()
     for v in versions:
         for mf in db.query(MediaFile).filter(MediaFile.version_id == v.id).all():

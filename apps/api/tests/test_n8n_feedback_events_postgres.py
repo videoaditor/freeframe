@@ -331,7 +331,9 @@ def _next_notification(connection, timeout=1.0):
 
 def test_postgres_notifies_fetchable_comment_events_without_no_op_noise():
     ids = {name: str(uuid.uuid4()) for name in ("user", "guest", "project", "asset", "version", "comment")}
-    listener = engine.raw_connection()
+    pooled_listener = engine.raw_connection()
+    listener = pooled_listener.driver_connection
+    previous_autocommit = listener.autocommit
     listener.autocommit = True
     listener.cursor().execute("LISTEN feedback_event")
 
@@ -414,7 +416,8 @@ def test_postgres_notifies_fetchable_comment_events_without_no_op_noise():
         assert deleted["type"] == "comment_deleted"
     finally:
         listener.cursor().execute("UNLISTEN *")
-        listener.close()
+        listener.autocommit = previous_autocommit
+        pooled_listener.close()
         with engine.begin() as writer:
             writer.execute(text("DELETE FROM comments WHERE id = :comment"), ids)
             writer.execute(text("DELETE FROM asset_versions WHERE id = :version"), ids)

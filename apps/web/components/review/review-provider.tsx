@@ -426,3 +426,5 @@ export function useReview(): ReviewContextValue {
   }
   return ctx;
 }
+
+export function useOptionalReview() { return useContext(ReviewContext); }

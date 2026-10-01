@@ -84,3 +84,12 @@ it('the ready shortcut shows only ready deliveries, without empty other stages',
   expect(screen.queryByRole('link', { name: 'Waiting' })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Finished' })).toHaveAttribute('href', '/projects/p1')
 })
+
+
+it('keeps unavailable files in review with their existing folder and share access', () => {
+  render(<ProjectKanban requests={[request('Unavailable', {status:'unavailable',folder_id:'f1'})]} paused={false} onShare={vi.fn()} />)
+  expect(screen.getByRole('region', {name:'In review'})).toHaveTextContent('Review unavailable')
+  expect(screen.getByRole('region', {name:'Ready to go'})).not.toHaveTextContent('Unavailable')
+  expect(screen.getByRole('link', {name:'Unavailable'})).toHaveAttribute('href','/projects/p1?folder=f1')
+  expect(screen.getByRole('button', {name:'Share Unavailable'})).toBeVisible()
+})
