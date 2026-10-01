@@ -25,7 +25,7 @@ Ordinary editor behavior was selected from FreeFrame `0910256` and Worker `9fb6c
 | Migration | One head `d0e1f2a3b4c5`, parent `c9d0e1f2a3b4`; local upgrade applied. Real PostgreSQL seeded backfill includes processing/ready, excludes uploading/failed |
 | FreeFrame frontend | **432 tests passed**, isolated production build and typecheck passed; lint passed with existing warnings and imported raw-image advisory warnings. Dependencies installed frozen in the own checkout after borrowed rollout modules disappeared |
 | Review Worker | **1,204 tests passed**; typecheck FAILS with **158 existing diagnostics** on both base and candidate. Sorted diagnostic messages match exactly. This is an unresolved rollout gate, not a green check |
-| Pages | **1,526 tests passed**, typecheck passed, candidate export built, member/team entry contract passed |
+| Pages | **1,526 tests passed**, typecheck passed, candidate export built, member/team entry contract passed. GitHub Cloudflare Pages check for `aditor-atlas` FAILS on both this PR and base PR482 (`ba3c2b9`); this is distinct from the `aditor-pages` Worker workflow. No green remote CI claim |
 
 Meaningful red/green regressions include missing editor endpoints, V2 identity despite a renamed file, missing/malformed/stale version evidence, unverified object size, Whop HTTP recovery, aborted share phantom, failed-video replacement and stale reaper fallback. Fresh independent review found the final three cases; all were fixed and their regressions rerun. The existing n8n notification test assigned autocommit to SQLAlchemy's pool proxy instead of the driver connection; it now uses the driver and restores its original mode. Application notification behavior was unchanged.
 
@@ -82,3 +82,5 @@ Required configuration names: `SUITE_URL`, `WHOP_APP_ID`, `API_INTERNAL_URL`, `N
 | Export from accepted landing `d20fca6` on Pages main | No design rebuild or publication; regenerate if approved landing source changes before acceptance |
 
 Reviewer scope rulings: live Whop/two-owner/phone/deployment stays with the original rollout owner (if wrong, real identity/reload faults remain unknown); iterations/performance remains excluded (if wrong, no speed guarantee/iteration generation); moving documentation was reconciled by the author after code review (if wrong, runbook may lag implementation, so rollout must inspect current state). No minor reviewer findings were deferred.
+
+Remote-check ruling: the unrelated `aditor-atlas` Cloudflare check is red on both Pages base PR482 and candidate PR483; report it unchanged rather than modify deployment configuration outside scope (if wrong, a remote build problem may still block merge; the rollout owner must inspect the check before publication).
