@@ -381,7 +381,7 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
                                               AssetVersion.processing_status == ProcessingStatus.uploading,
                                               AssetVersion.created_at < stale_before).all():
         dead.processing_status = ProcessingStatus.failed
-    last = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None)) \
+    last = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id) \
         .order_by(AssetVersion.version_number.desc()).first()
     # The guest has no account; the version is filed under the request's owner, who asked for it.
     version = AssetVersion(asset_id=asset.id, version_number=(last.version_number + 1) if last else 1,
@@ -485,6 +485,9 @@ def guest_abort(token: str, body: GuestPart, db: Session = Depends(get_db)):
             raise
     version.processing_status = ProcessingStatus.failed
     version.deleted_at = datetime.now(timezone.utc)
+    db.flush()
+    if not db.query(AssetVersion).filter(AssetVersion.asset_id == version.asset_id, AssetVersion.deleted_at.is_(None)).first():
+        db.get(Asset, version.asset_id).deleted_at = version.deleted_at
     db.commit()
 
 

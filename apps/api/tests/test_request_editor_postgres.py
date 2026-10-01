@@ -15,7 +15,7 @@ pytestmark = pytest.mark.skipif(not os.getenv('ITERATIONS_TEST_DATABASE_URL'), r
 
 def test_staged_revision_history_and_serialized_completion(monkeypatch):
     from apps.api.database import Base
-    from apps.api.models import User, Project, Folder, UploadRequest, Asset, AssetVersion, RequestUpload, MediaFile
+    from apps.api.models import User, Project, Folder, UploadRequest, Asset, AssetVersion, RequestUpload, MediaFile, ShareLink
     from apps.api.models.asset import ProcessingStatus
     from apps.api.routers import requests as rq
     admin = create_engine(os.environ['ITERATIONS_TEST_DATABASE_URL'])
@@ -39,7 +39,9 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
             project = Project(name='Brand', created_by=owner.id); db.add(project); db.flush()
             folder = Folder(name='Hand in', project_id=project.id, created_by=owner.id); db.add(folder); db.flush()
             req = UploadRequest(token='token', review_share_token='share', title='Launch', project_id=project.id, folder_id=folder.id, created_by=owner.id)
-            db.add(req); db.commit()
+            db.add(req)
+            db.add(ShareLink(token='share', folder_id=folder.id, created_by=owner.id, allow_download=True))
+            db.commit()
             init = rq.guest_initiate('token', rq.GuestInitiate(original_filename='cut.mp4', mime_type='video/mp4', file_size_bytes=100), db)
             assert db.query(RequestUpload).count() == 0
             with pytest.raises(HTTPException) as missing:
@@ -86,17 +88,40 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
             with pytest.raises(HTTPException): rq.finish_request('token', db)
             db.rollback()
             v2 = db.get(AssetVersion, uuid.UUID(revision['version_id']))
-            v2.processing_status = ProcessingStatus.failed; db.commit()
+            v2.processing_status = ProcessingStatus.failed
+            from datetime import datetime, timezone, timedelta
+            v2.created_at = datetime.now(timezone.utc) - timedelta(days=1)
+            db.commit()
+            from apps.api.tasks import cleanup_tasks
+            monkeypatch.setattr(cleanup_tasks, 'list_stale_multipart_uploads', lambda *a: [])
+            monkeypatch.setattr(cleanup_tasks, 'delete_object', lambda *a: None)
+            monkeypatch.setattr(cleanup_tasks, 'delete_prefix', lambda *a: None)
+            cleanup_tasks._reap_stale_uploads(db); db.commit()
+            assert v2.deleted_at is None
             failed = rq.guest_review('token', db)
             assert failed['assets'][0]['version_id'] == revision['version_id']
             assert failed['gate']['status'] == 'unavailable'
             assert rq.list_requests(None, db, owner)[0]['status'] == 'unavailable'
+            with pytest.raises(HTTPException) as blocked: rq.finish_request('token', db)
+            assert blocked.value.status_code == 409
+            db.rollback()
             v2.processing_status = ProcessingStatus.ready; db.commit()
             stats[init['asset_id']] = {'version_id': revision['version_id'], 'reviewed': True, 'openMustFix': 0}
             abandoned = rq.guest_initiate('token', rq.GuestInitiate(original_filename='cancelled.mp4', mime_type='video/mp4', file_size_bytes=100), db)
             monkeypatch.setattr(rq, 'abort_multipart_upload', lambda *a: None)
             rq.guest_abort('token', rq.GuestPart(s3_key=abandoned['s3_key'], upload_id='multipart', part_number=1), db)
             assert len(rq.view_request('token', db)['assets']) == 1
+            assert db.get(Asset, uuid.UUID(abandoned['asset_id'])).deleted_at is not None
+            from apps.api.routers.share import get_folder_share_assets
+            shared = get_folder_share_assets('share', None, 1, 50, None, db, None)
+            assert [str(a.id) for a in shared.assets] == [init['asset_id']]
+            # Canceling revisions retains the delivered asset and never reuses a unique number.
+            canceled_v3 = rq.guest_initiate('token', rq.GuestInitiate(asset_id=init['asset_id'], original_filename='cancel-v3.mp4', mime_type='video/mp4', file_size_bytes=100), db)
+            rq.guest_abort('token', rq.GuestPart(s3_key=canceled_v3['s3_key'], upload_id='multipart', part_number=1), db)
+            assert db.get(Asset, uuid.UUID(init['asset_id'])).deleted_at is None
+            retry_v4 = rq.guest_initiate('token', rq.GuestInitiate(asset_id=init['asset_id'], original_filename='retry-v4.mp4', mime_type='video/mp4', file_size_bytes=100), db)
+            assert retry_v4['version_number'] == 4
+            rq.guest_abort('token', rq.GuestPart(s3_key=retry_v4['s3_key'], upload_id='multipart', part_number=1), db)
         # A simultaneous initiation waits for the completion lock, then sees completed_at.
         checking, release = Event(), Event()
         def evidence(*args):

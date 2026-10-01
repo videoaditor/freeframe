@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from .celery_app import celery_app
 from ..database import SessionLocal
@@ -249,6 +249,12 @@ def _reap_stale_uploads(db) -> int:
         AssetVersion.processing_status.in_([ProcessingStatus.uploading, ProcessingStatus.failed]),
         AssetVersion.deleted_at.is_(None),
         AssetVersion.created_at < cutoff,
+        # Request failures and ambiguous old attempts must remain current evidence.
+        # Explicit abort hides canceled versions; retention GC reclaims deleted requests.
+        ~select(UploadRequest.id).join(Asset, Asset.folder_id == UploadRequest.folder_id).where(
+            Asset.id == AssetVersion.asset_id,
+            Asset.project_id == UploadRequest.project_id,
+        ).exists(),
     ).all()
     for v in versions:
         for mf in db.query(MediaFile).filter(MediaFile.version_id == v.id).all():

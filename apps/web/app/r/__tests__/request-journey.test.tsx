@@ -70,3 +70,20 @@ it('keeps a long review below the shared 120 requests per ten minute limit', asy
   expect(total).toBeGreaterThan(10)
   expect(total).toBeLessThan(100)
 })
+
+it('replaces a failed V2 on its own asset and completes only the reviewed V3', async () => {
+  localStorage.setItem('aditor-request-who', JSON.stringify({name:'Test editor',email:'editor@example.test'}))
+  vi.mocked(requestReview).mockResolvedValue({ assets: [{ ...asset, processing: 'failed', review_state: 'unavailable' }], gate: { status: 'unavailable', open_must_fixes: 0 }, review_share_token: 'share' })
+  vi.mocked(uploadToRequest).mockImplementation(async () => {
+    vi.mocked(requestReview).mockResolvedValue({ assets: [{ ...asset, version: 3, version_id: 'v3' }], gate: { status: 'clear', open_must_fixes: 0 }, review_share_token: 'share' })
+    return { asset_id: 'cut', version_number: 3 }
+  })
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Upload a replacement v3' }))
+  expect(finishRequest).not.toHaveBeenCalled()
+  fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [new File(['corrected'], 'renamed-v3.mp4', {type:'video/mp4'})] } })
+  expect(await screen.findByText('Your ads were submitted')).toBeVisible()
+  expect(vi.mocked(uploadToRequest).mock.calls[0][4]?.assetId).toBe('cut')
+  expect(finishRequest).toHaveBeenCalledTimes(1)
+  localStorage.removeItem('aditor-request-who')
+})

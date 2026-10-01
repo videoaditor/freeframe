@@ -73,3 +73,12 @@ it('uses the request brand for comment and player attribution without changing t
 })
 
 
+
+it('lets the editor replace a failed submitted version on the same asset', () => {
+  const asset: RequestAsset = { asset_id: 'cut', name: 'Cut', version: 2, version_id: 'v2', processing: 'failed', review_state: 'unavailable', comments: [] }
+  const revise = vi.fn()
+  render(<RequestWorkspace token="failed-test" assets={[asset]} onSelect={vi.fn()} onRefresh={vi.fn()} onRevise={revise} />)
+  expect(screen.getByText('Review unavailable')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: 'Upload a replacement v3' }))
+  expect(revise).toHaveBeenCalledWith(asset)
+})
