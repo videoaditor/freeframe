@@ -18,6 +18,7 @@ from ..models.folder import Folder
 from ..models.metadata import MetadataField, AssetMetadata, Collection, CollectionShare
 from ..models.branding import ProjectBranding, WatermarkSettings
 from ..models.activity import Mention, ActivityLog, Notification
+from ..models.upload_request import UploadRequest, RequestUpload
 from ..services.s3_service import (
     list_stale_multipart_uploads, abort_multipart_upload, delete_object, delete_prefix, list_keys,
 )
@@ -128,6 +129,11 @@ def _purge_share_link(db, share_link_id, counts: PurgeCounts) -> None:
     db.flush()
 
 
+def _purge_requests(db, request_ids) -> None:
+    db.query(RequestUpload).filter(RequestUpload.request_id.in_(request_ids)).delete(synchronize_session=False)
+    db.query(UploadRequest).filter(UploadRequest.id.in_(request_ids)).delete(synchronize_session=False)
+
+
 def _purge_asset(db, asset_id, counts: PurgeCounts) -> None:
     """Hard-delete an asset and everything hanging off it."""
     a = db.query(Asset).filter(Asset.id == asset_id).first()
@@ -148,6 +154,7 @@ def _purge_asset(db, asset_id, counts: PurgeCounts) -> None:
     db.query(AssetShare).filter(AssetShare.asset_id == asset_id).delete(synchronize_session=False)
     db.query(ActivityLog).filter(ActivityLog.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.asset_id == asset_id).delete(synchronize_session=False)
+    db.query(RequestUpload).filter(RequestUpload.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Asset).filter(Asset.id == asset_id).delete(synchronize_session=False)
     counts.assets += 1
     db.flush()
@@ -174,6 +181,7 @@ def _purge_folder(db, folder_id, counts: PurgeCounts) -> None:
         _purge_share_link(db, link.id, counts)
     db.query(ShareLinkItem).filter(ShareLinkItem.folder_id == folder_id).delete(synchronize_session=False)
     db.query(AssetShare).filter(AssetShare.folder_id == folder_id).delete(synchronize_session=False)
+    _purge_requests(db, [r.id for r in db.query(UploadRequest).filter(UploadRequest.folder_id == folder_id).all()])
     db.query(Folder).filter(Folder.id == folder_id).delete(synchronize_session=False)
     counts.folders += 1
     db.flush()
@@ -214,6 +222,7 @@ def _purge_project(db, project_id, counts: PurgeCounts) -> None:
     if p.poster_s3_key:
         _safe(delete_object, p.poster_s3_key)
         counts.s3_deletes += 1
+    _purge_requests(db, [r.id for r in db.query(UploadRequest).filter(UploadRequest.project_id == project_id).all()])
     db.query(Project).filter(Project.id == project_id).delete(synchronize_session=False)
     counts.projects += 1
     db.flush()
