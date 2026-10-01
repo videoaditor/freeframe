@@ -73,7 +73,7 @@ function Group({ title, hint, items, must, onSeek, onObject }: { title: string; 
   )
 }
 
-function Dispute({ c, onObject }: { c: ReviewComment; onObject: Objector }) {
+export function Dispute({ c, onObject }: { c: ReviewComment; onObject: Objector }) {
   const [open, setOpen] = React.useState(false)
   const [text, setText] = React.useState('')
   const [busy, setBusy] = React.useState(false)
@@ -88,8 +88,8 @@ function Dispute({ c, onObject }: { c: ReviewComment; onObject: Objector }) {
   }
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-2 text-[13px] font-medium text-text-secondary underline-offset-2 hover:text-text-primary hover:underline">
-        Not right?
+      <button type="button" onClick={() => setOpen(true)} className="report-bug-trigger mt-1 min-h-11 text-[13px] font-medium text-text-tertiary underline-offset-2 hover:text-text-primary hover:underline focus-visible:outline-accent">
+        Report bug
       </button>
     )
   }
@@ -102,14 +102,14 @@ function Dispute({ c, onObject }: { c: ReviewComment; onObject: Objector }) {
   return (
     <div className="mt-3 space-y-2 fade-in">
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} autoFocus
-        placeholder="What is actually in the video? e.g. The price is on screen at 0:14."
-        className="field min-h-[64px] resize-y py-2.5 text-[15px] leading-relaxed" aria-label="Why the note is wrong" />
+        placeholder="Describe the issue and include a timestamp if helpful."
+        className="field min-h-[64px] resize-y py-2.5 text-[15px] leading-relaxed" aria-label="Describe the review issue" />
       {error && <p className="text-[13px] text-status-error" role="alert">{error}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={() => setOpen(false)} className="press h-10 rounded-full px-4 text-[13px] font-medium text-text-secondary hover:bg-bg-hover">Cancel</button>
         <button type="button" onClick={send} disabled={text.trim().length < 3 || busy}
           className="press h-10 rounded-full bg-bg-hover px-4 text-[13px] font-semibold text-text-primary disabled:text-text-tertiary">
-          {busy ? 'Checking…' : 'Send'}
+          {busy ? 'Checking report…' : 'Submit report'}
         </button>
       </div>
     </div>

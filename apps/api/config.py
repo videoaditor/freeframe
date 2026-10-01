@@ -190,7 +190,7 @@ class Settings(BaseSettings):
     whop_app_id: str = ""
     # REVIEW_BRIDGE_URL / _SECRET: Auto Review's /api/v1/* contract (review.aditor.ai), called from
     # this server only - the secret never reaches a browser. Unset = requests still work, they are
-    # just not reviewed, and the owner list shows every request as ready (fail open).
+    # preserved with review unavailable; missing evidence never claims Ready or completion.
     review_bridge_url: str = ""
     review_bridge_secret: str = ""
 

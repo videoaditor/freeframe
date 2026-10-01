@@ -59,3 +59,8 @@ describe('upload slices', () => {
     expect(formatBytes(10)).toBe('1 KB')
   })
 })
+
+
+it('labels an unavailable review as a warning instead of ready', () => {
+  expect(statusLabel({ assets: 1, state: 'live', status: 'unavailable', open_must_fixes: 0 })).toEqual({label: 'Review unavailable', tone: 'warn'})
+})

@@ -24,3 +24,12 @@ def test_editor_stats_include_assets_after_the_worker_batch_limit(monkeypatch):
     result = review_bridge.asset_stats(ids)
     assert set(result) == set(ids)
     assert result[ids[-1]]["first_try"] is False
+
+
+import pytest
+
+@pytest.mark.parametrize('response', [[], 'bad', {'assets': 'bad', 'status': []}, {'assets': {'a': False}, 'status': {'s': None}}])
+def test_malformed_bridge_response_is_unavailable_not_a_route_error(monkeypatch, response):
+    monkeypatch.setattr(review_bridge, '_call', lambda *a, **kw: response)
+    assert review_bridge.asset_stats(['a']) == {}
+    assert review_bridge.request_status(['s']) == {}

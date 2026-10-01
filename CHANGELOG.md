@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
+
+### Fixed
+- Production containers provide the non-root user home required by Gunicorn's control socket.
+- Ready status now requires successful review of every current submitted version; outages, malformed evidence and failed revisions retain file access without claiming a pass.
+- Retention cleanup removes request records before reclaiming their folders and assets, and preserves failed delivery evidence until normal retention applies.
+- Editors can replace failed processing attempts; canceled uploads no longer hold a clean request open.
+- Whop sign-in explains missing member entry, denied access and account conflicts with an appropriate recovery action.
+
+### Added
 - **`n8n_feedback_events` names the card of each event** - three columns are appended after the unchanged `freeframe-feedback.v1` contract: `folder_id`, `folder_name` and `trello_card_id` (the Trello short link from the folder description). A consumer that follows up on review comments could only match a new round to the commented asset by file name, so a round uploaded into another project with the same generic names (`Hook 1`, `Hook 2`, …) looked like nothing had been delivered. The card is the identity that survives a move between projects. `n8n_read` still reads only the two views.
 - Optional Whop owner sign-in through Aditor Suite, with isolated customer accounts, continuing membership checks and a recoverable in-app entry screen. Disabled until configured; existing staff sign-in stays unchanged.
 - Brand playbook with numbered rule rows and labeled review checks, must-follow filters, full-text reading sheets and a separate suggestion approval area. Failed imports retain their text; switching brands isolates unfinished actions.

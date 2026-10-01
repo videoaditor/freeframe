@@ -5,7 +5,7 @@ const headers = { 'Cache-Control': 'no-store' }
 const errors: Record<number, string> = {
   401: 'Open Autoreview inside Whop to sign in. If it is already open there, close the app and open it again.',
   403: 'Your Whop membership does not currently include access to this workspace. Check your access in Whop or contact support.',
-  409: 'An account already exists for this identity. Contact support to connect it to Whop.',
+  409: 'An existing account uses this email. Team members can use their normal sign-in; customer accounts need support to verify both identities.',
   429: 'Too many sign-in attempts. Wait a minute, then try again.',
   503: 'We could not check your Whop access right now. Please try again shortly.',
 }

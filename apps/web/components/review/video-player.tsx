@@ -16,7 +16,7 @@ import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useReviewStore, type TimeFormat } from "@/stores/review-store";
 import { useVideoPlayer } from "@/hooks/use-video-player";
-import { useReview } from "./review-provider";
+import { useOptionalReview } from "./review-provider";
 import { ProgressBar } from "./progress-bar";
 import type { Comment } from "@/types";
 
@@ -27,6 +27,7 @@ interface StreamUrlResponse {
 }
 
 interface VideoPlayerProps {
+  onRetry?: () => void;
   assetId: string;
   comments?: Comment[];
   overlay?: React.ReactNode;
@@ -132,7 +133,7 @@ export function VideoPlayer({
   comments = [],
   overlay,
   className,
-  initialStreamUrl,
+  initialStreamUrl, onRetry,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
@@ -140,7 +141,7 @@ export function VideoPlayer({
 
   const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime, currentVersion } =
     useReviewStore();
-  const { registerPauseHandler } = useReview();
+  const registerPauseHandler = useOptionalReview()?.registerPauseHandler;
   const [timeFormatOpen, setTimeFormatOpen] = useState(false);
   const timeFormatRef = useRef<HTMLDivElement>(null);
 
@@ -239,7 +240,7 @@ export function VideoPlayer({
 
   // Register pause handler with review provider
   useEffect(() => {
-    registerPauseHandler(pause);
+    registerPauseHandler?.(pause);
   }, [registerPauseHandler, pause]);
 
   // Sync video currentTime to review store so comment input shows same timecode
@@ -346,7 +347,7 @@ export function VideoPlayer({
         {/* Error state */}
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <p className="text-red-400 text-sm">{error}</p>
+            <div className="text-center"><p className="text-red-400 text-sm">{error}</p>{onRetry && <button className="mt-3 min-h-11 rounded-full border border-white/30 px-5 text-sm text-white" onClick={onRetry}>Reload video</button>}</div>
           </div>
         )}
 

@@ -1,8 +1,9 @@
+from ..models.upload_request import UploadRequest, RequestUpload
 import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from .celery_app import celery_app
 from ..database import SessionLocal
@@ -128,6 +129,11 @@ def _purge_share_link(db, share_link_id, counts: PurgeCounts) -> None:
     db.flush()
 
 
+def _purge_requests(db, request_ids):
+    db.query(RequestUpload).filter(RequestUpload.request_id.in_(request_ids)).delete(synchronize_session=False)
+    db.query(UploadRequest).filter(UploadRequest.id.in_(request_ids)).delete(synchronize_session=False)
+
+
 def _purge_asset(db, asset_id, counts: PurgeCounts) -> None:
     """Hard-delete an asset and everything hanging off it."""
     a = db.query(Asset).filter(Asset.id == asset_id).first()
@@ -148,6 +154,7 @@ def _purge_asset(db, asset_id, counts: PurgeCounts) -> None:
     db.query(AssetShare).filter(AssetShare.asset_id == asset_id).delete(synchronize_session=False)
     db.query(ActivityLog).filter(ActivityLog.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.asset_id == asset_id).delete(synchronize_session=False)
+    db.query(RequestUpload).filter(RequestUpload.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Asset).filter(Asset.id == asset_id).delete(synchronize_session=False)
     counts.assets += 1
     db.flush()
@@ -174,6 +181,7 @@ def _purge_folder(db, folder_id, counts: PurgeCounts) -> None:
         _purge_share_link(db, link.id, counts)
     db.query(ShareLinkItem).filter(ShareLinkItem.folder_id == folder_id).delete(synchronize_session=False)
     db.query(AssetShare).filter(AssetShare.folder_id == folder_id).delete(synchronize_session=False)
+    _purge_requests(db, [r.id for r in db.query(UploadRequest).filter(UploadRequest.folder_id == folder_id).all()])
     db.query(Folder).filter(Folder.id == folder_id).delete(synchronize_session=False)
     counts.folders += 1
     db.flush()
@@ -214,6 +222,7 @@ def _purge_project(db, project_id, counts: PurgeCounts) -> None:
     if p.poster_s3_key:
         _safe(delete_object, p.poster_s3_key)
         counts.s3_deletes += 1
+    _purge_requests(db, [r.id for r in db.query(UploadRequest).filter(UploadRequest.project_id == project_id).all()])
     db.query(Project).filter(Project.id == project_id).delete(synchronize_session=False)
     counts.projects += 1
     db.flush()
@@ -240,6 +249,12 @@ def _reap_stale_uploads(db) -> int:
         AssetVersion.processing_status.in_([ProcessingStatus.uploading, ProcessingStatus.failed]),
         AssetVersion.deleted_at.is_(None),
         AssetVersion.created_at < cutoff,
+        # Request failures and ambiguous old attempts must remain current evidence.
+        # Explicit abort hides canceled versions; retention GC reclaims deleted requests.
+        ~select(UploadRequest.id).join(Asset, Asset.folder_id == UploadRequest.folder_id).where(
+            Asset.id == AssetVersion.asset_id,
+            Asset.project_id == UploadRequest.project_id,
+        ).exists(),
     ).all()
     for v in versions:
         for mf in db.query(MediaFile).filter(MediaFile.version_id == v.id).all():

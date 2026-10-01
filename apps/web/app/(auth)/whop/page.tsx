@@ -7,11 +7,13 @@ import { resetWhopEntry, setTokens } from '@/lib/auth'
 export default function WhopPage() {
   const started = useRef(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorStatus, setErrorStatus] = useState<number | null>(null)
   const [busy, setBusy] = useState(true)
 
   async function connect() {
     setBusy(true)
     setError(null)
+    setErrorStatus(null)
     try {
       resetWhopEntry()
     } catch {
@@ -22,7 +24,10 @@ export default function WhopPage() {
     try {
       const response = await fetch('/whop/session', { method: 'POST', cache: 'no-store' })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.detail || 'Whop sign-in is temporarily unavailable. Please try again.')
+      if (!response.ok) {
+        setErrorStatus(response.status)
+        throw new Error(data.detail || 'Whop sign-in is temporarily unavailable. Please try again.')
+      }
       if (typeof data.access_token !== 'string' || typeof data.refresh_token !== 'string') throw new Error('Sign-in could not be completed. Please try again.')
       try {
         setTokens(data.access_token, data.refresh_token, 'whop')
@@ -54,9 +59,10 @@ export default function WhopPage() {
       ) : (
         <>
           <p role="alert" className="text-sm leading-relaxed text-text-secondary">{error}</p>
-          <Button type="button" size="lg" onClick={() => void connect()} className="w-full">
-            Try again
-          </Button>
+          {errorStatus === 401 || errorStatus === 403 ? <Button asChild size="lg" className="w-full"><a href="https://whop.com/aditor-wisdom/exp_kLsfFtlUrXJejl/app/" target="_top">{errorStatus === 401 ? 'Open in Whop' : 'Check access in Whop'}</a></Button> : errorStatus === 409 ? <>
+            <p className="text-sm leading-relaxed text-text-secondary">This sign-in does not link or change your existing account. Team members can sign in below. For a customer account, contact support to verify both identities before connecting it.</p>
+            <Button asChild size="lg" className="w-full"><a href="/login?from=/home">Team sign-in</a></Button>
+          </> : <Button type="button" size="lg" onClick={() => void connect()} className="w-full">Try again</Button>}
         </>
       )}
     </div>

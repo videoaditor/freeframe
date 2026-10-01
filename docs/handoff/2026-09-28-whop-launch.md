@@ -1,8 +1,8 @@
 # Whop launch: implementation and acceptance
 
-Status: implemented locally, **not deployed and not announcement-ready**. Alan authorized Codex
-("übernimm") to take over the missing backend integration. The current Whop app still opens
-`review.aditor.ai/o`, the older Worker owner page, not the new FreeFrame workspace.
+Status update 2026-10-01: PR31 is merged at `828812f`. The rollout chat **Rebase and verify FreeFrame PR 31** fixed the Gunicorn appuser-home failure in `235cbeb`. Its later Whop diagnostic exposed a mistyped configured App ID: lowercase `l` was wrong; uppercase `I` matches the real token audience. The corrected candidate passed audience and Suite owner/entitlement checks, while the diagnostic still denied sessions. Full real owner login/reload acceptance remains pending. This document's original environment descriptions are historical and must not be reused as current production observations.
+
+The local launch-gap candidates and remaining gates are recorded in [2026-10-01-autoreview-launch-acceptance.md](2026-10-01-autoreview-launch-acceptance.md). No production deployment or Whop switch was performed by the integration session. The original rollout chat owns activation and STOP 2. Real Whop membership, two-owner isolation, phone reload and pilot account conflicts remain unaccepted.
 
 ## Implemented path
 
@@ -53,9 +53,9 @@ a caller could point their own logo at another project's storage object).
 | Service | Setting | Value / requirement |
 | --- | --- | --- |
 | FreeFrame API | `SUITE_URL` | `https://aditor-suite.onrender.com` |
-| FreeFrame API | `REVIEW_BRIDGE_URL` | `https://review.aditor.ai` (currently empty; enable in Phase 3) |
-| FreeFrame API | `REVIEW_BRIDGE_SECRET` | New shared bridge credential; configure only in Phase 3 without printing it |
-| FreeFrame API | `WHOP_APP_ID` | `app_xSpqlhgkn1AX2J` (Review app, verified from Worker handshake spec) |
+| FreeFrame API | `REVIEW_BRIDGE_URL` | `https://review.aditor.ai`; inspect current runtime privately before activation |
+| FreeFrame API | `REVIEW_BRIDGE_SECRET` | Reuse the existing shared bridge credential; never print or rotate it for this integration |
+| FreeFrame API | `WHOP_APP_ID` | `app_xSpqIhgkn1AX2J` (capital **I** after `Spq`; verified against the actual Whop token audience during the original rollout diagnostic on 2026-10-02) |
 | FreeFrame Next | `API_INTERNAL_URL` | `http://api:8000` in production compose; absolute API URL outside Docker |
 | Suite | `WHOP_ADITOR_REVIEW_APP_API_KEY` | Existing Review app key must be configured; do not generate/rotate or print it |
 | Whop app | application target | `https://feedback.aditor.ai/whop`; Alan switches only at STOP 2; keep old `/o` beforehand |

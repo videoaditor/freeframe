@@ -1,214 +1,103 @@
 'use client'
 
-/**
- * A file request, from the editor's side. No account: the link is the permission.
- *
- * Goal of the screen: hand in the cut and know, within a minute, whether it is done. Name + email
- * once (remembered), drop the files, watch them upload, read the review. If something must be
- * fixed, the answer is on the same screen: drop the new version here, same file name.
- */
 import * as React from 'react'
 import useSWR from 'swr'
-import { CheckCircle2, FileVideo } from 'lucide-react'
-import { objectToNote, requestReview, uploadToRequest, viewRequest, type RequestReview } from '@/lib/platform'
-import { withViewTransition } from '@/lib/motion'
+import { ArrowLeft } from 'lucide-react'
+import { finishRequest, objectToNote, requestReview, uploadToRequest, viewRequest, type RequestAsset } from '@/lib/platform'
 import { DropZone } from '@/components/v2/drop-zone'
 import { UploadCard, type UploadPhase } from '@/components/v2/upload-card'
-import { ReviewList } from '@/components/v2/review-list'
-import { ReviewWaiting } from '@/components/v2/review-waiting'
-import { cn } from '@/lib/utils'
+import { RequestWorkspace, SubmissionSuccess } from '@/components/v2/request-workspace'
 
+interface Who { name: string; email: string }
 interface Job { id: string; file: File; progress: number; phase: UploadPhase; error?: string; assetId?: string }
-
 const WHO_KEY = 'aditor-request-who'
+const validWho = (who: Who) => !!who.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(who.email)
 
-function loadWho(): { name: string; email: string } {
-  try { return JSON.parse(localStorage.getItem(WHO_KEY) || '') } catch { return { name: '', email: '' } }
-}
-
-export default function RequestPage({ params }: { params: { token: string } }) {
-  const { token } = params
-  const { data: view, error: viewError } = useSWR(`/r/${token}`, () => viewRequest(token), { shouldRetryOnError: false })
+export default function RequestPage({ params: { token } }: { params: { token: string } }) {
+  const { data: view, error: viewError, mutate: refreshView } = useSWR(`/r/${token}`, () => viewRequest(token), { shouldRetryOnError: false, refreshInterval: d => d?.completed_at ? 0 : 60000 })
+  const { data: review, error: reviewError, mutate: refreshReview } = useSWR(view?.assets.length ? `/r/${token}/review` : null, () => requestReview(token), { refreshInterval: d => d?.completed_at || view?.completed_at ? 0 : 10000 })
   const [jobs, setJobs] = React.useState<Job[]>([])
-  const [who, setWho] = React.useState({ name: '', email: '' })
-  const [whoError, setWhoError] = React.useState('')
-  const nameRef = React.useRef<HTMLInputElement>(null)
-  const previews = React.useRef<Record<string, string>>({})
-  const videoRefs = React.useRef<Record<string, HTMLVideoElement | null>>({})
+  const [who, setWho] = React.useState<Who>({ name: '', email: '' })
+  const identity = React.useRef<Who | null>(null)
+  const identityWaiters = React.useRef<((who: Who) => void)[]>([])
+  const [error, setError] = React.useState('')
+  const [waitingIdentity, setWaitingIdentity] = React.useState(false)
+  const [revision, setRevision] = React.useState<RequestAsset | null>(null)
+  const [uploadMode, setUploadMode] = React.useState(false)
+  const [activeId, setActiveId] = React.useState<string>()
+  const [completedAt, setCompletedAt] = React.useState<string>()
+  const finishAttempt = React.useRef('')
+  React.useEffect(() => {
+    try { const saved = JSON.parse(localStorage.getItem(WHO_KEY) || 'null'); if (saved && validWho(saved)) { setWho(saved); identity.current = saved } } catch { /* private browsing */ }
+  }, [])
+  const refresh = React.useCallback(async () => { await Promise.allSettled([refreshView(), refreshReview()]) }, [refreshView, refreshReview])
+  const uploading = jobs.some(j => j.phase === 'uploading')
+  const complete = !!(view?.completed_at || review?.completed_at || completedAt)
+  const assets = review?.assets || []
+  const hasSubmission = (view?.assets.length || 0) > 0
+  const showUpload = !complete && (uploadMode || uploading || jobs.some(j => j.phase === 'error') || (!hasSubmission && !jobs.some(j => j.phase === 'done')))
+  React.useEffect(() => { window.scrollTo?.({ top: 0 }) }, [showUpload, complete])
+  const readyToFinish = !!review?.assets.length && review.assets.every(a => a.processing === 'ready' && a.review_state === 'clear') && review.gate.status === 'clear'
+  React.useEffect(() => {
+    if (!readyToFinish || uploading || complete || jobs.some(j => j.phase === 'error')) return
+    const signature = review!.assets.map(a => a.version_id).join(',')
+    if (finishAttempt.current === signature) return
+    finishAttempt.current = signature
+    finishRequest(token).then(r => { setCompletedAt(r.completed_at); refresh() }).catch(e => setError(e.message))
+  }, [readyToFinish, uploading, complete, jobs, review, token, refresh])
 
-  React.useEffect(() => { setWho(loadWho()) }, [])
-
-  const handedIn = (view?.assets.length || 0) > 0 || jobs.some((j) => j.phase !== 'error')
-  const { data: review, mutate: refreshReview } = useSWR<RequestReview>(handedIn ? `/r/${token}/review` : null, () => requestReview(token), {
-    refreshInterval: (d) => (!d || d.gate.status !== 'clear' || d.assets.some((a) => a.processing !== 'ready')) ? 5000 : 0,
-  })
-
-  const update = (id: string, patch: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)))
-
+  const update = (id: string, patch: Partial<Job>) => setJobs(js => js.map(j => j.id === id ? { ...j, ...patch } : j))
+  const submitIdentity = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validWho(who)) { setError('Add your name and a valid email to submit.'); return }
+    const value = { name: who.name.trim(), email: who.email.trim() }
+    identity.current = value
+    try { localStorage.setItem(WHO_KEY, JSON.stringify(value)) } catch { /* private browsing */ }
+    identityWaiters.current.splice(0).forEach(resolve => resolve(value)); setWaitingIdentity(false); setError('')
+  }
   const upload = async (job: Job) => {
-    update(job.id, { phase: 'uploading', progress: 0, error: undefined })
+    update(job.id, { phase: 'uploading', progress: 0, error: undefined }); setError('')
     try {
-      const r = await uploadToRequest(token, who, job.file, (p) => update(job.id, { progress: p }))
-      previews.current[r.asset_id] = URL.createObjectURL(job.file)
-      update(job.id, { phase: 'done', progress: 1, assetId: r.asset_id })
-      refreshReview()
-    } catch (e) {
-      update(job.id, { phase: 'error', error: e instanceof Error ? e.message : 'The upload stopped. Try again.' })
-    }
+      const result = await uploadToRequest(token, identity.current || { name: '', email: '' }, job.file, progress => update(job.id, { progress }), { assetId: job.assetId, identity: async () => {
+        if (identity.current) return identity.current
+        setWaitingIdentity(true)
+        return new Promise<Who>(resolve => identityWaiters.current.push(resolve))
+      } })
+      update(job.id, { phase: 'done', progress: 1, assetId: result.asset_id })
+      setActiveId(result.asset_id); setUploadMode(false); setRevision(null); refresh()
+    } catch (e) { update(job.id, { phase: 'error', error: e instanceof Error ? e.message : 'Upload stopped. Try again.' }) }
   }
-
   const onFiles = async (files: File[]) => {
-    if (!who.name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(who.email)) {
-      setWhoError('Add your name and email first, so the owner knows who handed this in.')
-      nameRef.current?.focus()
-      return
-    }
-    setWhoError('')
-    try { localStorage.setItem(WHO_KEY, JSON.stringify(who)) } catch { /* private window */ }
-    const fresh = files.map((file) => ({ id: `${file.name}-${file.size}-${Date.now()}`, file, progress: 0, phase: 'uploading' as UploadPhase }))
-    withViewTransition(() => setJobs((js) => [...fresh, ...js]))
-    // One at a time: a laptop uplink shared by three files finishes none of them sooner.
-    for (const j of fresh) await upload(j)
+    if (complete) return
+    if (files.some(file => !file.type.startsWith('video/') && !/\.(mp4|mov|webm|m4v)$/i.test(file.name))) { setError('Choose a video file for this review.'); return }
+    const chosen = revision ? files.slice(0, 1) : files
+    const fresh = chosen.map(file => ({ id: crypto.randomUUID(), file, assetId: revision?.asset_id, progress: 0, phase: 'uploading' as UploadPhase }))
+    setJobs(js => [...js, ...fresh])
+    for (const job of fresh) await upload(job)
   }
+  const uploaderDetails = identity.current ? <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-text-secondary"><span>Submitting as {who.name} · {who.email}</span><button className="min-h-11 text-accent" onClick={() => { identity.current = null; setWho(w => ({ ...w })) }}>Edit details</button></div> : <form onSubmit={submitIdentity} className="mt-6">
+    <div className="grid gap-4 sm:grid-cols-2">{(['name', 'email'] as const).map(field => <label key={field} className="text-xs font-medium text-text-secondary">Your {field}<input required type={field === 'email' ? 'email' : 'text'} value={who[field]} autoComplete={field} onChange={e => { setWho(w => ({ ...w, [field]: e.target.value })); identity.current = null }} className="field mt-2 min-h-11 w-full" /></label>)}</div>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-text-tertiary">{waitingIdentity ? 'Transfer complete. Add your details to submit.' : 'Your files can upload while you fill this in.'}</p>{!identity.current && <button className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-text-inverse">{uploading ? 'Submit my files' : 'Save details'}</button>}</div>
 
-  const seek = (assetId: string, t: number) => {
-    const v = videoRefs.current[assetId]
-    if (v) { v.currentTime = t; v.play().catch(() => {}) }
-  }
+  </form>
+  const jobCard = (job: Job) => <div key={job.id} className="mt-3"><UploadCard file={job.file} name={job.file.name} size={job.file.size} phase={job.phase} progress={job.progress} error={job.error} onRetry={() => upload(job)} onRemove={job.phase === 'error' ? () => setJobs(js => js.filter(j => j.id !== job.id)) : undefined} />{job.progress === 1 && job.phase === 'uploading' && <p className="mt-2 text-xs text-text-secondary">{waitingIdentity ? 'Uploaded · waiting for your details' : 'Submitting your file…'}</p>}</div>
+  return <div className="owner-workspace min-h-screen bg-bg-primary text-text-primary">
+    <header className={`relative mx-auto flex h-20 max-w-[1120px] items-center border-b border-border px-5 sm:px-8 ${complete ? 'justify-center' : 'justify-between'}`}>{view?.logo_url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={view.logo_url} alt={view.brand} className="h-8 max-w-40 object-contain" /> : <span className="text-lg font-semibold tracking-tight">{view?.brand || 'File request'}</span>}<span className={`text-xs text-text-tertiary ${complete ? 'absolute right-5 sm:right-8' : ''}`}>{complete ? 'Completed' : showUpload ? 'Editor upload' : 'Editor review'}</span></header>
+    <main className={`mx-auto px-5 pb-16 pt-8 sm:px-8 sm:pt-10 ${showUpload ? 'max-w-3xl' : 'max-w-[1120px]'}`}>
+      {viewError && (!view || [401, 403, 404, 410].includes(viewError.status)) ? <div className="py-20 text-center"><h1 className="text-2xl font-semibold">{viewError.status === 410 ? 'This link is closed' : 'This link could not be opened'}</h1><p className="mt-3 text-text-secondary">{viewError.message}</p></div> : !view ? <p role="status">Opening your project…</p> : <>
+      <div className={`mb-7 ${complete ? 'text-center' : ''}`}><p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">{revision && showUpload ? `Next version · v${revision.version + 1}` : complete ? 'Handed in. Nicely done.' : 'Your project'}</p><h1 className="text-balance text-3xl font-semibold tracking-tight">{view.title}</h1></div>
+      {error && <div role="alert" className="mb-5 rounded-xl border border-border p-4 text-sm text-status-error">{error}{readyToFinish && !complete && <button className="ml-3 min-h-11 underline" onClick={() => { finishAttempt.current = ''; refresh() }}>Try again</button>}</div>}
+      {complete ? <SubmissionSuccess token={token} brand={view.brand} /> : <>
+      {showUpload ? <>
+        {hasSubmission && !uploading && <button className="mb-4 flex min-h-11 items-center gap-2 text-sm text-text-secondary" onClick={() => { setUploadMode(false); setRevision(null) }}><ArrowLeft size={16} /> Back to {revision ? `v${revision.version} ` : ''}feedback</button>}
+        <DropZone onFiles={onFiles} multiple={!revision} accept="video/*" disabled={uploading} title={revision ? `Drop ${revision.name} · v${revision.version + 1}` : 'Drop your files to begin'} hint={revision ? 'New filename? No problem. This replaces the selected cut.' : 'Video files · or choose files'} />{jobs.filter(j => j.phase !== 'done').map(jobCard)}{uploaderDetails}
+      </> : <>
+        <RequestWorkspace token={token} brand={view.brand} assets={assets} activeId={activeId} onSelect={setActiveId} onRefresh={refresh} onRevise={asset => { setRevision(asset); setUploadMode(true) }} onObject={async (asset, comment, text) => { const result = await objectToNote(token, { asset_id: asset.asset_id, version_id: asset.version_id, comment_id: comment.id, body: comment.body, text, name: who.name }); refresh(); return result }} />
+        {reviewError && <p role="alert" className="mb-5 text-sm text-status-error">Feedback is temporarily unavailable. Your files are safe. <button onClick={refresh} className="min-h-11 underline">Try again</button></p>}
 
-  if (viewError) {
-    const status = (viewError as { status?: number }).status
-    return (
-      <Shell>
-        <div className="page-in mx-auto max-w-md pt-24 text-center">
-          <h1 className="text-[28px] font-bold tracking-tight text-text-primary">{status === 410 ? 'This link is closed' : 'This link does not work'}</h1>
-          <p className="mt-3 text-[17px] text-text-secondary">{(viewError as Error).message} Ask whoever sent it for a new one.</p>
-        </div>
-      </Shell>
-    )
-  }
-  if (!view) {
-    return <Shell><div className="mx-auto max-w-2xl pt-16"><div className="skeleton-shimmer h-40 animate-shimmer rounded-[var(--radius-xl)]" /></div></Shell>
-  }
-
-  const gate = review?.gate
-  const uploading = jobs.some((j) => j.phase === 'uploading')
-
-  return (
-    <Shell brand={view.brand} logo={view.logo_url}>
-      <div className="page-in mx-auto w-full max-w-3xl pb-24 pt-8 sm:pt-12">
-        <h1 className="text-balance text-[34px] font-bold leading-tight tracking-[-0.02em] text-text-primary">{view.title}</h1>
-        {view.brief_excerpt && (
-          <p className="mt-3 line-clamp-3 max-w-2xl text-[15px] leading-relaxed text-text-secondary">{view.brief_excerpt}</p>
-        )}
-
-        {gate && handedIn && !uploading && <GateBanner status={gate.status} open={gate.open_must_fixes} brand={view.brand} />}
-
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <input ref={nameRef} value={who.name} onChange={(e) => setWho({ ...who, name: e.target.value })} placeholder="Your name" autoComplete="name" aria-label="Your name" className="field" />
-          <input value={who.email} onChange={(e) => setWho({ ...who, email: e.target.value })} placeholder="Your email" type="email" autoComplete="email" aria-label="Your email" className="field" />
-        </div>
-        {whoError && <p className="mt-2 text-[13px] text-status-error" role="alert">{whoError}</p>}
-
-        <div className="mt-4">
-          <DropZone
-            multiple
-            accept="video/*,image/*"
-            compact={handedIn}
-            onFiles={onFiles}
-            title={gate?.status === 'held' ? 'Drop the fixed version' : handedIn ? 'Add more files' : 'Drop your files'}
-            hint={gate?.status === 'held' ? 'Same file name as before, so it becomes v2' : 'Videos or images · as many as you like'}
-          />
-        </div>
-
-        {jobs.filter((j) => j.phase !== 'done').length > 0 && (
-          <div className="mt-6 space-y-3">
-            {jobs.filter((j) => j.phase !== 'done').map((j) => (
-              <UploadCard key={j.id} file={j.file} name={j.file.name} size={j.file.size} progress={j.progress} phase={j.phase} error={j.error}
-                onRetry={() => upload(j)} onRemove={() => setJobs((js) => js.filter((x) => x.id !== j.id))} className="sheet-in" />
-            ))}
-          </div>
-        )}
-
-        {review && review.assets.length > 0 && (
-          <div className="mt-12 space-y-12">
-            {review.assets.map((a) => {
-              const pending = a.processing !== 'ready' || (gate?.status === 'reviewing' && !a.comments.length)
-              const src = previews.current[a.asset_id]
-              return (
-                <article key={a.asset_id} className="fade-in">
-                  <div className="mb-4 flex items-center gap-3">
-                    <FileVideo className="h-5 w-5 text-text-tertiary" />
-                    <h2 className="min-w-0 flex-1 truncate text-[20px] font-semibold tracking-tight text-text-primary">{a.name}</h2>
-                    {a.version > 1 && <span className="rounded-full bg-bg-hover px-2.5 py-1 text-[12px] font-medium text-text-secondary">v{a.version}</span>}
-                  </div>
-                  <div className={cn('grid gap-6', src && 'md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]')}>
-                    {src && (
-                      <video ref={(el) => { videoRefs.current[a.asset_id] = el }} src={src} controls playsInline
-                        className="aspect-[9/16] max-h-[60vh] w-full rounded-[var(--radius-xl)] bg-black object-contain md:sticky md:top-6" />
-                    )}
-                    {pending ? (
-                      <p role="status" className="py-5 text-[15px] text-text-secondary">Feedback will appear here when the review is ready.</p>
-                    ) : (
-                      <ReviewList comments={a.comments} onSeek={src ? (t) => seek(a.asset_id, t) : undefined}
-                        onObject={async (c, text) => {
-                          const r = await objectToNote(token, { asset_id: a.asset_id, comment_id: c.id, body: c.body, text, name: who.name })
-                          refreshReview()
-                          return r
-                        }} />
-                    )}
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </Shell>
-  )
-}
-
-function GateBanner({ status, open, brand }: { status: 'reviewing' | 'held' | 'clear'; open: number; brand: string }) {
-  if (status === 'clear') {
-    return (
-      <div className="glass fade-in mt-8 flex items-center gap-3 p-5" role="status">
-        <CheckCircle2 className="h-6 w-6 shrink-0 text-status-success" />
-        <p className="text-[17px] text-text-primary"><span className="font-semibold">All clear.</span> {brand} can see your work now. Anything below is optional.</p>
-      </div>
-    )
-  }
-  if (status === 'held') {
-    return (
-      <div className="mustfix-ring fade-in mt-8 bg-bg-secondary p-5" role="status">
-        <p className="text-[17px] text-text-primary">
-          <span className="font-semibold">{open} {open === 1 ? 'thing needs' : 'things need'} fixing before {brand} sees this.</span>{' '}
-          Fix {open === 1 ? 'it' : 'them'} and drop the new version below with the same file name. If a note is wrong, tap Not right? under it.
-        </p>
-      </div>
-    )
-  }
-  return (
-    <div className="glass mt-8"><ReviewWaiting compact /></div>
-  )
-}
-
-/**
- * White-label: this page belongs to the BRAND, not to us. Its logo (uploaded under Brand rules), or
- * its name set as a wordmark when there is none. No Aditor logo, no Aditor headline.
- */
-function Shell({ children, brand, logo }: { children: React.ReactNode; brand?: string; logo?: string | null }) {
-  return (
-    <div className="min-h-screen bg-bg-primary">
-      <div className="orange-halo pointer-events-none absolute inset-x-0 top-0 h-[420px]" aria-hidden="true" />
-      <header className="relative mx-auto flex h-20 max-w-5xl items-center px-4 sm:px-6">
-        {logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logo} alt={brand || ''} className="h-9 max-w-[180px] object-contain fade-in" />
-        ) : brand ? (
-          <span className="text-[20px] font-bold tracking-tight text-text-primary">{brand}</span>
-        ) : null}
-      </header>
-      <main className="relative mx-auto max-w-5xl px-4 sm:px-6">{children}</main>
-    </div>
-  )
+      </>}
+      </>}
+      </>}
+    </main>
+  </div>
 }

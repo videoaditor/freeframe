@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 try:
@@ -35,6 +35,8 @@ class UploadRequest(Base):
     last_uploader_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_uploader_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completion_versions: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -47,6 +49,7 @@ class RequestUpload(Base):
     request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("upload_requests.id"), nullable=False, index=True)
     asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id"), nullable=False, index=True)
     version_number: Mapped[int] = mapped_column(nullable=False)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     uploader_name: Mapped[str] = mapped_column(String(255), nullable=False)
     uploader_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

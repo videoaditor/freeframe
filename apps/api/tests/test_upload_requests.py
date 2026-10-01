@@ -96,13 +96,14 @@ def test_an_upload_in_the_request_folder_is_allowed():
     assert _owned_media(db, req, "raw/x") == (media, version)
 
 
-# ── The owner's list fails open ───────────────────────────────────────────────
+# ── The owner's list requires review evidence ───────────────────────────────────────────────
 
-def test_no_answer_from_the_review_reads_as_ready():
-    from apps.api.routers.requests import owner_status
-    assert owner_status(None) == {"status": "clear", "open_must_fixes": 0}
-    assert owner_status({"status": "weird"})["status"] == "clear"
-    assert owner_status({"status": "held", "openMustFixes": 2}) == {"status": "held", "open_must_fixes": 2}
+def test_no_answer_from_the_review_reads_as_unavailable():
+    from apps.api.routers.requests import _request_gate
+    assets = [{'review_state': 'clear'}]
+    assert _request_gate(assets, None) == {"status": "unavailable", "open_must_fixes": 0}
+    assert _request_gate(assets, {"status": "weird"})["status"] == "unavailable"
+    assert _request_gate(assets, {"status": "held", "openMustFixes": 2}) == {"status": "held", "open_must_fixes": 2}
 
 
 def test_the_bridge_is_silent_when_unconfigured(monkeypatch):
