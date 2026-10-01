@@ -1,6 +1,6 @@
 # AutoReview launch-gap candidate — 2026-10-01
 
-**Decision: local integration candidate; broad launch NOT accepted.** No production deployment, Whop Base URL change, landing publication or automatic rollout re-enable occurred in this session. The original chat **Rebase and verify FreeFrame PR 31** owns production and STOP 2. Its last read status was runtime rollback after a Gunicorn appuser-home permission startup failure; additive schema retained. Re-read that chat before planning activation; this is historical session evidence, not a new live inspection.
+**Decision: local integration candidate; broad launch NOT accepted.** No production deployment, Whop Base URL change, landing publication or automatic rollout re-enable occurred in this session. The original chat **Rebase and verify FreeFrame PR 31** owns production and STOP 2. Follow-up read on 2026-10-02: Gunicorn startup was fixed in `235cbeb`; the later actual Whop token diagnosis found a mistyped app ID. Corrected ID `app_xSpqIhgkn1AX2J` (capital **I**, not lowercase **l**) passed audience and Suite owner/entitlement checks in a diagnostic that intentionally kept sessions denied. Full live owner login remains unaccepted. Re-read that chat before planning activation; this is historical session evidence, not a new live inspection.
 
 Drafts: [FreeFrame #34](https://github.com/videoaditor/freeframe/pull/34), [Review Worker #72](https://github.com/videoaditor/feedback-agent/pull/72), [Pages #483](https://github.com/videoaditor/aditor-ops/pull/483). All are review candidates held behind the remaining gates.
 
@@ -18,13 +18,14 @@ Ordinary editor behavior was selected from FreeFrame `0910256` and Worker `9fb6c
 
 | Check | Actual result |
 | --- | --- |
+| Production image startup (2026-10-02) | Before fix: Gunicorn logs a permission error for `/home/appuser`. Candidate: non-root startup and HTTP response pass without errors. This check now runs in CI |
 | API including true PostgreSQL | **400 passed, zero skipped** on a dedicated loopback PostgreSQL 16 database; notification DDL opt-in enabled |
 | Request concurrency | Two real sessions: complete/finish serialize; finish/initiate serialize; exact completion map persists; new uploads rejected with 409 |
 | Failed current delivery | Submitted failed V2 remains unavailable after stale-upload reaper; old V1 clearance cannot finish |
 | Cancellation | Empty canceled asset soft-deleted; actual share listing omits it; canceled revision retains delivered asset; unique version numbers never reused |
 | Migration | One head `d0e1f2a3b4c5`, parent `c9d0e1f2a3b4`; local upgrade applied. Real PostgreSQL seeded backfill includes processing/ready, excludes uploading/failed |
 | FreeFrame frontend | **432 tests passed**, isolated production build and typecheck passed; lint passed with existing warnings and imported raw-image advisory warnings. Dependencies installed frozen in the own checkout after borrowed rollout modules disappeared |
-| Review Worker | **1,204 tests passed**; typecheck FAILS with **158 existing diagnostics** on both base and candidate. Sorted diagnostic messages match exactly. This is an unresolved rollout gate, not a green check |
+| Review Worker | **1,204 tests passed**; typecheck FAILS with **158 existing diagnostics** on both base and candidate. Sorted diagnostic messages match exactly. The Worker AGENTS.md explicitly permits existing type errors and requires **no new errors**: that policy is satisfied. The raw compiler still exits nonzero; it is not a new launch blocker |
 | Pages | **1,526 tests passed**, typecheck passed, candidate export built, member/team entry contract passed. GitHub Cloudflare Pages check for `aditor-atlas` FAILS on both this PR and base PR482 (`ba3c2b9`); this is distinct from the `aditor-pages` Worker workflow. No green remote CI claim |
 
 Meaningful red/green regressions include missing editor endpoints, V2 identity despite a renamed file, missing/malformed/stale version evidence, unverified object size, Whop HTTP recovery, aborted share phantom, failed-video replacement and stale reaper fallback. Fresh independent review found the final three cases; all were fixed and their regressions rerun. The existing n8n notification test assigned autocommit to SQLAlchemy's pool proxy instead of the driver connection; it now uses the driver and restores its original mode. Application notification behavior was unchanged.
@@ -59,7 +60,7 @@ These are **pending**, not failed or passed by local fixtures. Use only designat
 | Whop Owner B / telephone | A's brands/rules/requests invisible to B, direct foreign IDs denied; account switch and delayed 401 preserve correct identity; real phone reload, native reduced-motion preference |
 | Interruptions / backward compatibility | Expired/revoked editor link410, membership revocation denies Owner, bridge outage keeps files and unavailable/no finish; staff/login/share/handin/Trello/n8n smokechecks; unresolved409 owners excluded |
 
-Broad launch needs all cases green plus resolution of the Worker typecheck gate. A limited pilot requires named accepted accounts and an explicit rollout decision. This integration does not authorize either outcome.
+Broad launch needs all real acceptance cases green. Worker verification follows its documented baseline policy: existing compiler errors are tolerated only when none are added. A limited pilot requires named accepted accounts and an explicit rollout decision. This integration does not authorize either outcome.
 
 ## Deployment order and rollback contract
 
@@ -78,9 +79,15 @@ Required configuration names: `SUITE_URL`, `WHOP_APP_ID`, `API_INTERNAL_URL`, `N
 | Target accepted merged source `828812f`, not rolled-back runtime | Matches reviewed launch source; live qualification still needs the actual runtime comparison |
 | Port ordinary editor only; omit iterations/history-verification/timing | Avoids new launch dependencies; optional cross-project history is absent |
 | Repair preexisting retention FK cleanup | True PostgreSQL exposed request rows blocking purge; deletion remains retention-owned, application soft delete preserved |
-| Keep existing Worker type errors as a visible gate | Candidate adds no diagnostic messages; unrelated baseline defects can still hide runtime issues, so broad launch remains blocked |
+| Follow Worker no-new-type-errors policy | 158 baseline/candidate errors match by file and message; existing defects remain, but inventing a stricter launch gate was incorrect |
 | Export from accepted landing `d20fca6` on Pages main | No design rebuild or publication; regenerate if approved landing source changes before acceptance |
 
 Reviewer scope rulings: live Whop/two-owner/phone/deployment stays with the original rollout owner (if wrong, real identity/reload faults remain unknown); iterations/performance remains excluded (if wrong, no speed guarantee/iteration generation); moving documentation was reconciled by the author after code review (if wrong, runbook may lag implementation, so rollout must inspect current state). No minor reviewer findings were deferred.
 
 Remote-check ruling: the unrelated `aditor-atlas` Cloudflare check is red on both Pages base PR482 and candidate PR483; report it unchanged rather than modify deployment configuration outside scope (if wrong, a remote build problem may still block merge; the rollout owner must inspect the check before publication).
+
+## Follow-up — 2026-10-02
+
+The Worker typecheck was rerun: 158 errors across 20 files, with identical per-file counts and normalized diagnostic messages versus its accepted source baseline. Its repository explicitly defines no-new-errors as the check. Earlier reports calling the old errors a launch blocker were too strict and are superseded here. Whop auth code should not be weakened: the actual failure was the configured ID typo. Deployment and two-owner/phone acceptance remain owned by the original rollout chat.
+
+Ported only the already diagnosed production startup fix and its stdlib regression check from rollout commit `235cbeb`: create the existing non-root user's home, then exercise Gunicorn inside the built image. The original image failed this check with `Control server error: Permission denied '/home/appuser'`; the corrected image passed. Local arm64 test image ID: `sha256:7c9c1bb0d751b4ab749a926edb37d7f80724a2c5746ffaf385ebd37e599d900d`. This is a local test image, not a production deployment digest. Migration upgrade and all **400 API tests, zero skipped**, including PostgreSQL integration tests, passed inside that image. Frontend, Worker and Pages source code did not change in this follow-up; their prior full-suite results above remain dated to 2026-10-01.

@@ -251,6 +251,9 @@ jobs:
       - name: Build API image (prod)
         run: docker build -t freeframe-api:prod -f apps/api/Dockerfile.prod .
 
+      - name: Check production Gunicorn startup
+        run: docker run --rm --entrypoint python freeframe-api:prod /workspace/apps/api/tests/check_prod_image.py
+
       - name: Build Web image (dev)
         run: docker build -t freeframe-web:test -f apps/web/Dockerfile apps/web/
 
