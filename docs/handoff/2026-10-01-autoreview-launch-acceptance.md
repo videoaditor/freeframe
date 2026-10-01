@@ -2,6 +2,8 @@
 
 **Decision: local integration candidate; broad launch NOT accepted.** No production deployment, Whop Base URL change, landing publication or automatic rollout re-enable occurred in this session. The original chat **Rebase and verify FreeFrame PR 31** owns production and STOP 2. Its last read status was runtime rollback after a Gunicorn appuser-home permission startup failure; additive schema retained. Re-read that chat before planning activation; this is historical session evidence, not a new live inspection.
 
+Drafts: [FreeFrame #34](https://github.com/videoaditor/freeframe/pull/34), [Review Worker #72](https://github.com/videoaditor/feedback-agent/pull/72), [Pages #483](https://github.com/videoaditor/aditor-ops/pull/483). All are review candidates held behind the remaining gates.
+
 ## Candidate provenance
 
 | Repository | Accepted source base | Candidate branch / implementation |
