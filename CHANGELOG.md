@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Whop workspaces retain their authenticated session when the app proxy removes the Authorization header; the older `/o` entry opens the Whop sign-in flow.
+- Retention cleanup removes request dependencies before purging expired assets, folders and projects.
 - Production API containers create the non-root user's home directory so Gunicorn's control socket starts without permission errors.
 - Customer accounts cannot list assets or folders of public staff projects without membership; delayed authenticated retries cannot replay an earlier owner’s action as a newly signed-in owner.
 - Review statuses and editor statistics include every batch instead of silently truncating at 50 requests or 200 assets.
