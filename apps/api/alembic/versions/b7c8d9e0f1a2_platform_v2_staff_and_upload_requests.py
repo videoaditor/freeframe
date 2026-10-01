@@ -4,7 +4,7 @@ Every existing account becomes staff (server default true), so nothing changes f
 self-signed-up customers are created with is_staff = false.
 
 Revision ID: b7c8d9e0f1a2
-Revises: a1c3e5f7b9d2
+Revises: 3b8e1d6c9f20
 Create Date: 2026-09-28
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision: str = 'b7c8d9e0f1a2'
-down_revision: Union[str, Sequence[str], None] = 'a1c3e5f7b9d2'
+down_revision: Union[str, Sequence[str], None] = '3b8e1d6c9f20'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

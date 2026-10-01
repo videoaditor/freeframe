@@ -48,17 +48,19 @@ Two related launch blockers were fixed: customer brands bypass the internal staf
 requirement; branding saves accept only the current project's presigned logo key format (previously
 a caller could point their own logo at another project's storage object).
 
-## Configuration to apply only with an approved test deployment
+## Configuration to apply only after rollout approval
 
 | Service | Setting | Value / requirement |
 | --- | --- | --- |
 | FreeFrame API | `SUITE_URL` | `https://aditor-suite.onrender.com` |
+| FreeFrame API | `REVIEW_BRIDGE_URL` | `https://review.aditor.ai` (currently empty; enable in Phase 3) |
+| FreeFrame API | `REVIEW_BRIDGE_SECRET` | New shared bridge credential; configure only in Phase 3 without printing it |
 | FreeFrame API | `WHOP_APP_ID` | `app_xSpqlhgkn1AX2J` (Review app, verified from Worker handshake spec) |
 | FreeFrame Next | `API_INTERNAL_URL` | `http://api:8000` in production compose; absolute API URL outside Docker |
 | Suite | `WHOP_ADITOR_REVIEW_APP_API_KEY` | Existing Review app key must be configured; do not generate/rotate or print it |
-| Whop app | application target | Approved FreeFrame test deployment origin + `/whop`; keep old `/o` until acceptance |
+| Whop app | application target | `https://feedback.aditor.ai/whop`; Alan switches only at STOP 2; keep old `/o` beforehand |
 
-Deploy migration `c9d0e1f2a3b4` after `b7c8d9e0f1a2` (two nullable unique columns; existing rows
+Deploy `b7c8d9e0f1a2` after the current live n8n head `3b8e1d6c9f20`, then `c9d0e1f2a3b4` (two nullable unique columns; existing rows
 unchanged). Keep `NEXT_PUBLIC_API_URL=/api` in the production build. Preserve the Whop header through
 its proxy and nginx. Check the actual frame policy and storage CORS for the Whop proxy origin;
 do not add wildcard CORS or remove protections speculatively. Configure the existing Review bridge
@@ -90,3 +92,11 @@ these live checks and the Worker dependency are outstanding. No announcement was
 
 Independent focused code review completed. Its SSE event-loop and sticky sign-in-provider findings,
 and the subsequent stale-request replay finding, were fixed and rechecked with no remaining findings.
+
+## 2026-10-01 launch continuation
+
+No test server exists. Phase 1 is prepared in a fresh worktree; main, the live box and Whop
+remain unchanged. The current user request supersedes the earlier test-target requirement
+and authorizes a live rollout only after STOP 1 approval. See
+[verified rollout and rollback runbook](2026-10-01-whop-rollout.md) for fresh counts,
+header evidence, the corrected single migration chain and the automatic-deploy gate.

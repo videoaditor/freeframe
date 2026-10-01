@@ -26,18 +26,16 @@ export function getRefreshToken(): string | null {
 const EXPIRY_LEEWAY_SECONDS = 30
 
 /**
- * Read the `exp` claim without verifying the signature - verification is the
- * server's job; the client only needs to know whether sending this is futile.
- * Returns null for anything unparseable, which callers treat as expired.
+ * Read a claim without verifying the signature; the server still authenticates
+ * the token. The client uses this only to reject expired or cross-account retries.
  */
-function readExpiry(token: string): number | null {
-  const payload = token.split('.')[1]
+function readTokenClaim(token: string | null, claim: string): unknown {
+  const payload = token?.split('.')[1]
   if (!payload) return null
   try {
     // JWT uses base64url; atob wants base64.
     const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp
-    return typeof exp === 'number' ? exp : null
+    return (JSON.parse(json) as Record<string, unknown>)[claim]
   } catch {
     return null
   }
@@ -51,8 +49,8 @@ function readExpiry(token: string): number | null {
 export function getLiveAccessToken(): string | null {
   const token = getAccessToken()
   if (!token) return null
-  const exp = readExpiry(token)
-  if (exp === null) return null
+  const exp = readTokenClaim(token, 'exp')
+  if (typeof exp !== 'number') return null
   return exp - EXPIRY_LEEWAY_SECONDS > Date.now() / 1000 ? token : null
 }
 
@@ -124,9 +122,18 @@ export async function refreshAccessTokenQuietly(): Promise<string | null> {
  * the browser sent to /login. Correct behind the dashboard, where every route
  * needs an account anyway.
  */
-export async function refreshAccessToken(): Promise<string | null> {
+function sameAccount(original: string | null, current: string | null): boolean {
+  if (original === current) return true
+  const subject = readTokenClaim(original, 'sub')
+  return typeof subject === 'string' && !!subject && subject === readTokenClaim(current, 'sub')
+}
+
+export async function refreshAccessToken(expectedAccessToken = getAccessToken()): Promise<string | null> {
+  // A delayed 401 belongs to its original account, even if another tab has signed in.
+  if (!sameAccount(expectedAccessToken, getAccessToken())) return null
   const originalSession = getRefreshToken()
   const token = await refreshAccessTokenQuietly()
+  if (!sameAccount(expectedAccessToken, getAccessToken())) return null
   if (!token && getRefreshToken() === originalSession) clearTokens()
   return token
 }

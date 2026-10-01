@@ -292,7 +292,7 @@ def test_a_customer_gets_no_people_directory():
 
 def test_public_projects_are_a_staff_thing(monkeypatch):
     from apps.api.services import permissions
-    monkeypatch.setattr(permissions, "is_public_project", lambda db, pid: True)
+    monkeypatch.setattr(permissions, "is_public_project", lambda db, pid, user: True)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
     asset = MagicMock(project_id=uuid.uuid4())

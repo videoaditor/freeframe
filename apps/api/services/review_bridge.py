@@ -60,8 +60,11 @@ def register_request(share_token: str, brand: str, title: str, brief_text: str =
 def request_status(share_tokens: list[str]) -> dict[str, dict]:
     if not share_tokens:
         return {}
-    r = _call("GET", "/api/v1/requests/status", params={"tokens": ",".join(share_tokens[:50])})
-    return (r or {}).get("status") or {}
+    statuses = {}
+    for start in range(0, len(share_tokens), 50):
+        r = _call("GET", "/api/v1/requests/status", params={"tokens": ",".join(share_tokens[start:start + 50])})
+        statuses.update((r or {}).get("status") or {})
+    return statuses
 
 
 def time_saved(days: int, brands: Optional[list[str]]) -> Optional[dict]:
@@ -97,5 +100,8 @@ def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, 
 def asset_stats(asset_ids: list[str]) -> dict[str, dict]:
     if not asset_ids:
         return {}
-    r = _call("GET", "/api/v1/assets", params={"ids": ",".join(asset_ids[:200])})
-    return (r or {}).get("assets") or {}
+    assets = {}
+    for start in range(0, len(asset_ids), 200):
+        r = _call("GET", "/api/v1/assets", params={"ids": ",".join(asset_ids[start:start + 200])})
+        assets.update((r or {}).get("assets") or {})
+    return assets

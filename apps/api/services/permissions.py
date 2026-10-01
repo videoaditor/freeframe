@@ -108,8 +108,10 @@ def is_staff(user) -> bool:
     return getattr(user, "is_staff", True) is not False
 
 
-def is_public_project(db: Session, project_id: uuid.UUID) -> bool:
-    """Check if a project is public."""
+def is_public_project(db: Session, project_id: uuid.UUID, user: User) -> bool:
+    """Public projects grant a read fallback only to staff, never customers."""
+    if not is_staff(user):
+        return False
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.deleted_at.is_(None),
@@ -137,7 +139,7 @@ def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
         return True
 
     # 4. Public project — any authenticated STAFF user can view (never a customer account)
-    if is_staff(user) and is_public_project(db, asset.project_id):
+    if is_public_project(db, asset.project_id, user):
         return True
 
     return False
