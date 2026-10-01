@@ -422,6 +422,7 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
     }
     # (referencing_table, referencing_column) confirmed handled by a _purge_* helper.
     KNOWN_HANDLED = {
+        ("request_uploads", "asset_id"), ("upload_requests", "folder_id"), ("upload_requests", "project_id"),
         # -> projects.id
         ("assets", "project_id"), ("folders", "project_id"), ("share_links", "project_id"),
         ("project_brandings", "project_id"), ("watermark_settings", "project_id"),
@@ -509,3 +510,20 @@ def test_run_cleanup_skips_when_advisory_lock_held(real_db, monkeypatch):
     finally:
         other.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": ct._PURGE_ADVISORY_LOCK_KEY})
         other.close()
+
+
+def test_purge_folder_removes_request_uploads_and_request(real_db):
+    from apps.api.models.upload_request import UploadRequest, RequestUpload
+    owner = _user(real_db); project = _project(real_db, owner)
+    folder = Folder(name='Request', project_id=project.id, created_by=owner.id)
+    real_db.add(folder); real_db.flush()
+    asset = _asset(real_db, project, owner, folder)
+    req = UploadRequest(token=str(uuid.uuid4()), review_share_token='s', title='Request',
+        project_id=project.id, folder_id=folder.id, created_by=owner.id)
+    real_db.add(req); real_db.flush()
+    upload = RequestUpload(request_id=req.id, asset_id=asset.id, version_number=1,
+        uploader_name='Editor', uploader_email='editor@example.test')
+    real_db.add(upload); real_db.flush()
+    ct._purge_folder(real_db, folder.id, ct.PurgeCounts())
+    assert real_db.query(UploadRequest).filter_by(id=req.id).count() == 0
+    assert real_db.query(RequestUpload).filter_by(id=upload.id).count() == 0
