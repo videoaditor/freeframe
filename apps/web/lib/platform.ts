@@ -242,6 +242,7 @@ export function fileToBase64(file: File): Promise<string> {
 // ── Editor with a link (no account) ────────────────────────────────────────────
 
 export interface RequestView {
+  completed_at?: string | null
   title: string
   brand: string
   logo_url?: string | null
@@ -251,16 +252,23 @@ export interface RequestView {
   expires_at: string | null
 }
 
+export interface RequestAsset {
+  asset_id: string; name: string; version: number; version_id?: string; processing: string; comments: ReviewComment[]
+  asset_type?: string; media_url?: string | null; thumbnail_url?: string | null; duration_seconds?: number | null
+  review_state?: 'reviewing' | 'held' | 'clear' | 'unavailable'
+  versions?: { id: string; version_number: number; processing: string }[]
+}
 export interface RequestReview {
-  assets: { asset_id: string; name: string; version: number; processing: string; comments: ReviewComment[] }[]
+  completed_at?: string | null
+  assets: RequestAsset[]
   gate: { status: GateStatus; open_must_fixes: number }
   review_share_token: string
 }
 
-async function pub<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function pub<T>(method: string, path: string, body?: unknown, editorSession?: string): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
+    headers: body || editorSession ? { ...(body ? { 'content-type': 'application/json' } : {}), ...(editorSession ? { Authorization: `Bearer ${editorSession}` } : {}) } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!r.ok) {
@@ -272,8 +280,10 @@ async function pub<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 export const viewRequest = (token: string) => pub<RequestView>('GET', `/r/${token}`)
+export const finishRequest = (token: string) => pub<{ completed_at: string }>('POST', `/r/${token}/finish`)
+export const requestVersion = (token: string, assetId: string, versionId: string) => pub<RequestAsset>('GET', `/r/${token}/assets/${assetId}/versions/${versionId}`)
 export const requestReview = (token: string) => pub<RequestReview>('GET', `/r/${token}/review`)
-export const objectToNote = (token: string, body: { asset_id: string; comment_id?: string; body: string; text: string; name?: string }) =>
+export const objectToNote = (token: string, body: { asset_id: string; version_id?: string; comment_id?: string; body: string; text: string; name?: string }) =>
   pub<{ withdrawn: boolean; why: string }>('POST', `/r/${token}/object`, body)
 
 const CHUNK = 10 * 1024 * 1024
@@ -284,11 +294,13 @@ export async function uploadToRequest(
   who: { name: string; email: string },
   file: File,
   onProgress: (fraction: number) => void,
+  options?: { assetId?: string; identity?: () => Promise<{ name: string; email: string }> },
 ): Promise<{ asset_id: string; version_number: number }> {
   const init = await pub<{ upload_id: string; s3_key: string; asset_id: string; version_id: string; version_number: number }>(
     'POST', `/r/${token}/upload/initiate`, {
-      name: who.name, email: who.email, original_filename: file.name,
+      ...(!options?.identity && who.name.trim() && who.email.trim() ? { name: who.name, email: who.email } : {}), original_filename: file.name,
       mime_type: file.type || 'video/mp4', file_size_bytes: file.size,
+      ...(options?.assetId ? { asset_id: options.assetId } : {}),
     })
   const parts: { PartNumber: number; ETag: string }[] = []
   const total = Math.ceil(file.size / CHUNK)
@@ -318,7 +330,8 @@ export async function uploadToRequest(
     const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
     if (failure) throw failure.reason
     parts.sort((a, b) => a.PartNumber - b.PartNumber)
-    await pub('POST', `/r/${token}/upload/complete`, { s3_key: init.s3_key, upload_id: init.upload_id, parts })
+    const identity = options?.identity ? await options.identity() : who
+    await pub('POST', `/r/${token}/upload/complete`, { s3_key: init.s3_key, upload_id: init.upload_id, parts, ...identity })
   } catch (e) {
     await pub('POST', `/r/${token}/upload/abort`, { s3_key: init.s3_key, upload_id: init.upload_id, part_number: 1 }).catch(() => {})
     throw e

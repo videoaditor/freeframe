@@ -370,6 +370,8 @@ function InlineReplyInput({
 // ─── Single comment item ──────────────────────────────────────────────────────
 
 interface CommentItemProps {
+  readOnly?: boolean;
+  action?: React.ReactNode;
   comment: CommentWithReplies;
   commentNumber?: number;
   depth?: number;
@@ -387,7 +389,8 @@ interface CommentItemProps {
   onShowAnnotation?: (drawingData: Record<string, unknown> | null) => void;
 }
 
-function CommentItem({
+export function CommentItem({
+  readOnly = false, action,
   comment,
   commentNumber,
   depth = 0,
@@ -546,7 +549,7 @@ function CommentItem({
               </span>
             )}
             <span className="text-[11px] text-text-tertiary leading-none">
-              {formatRelativeTime(comment.created_at)}
+              {comment.created_at ? formatRelativeTime(comment.created_at) : ''}
             </span>
             <div className="ml-auto flex items-center gap-1.5">
               {commentNumber !== undefined && depth === 0 && (
@@ -556,7 +559,7 @@ function CommentItem({
               )}
               {comment.visibility === "internal" ? (
                 <Lock className="h-3.5 w-3.5 text-amber-400" />
-              ) : (
+              ) : !readOnly && (
                 <Globe className="h-3.5 w-3.5 text-text-tertiary" />
               )}
             </div>
@@ -647,7 +650,7 @@ function CommentItem({
           )}
 
           {/* Reactions row */}
-          {reactionGroups.length > 0 && (
+          {!readOnly && reactionGroups.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {reactionGroups.map((r) => (
                 <button
@@ -667,8 +670,9 @@ function CommentItem({
             </div>
           )}
 
+          {action}
           {/* Action row: Reply text + hover icons */}
-          <div className="mt-1.5 flex items-center gap-2">
+          {!readOnly && <div className="mt-1.5 flex items-center gap-2">
             {depth === 0 && (
               <button
                 className="text-[13px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
@@ -735,10 +739,10 @@ function CommentItem({
                 </button>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Inline reply input */}
-          {isReplyingHere && onSubmitReply && (
+          {!readOnly && isReplyingHere && onSubmitReply && (
             <InlineReplyInput
               parentId={comment.id}
               onSubmit={onSubmitReply}
@@ -768,6 +772,7 @@ function CommentItem({
               {comment.replies.map((reply) => (
                 <CommentItem
                   key={reply.id}
+                  readOnly={readOnly}
                   comment={reply}
                   depth={depth + 1}
                   currentUserId={currentUserId}

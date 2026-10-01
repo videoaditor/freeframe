@@ -21,7 +21,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -264,11 +265,22 @@ def _live_request(db: Session, token: str) -> UploadRequest:
     return req
 
 
+def locked_request(db, request_id):
+    return db.query(UploadRequest).filter(UploadRequest.id == request_id).populate_existing().with_for_update().one()
+
+
+def _submitted_assets(db, req):
+    alive = select(AssetVersion.asset_id).where(AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status != ProcessingStatus.failed)
+    return db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.deleted_at.is_(None),
+        Asset.id.in_(alive)).order_by(Asset.created_at).all()
+
+
 @router.get("/r/{token}", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def view_request(token: str, db: Session = Depends(get_db)):
     req = _live_request(db, token)
     project = db.query(Project).filter(Project.id == req.project_id).first()
-    assets = db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.deleted_at.is_(None)).order_by(Asset.created_at).all()
+    assets = _submitted_assets(db, req)
     return {
         "title": req.title,
         "brand": project.name if project else "",
@@ -277,12 +289,45 @@ def view_request(token: str, db: Session = Depends(get_db)):
         "review_share_token": req.review_share_token,
         "assets": [{"id": str(a.id), "name": a.name} for a in assets],
         "expires_at": req.expires_at.isoformat() if req.expires_at else None,
+        "completed_at": req.completed_at.isoformat() if req.completed_at else None,
     }
 
 
-class GuestInitiate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    email: EmailStr
+def _writable_request(db, token):
+    req = locked_request(db, _live_request(db, token).id)
+    if req.completed_at:
+        raise HTTPException(409, 'This request is complete.')
+    return req
+
+
+def _record_uploader(db, req, version, identity):
+    record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
+        RequestUpload.asset_id == version.asset_id, RequestUpload.version_number == version.version_number).first()
+    if identity.name is None:
+        if not record:
+            raise HTTPException(422, 'Add your name and email to submit these files.')
+        return
+    if not record:
+        record = RequestUpload(request_id=req.id, asset_id=version.asset_id, version_number=version.version_number)
+        db.add(record)
+    record.uploader_name = identity.name.strip()
+    record.uploader_email = str(identity.email).lower()
+    req.last_uploader_name, req.last_uploader_email = record.uploader_name, record.uploader_email
+
+
+class GuestIdentity(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    email: Optional[EmailStr] = None
+
+    @model_validator(mode="after")
+    def paired_identity(self):
+        if (self.name is None) != (self.email is None) or (self.name is not None and not self.name.strip()):
+            raise ValueError("Provide both your name and email.")
+        return self
+
+
+class GuestInitiate(GuestIdentity):
+    asset_id: Optional[uuid.UUID] = None
     original_filename: str = Field(min_length=1, max_length=500)
     mime_type: str
     file_size_bytes: int = Field(gt=0)
@@ -290,17 +335,26 @@ class GuestInitiate(BaseModel):
 
 @router.post("/r/{token}/upload/initiate", dependencies=[Depends(rate_limit("request_upload", 60, 600))])
 def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db)):
-    req = _live_request(db, token)
+    req = _writable_request(db, token)
     if body.mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {body.mime_type}")
+    if not body.mime_type.startswith('video/'):
+        raise HTTPException(400, 'Automatic request review currently supports videos. Choose a video file.')
     guard = upload_guard_error(db, body.file_size_bytes)
     if guard:
         raise HTTPException(status_code=400, detail=guard)
 
     name = asset_name_for(body.original_filename)
-    # Same name in this folder = the next version of that asset (a V2), never a second asset.
-    asset = db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.name == name,
-                                   Asset.deleted_at.is_(None)).first()
+    if body.asset_id:
+        asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.folder_id == req.folder_id,
+                                       Asset.project_id == req.project_id, Asset.deleted_at.is_(None)).first()
+        if not asset:
+            raise HTTPException(404, 'File not found in this request.')
+        if asset.asset_type != mime_to_asset_type(body.mime_type):
+            raise HTTPException(400, 'Choose the same media type for a new version.')
+    else:
+        asset = db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.name == name,
+                                       Asset.deleted_at.is_(None)).first()
     if not asset:
         asset = Asset(project_id=req.project_id, name=name, asset_type=mime_to_asset_type(body.mime_type),
                       created_by=req.created_by, folder_id=req.folder_id)
@@ -326,10 +380,8 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
     file_type = {AssetType.image: FileType.image, AssetType.audio: FileType.audio}.get(asset.asset_type, FileType.video)
     db.add(MediaFile(version_id=version.id, file_type=file_type, original_filename=body.original_filename,
                      mime_type=body.mime_type, file_size_bytes=body.file_size_bytes, s3_key_raw=s3_key))
-    req.last_uploader_name = body.name.strip()
-    req.last_uploader_email = str(body.email).lower()
-    db.add(RequestUpload(request_id=req.id, asset_id=asset.id, version_number=version.version_number,
-                         uploader_name=body.name.strip(), uploader_email=str(body.email).lower()))
+    if body.name is not None:
+        _record_uploader(db, req, version, body)
     db.commit()
     return {"upload_id": upload_id, "s3_key": s3_key, "asset_id": str(asset.id), "version_id": str(version.id),
             "version_number": version.version_number}
@@ -338,8 +390,8 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
 def _owned_media(db: Session, req: UploadRequest, s3_key: str) -> tuple[MediaFile, AssetVersion]:
     """The upload must belong to THIS request's folder - a token never reaches another folder."""
     media = db.query(MediaFile).filter(MediaFile.s3_key_raw == s3_key).first()
-    version = db.query(AssetVersion).filter(AssetVersion.id == media.version_id).first() if media else None
-    asset = db.query(Asset).filter(Asset.id == version.asset_id).first() if version else None
+    version = db.query(AssetVersion).filter(AssetVersion.id == media.version_id, AssetVersion.deleted_at.is_(None)).first() if media else None
+    asset = db.query(Asset).filter(Asset.id == version.asset_id, Asset.deleted_at.is_(None)).first() if version else None
     if not media or not version or not asset or asset.folder_id != req.folder_id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
     return media, version
@@ -359,7 +411,7 @@ def guest_presign(token: str, body: GuestPart, db: Session = Depends(get_db)):
             "part_number": body.part_number}
 
 
-class GuestComplete(BaseModel):
+class GuestComplete(GuestIdentity):
     s3_key: str
     upload_id: str
     parts: list[dict]
@@ -373,11 +425,12 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
 
 @router.post("/r/{token}/upload/complete", dependencies=[Depends(rate_limit("request_upload", 60, 600))])
 def guest_complete(token: str, body: GuestComplete, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    req = _live_request(db, token)
+    req = _writable_request(db, token)
     _, version = _owned_media(db, req, body.s3_key)
     # Completing twice (a retried request) must not re-trigger processing on a finished version.
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
+    _record_uploader(db, req, version, body)
     complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
     # The size was CLAIMED at initiate; presigned parts do not enforce it. Measure the object and
     # refuse (and delete) anything bigger than claimed - that is how the storage cap stays a cap.
@@ -391,6 +444,9 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
         version.processing_status = ProcessingStatus.failed
         db.commit()
         raise HTTPException(status_code=413, detail="The file is larger than announced. Upload it again.")
+    record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
+        RequestUpload.asset_id == version.asset_id, RequestUpload.version_number == version.version_number).one()
+    record.submitted_at = datetime.now(timezone.utc)
     version.processing_status = ProcessingStatus.processing
     db.commit()
     background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
@@ -399,51 +455,113 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
 
 @router.post("/r/{token}/upload/abort", status_code=status.HTTP_204_NO_CONTENT)
 def guest_abort(token: str, body: GuestPart, db: Session = Depends(get_db)):
-    req = _live_request(db, token)
+    req = locked_request(db, _live_request(db, token).id)
     _, version = _owned_media(db, req, body.s3_key)
+    if version.processing_status != ProcessingStatus.uploading:
+        return
     abort_multipart_upload(body.s3_key, body.upload_id)
     version.processing_status = ProcessingStatus.failed
     db.commit()
 
 
-@router.get("/r/{token}/review", dependencies=[Depends(rate_limit("request_view", 120, 600))])
-def guest_review(token: str, db: Session = Depends(get_db)):
-    """The review of what was handed in: Auto Review's comments on the LATEST version of each file.
+def editor_review_state(version, evidence):
+    """Only a verdict for these exact bytes may clear the editor's work."""
+    if not version or version.processing_status != ProcessingStatus.ready:
+        return 'unavailable' if version and version.processing_status == ProcessingStatus.failed else 'reviewing'
+    if not evidence or not evidence.get('version_id'):
+        return 'unavailable'
+    if evidence['version_id'] != str(version.id) or evidence.get('reviewed') is not True:
+        return 'reviewing'
+    if not isinstance(evidence.get('openMustFix'), int) or evidence['openMustFix'] < 0:
+        return 'unavailable'
+    return 'held' if evidence['openMustFix'] else 'clear'
 
-    These are the comments FreeFrame stores as internal (kept off client-facing shares); the token
-    holder is the editor who handed the files in, so they see them. Plus the gate: held means a
-    must-fix is open and a new version is the way through.
-    """
-    req = _live_request(db, token)
+
+def _version_review(db, req, asset, version, reviewer, evidence):
+    comments = []
+    if version and reviewer and version.processing_status == ProcessingStatus.ready:
+        rows = db.query(Comment).filter(Comment.asset_id == asset.id, Comment.version_id == version.id,
+            Comment.guest_author_id == reviewer.id, Comment.parent_id.is_(None),
+            Comment.deleted_at.is_(None)).order_by(Comment.timecode_start.asc().nullsfirst()).all()
+        withdrawn = {r.parent_id for r in db.query(Comment).filter(
+            Comment.asset_id == asset.id, Comment.version_id == version.id, Comment.guest_author_id == reviewer.id,
+            Comment.parent_id.isnot(None), Comment.deleted_at.is_(None), Comment.body.like("You're right%")).all()}
+        comments = [{'id': str(c.id), 't': c.timecode_start, 'body': c.body.replace('Must fix — ', '', 1),
+                     'must_fix': c.body.startswith('Must fix')} for c in rows if c.id not in withdrawn]
+    state = editor_review_state(version, evidence)
+    # Visible unresolved blockers must never be contradicted by a green engine projection.
+    if state == 'clear' and any(c.get('must_fix') for c in comments):
+        state = 'held'
+    media = db.query(MediaFile).filter(MediaFile.version_id == version.id).first() if version else None
+    media_url = None
+    thumbnail_url = None
+    if media and version.processing_status in (ProcessingStatus.ready, ProcessingStatus.processing):
+        media_url = s3_service.generate_presigned_get_url(media.s3_key_raw if asset.asset_type == AssetType.video else media.s3_key_processed or media.s3_key_raw)
+        if media.s3_key_thumbnail and asset.asset_type != AssetType.audio:
+            thumbnail_url = s3_service.generate_presigned_get_url(media.s3_key_thumbnail)
+    review_error = None if asset.asset_type == AssetType.video else 'Automatic review supports videos. Ask the owner to move this attachment out of the request.'
+    return {'asset_id': str(asset.id), 'name': asset.name, 'asset_type': asset.asset_type.value, 'review_error': review_error,
+            'version_id': str(version.id) if version else None, 'version': version.version_number if version else 0,
+            'processing': version.processing_status.value if version else 'uploading',
+            'media_url': media_url, 'thumbnail_url': thumbnail_url, 'duration_seconds': media.duration_seconds if media else None,
+            'comments': comments, 'review_state': state}
+
+
+def _editor_review(db, req):
+    assets = _submitted_assets(db, req)
+    stats = review_bridge.asset_stats([str(a.id) for a in assets])
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
     out = []
-    for a in db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.deleted_at.is_(None)).order_by(Asset.created_at).all():
-        # Comments come from the newest READY version; the status shows the newest one still alive
-        # (uploading/processing), so a failed or abandoned retry never hides the review.
-        alive = db.query(AssetVersion).filter(AssetVersion.asset_id == a.id, AssetVersion.deleted_at.is_(None),
-                                              AssetVersion.processing_status != ProcessingStatus.failed) \
-            .order_by(AssetVersion.version_number.desc()).first()
-        v = db.query(AssetVersion).filter(AssetVersion.asset_id == a.id, AssetVersion.deleted_at.is_(None),
-                                          AssetVersion.processing_status == ProcessingStatus.ready) \
-            .order_by(AssetVersion.version_number.desc()).first()
-        comments = []
-        if v and reviewer:
-            rows = db.query(Comment).filter(Comment.asset_id == a.id, Comment.version_id == v.id,
-                                            Comment.guest_author_id == reviewer.id, Comment.parent_id.is_(None),
-                                            Comment.deleted_at.is_(None)).order_by(Comment.timecode_start.asc().nullsfirst()).all()
-            # A note the reviewer itself withdrew (after an objection) is no longer a finding.
-            withdrawn = {r.parent_id for r in db.query(Comment).filter(
-                Comment.asset_id == a.id, Comment.guest_author_id == reviewer.id, Comment.parent_id.isnot(None),
-                Comment.deleted_at.is_(None), Comment.body.like("You're right%")).all()}
-            rows = [c for c in rows if c.id not in withdrawn]
-            comments = [{"id": str(c.id), "t": c.timecode_start, "body": c.body.replace("Must fix — ", "", 1),
-                         "must_fix": c.body.startswith("Must fix")} for c in rows]
-        out.append({"asset_id": str(a.id), "name": a.name,
-                    "version": (alive or v).version_number if (alive or v) else 0,
-                    "processing": (alive.processing_status.value if alive else "uploading"),
-                    "comments": comments})
-    gate = owner_status(review_bridge.request_status([req.review_share_token]).get(req.review_share_token))
-    return {"assets": out, "gate": gate, "review_share_token": req.review_share_token}
+    for asset in assets:
+        versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None)) \
+            .order_by(AssetVersion.version_number.desc()).all()
+        current = next((v for v in versions if v.processing_status != ProcessingStatus.failed), versions[0] if versions else None)
+        entry = _version_review(db, req, asset, current, reviewer, stats.get(str(asset.id)))
+        entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
+        out.append(entry)
+    bridge = review_bridge.request_status([req.review_share_token]).get(req.review_share_token)
+    held = any(a['review_state'] == 'held' for a in out) or (bridge or {}).get('status') == 'held'
+    clear = bool(out) and all(a['review_state'] == 'clear' for a in out) and (bridge or {}).get('status') == 'clear'
+    gate = {'status': 'held' if held else 'clear' if clear else 'reviewing',
+            'open_must_fixes': max(int((bridge or {}).get('openMustFixes') or 0), sum(c.get('must_fix', False) for a in out for c in a['comments']))}
+    return {'assets': out, 'gate': gate, 'review_share_token': req.review_share_token,
+            'completed_at': req.completed_at.isoformat() if req.completed_at else None}
+
+
+@router.get("/r/{token}/review", dependencies=[Depends(rate_limit("request_view", 120, 600))])
+def guest_review(token: str, db: Session = Depends(get_db)):
+    return _editor_review(db, _live_request(db, token))
+
+
+@router.get("/r/{token}/assets/{asset_id}/versions/{version_id}", dependencies=[Depends(rate_limit("request_view", 120, 600))])
+def guest_version(token: str, asset_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db)):
+    req = _live_request(db, token)
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.folder_id == req.folder_id,
+                                  Asset.project_id == req.project_id, Asset.deleted_at.is_(None)).first()
+    if not asset:
+        raise HTTPException(404, 'File not found in this request.')
+    version = db.query(AssetVersion).filter(AssetVersion.id == version_id, AssetVersion.asset_id == asset.id,
+                                          AssetVersion.deleted_at.is_(None)).first()
+    if not version:
+        raise HTTPException(404, 'Version not found.')
+    reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
+    evidence = review_bridge.asset_stats([str(asset.id)]).get(str(asset.id))
+    return _version_review(db, req, asset, version, reviewer, evidence)
+
+
+@router.post("/r/{token}/finish", dependencies=[Depends(rate_limit("request_view", 120, 600))])
+def finish_request(token: str, db: Session = Depends(get_db)):
+    req = locked_request(db, _live_request(db, token).id)
+    if not req.completed_at:
+        review = _editor_review(db, req)
+        if any(a.get('review_error') for a in review['assets']):
+            raise HTTPException(409, 'This request includes an attachment automatic review cannot verify. Ask the owner to move it out of the request.')
+        if not review['assets'] or review['gate']['status'] != 'clear' or review['gate']['open_must_fixes'] or any(a['review_state'] != 'clear' for a in review['assets']):
+            raise HTTPException(409, 'All submitted versions must finish review before completing this request.')
+        req.completed_at = datetime.now(timezone.utc)
+        req.completion_versions = {a['asset_id']: a['version_id'] for a in review['assets']}
+        db.commit()
+    return {'completed_at': req.completed_at.isoformat(), 'completion_versions': req.completion_versions}
 
 
 class SuggestionDecision(BaseModel):
@@ -463,6 +581,7 @@ def decide_suggestion(body: SuggestionDecision, db: Session = Depends(get_db), c
 
 class GuestObjection(BaseModel):
     asset_id: uuid.UUID
+    version_id: Optional[uuid.UUID] = None
     comment_id: str = ""
     body: str = Field(default="", max_length=2000)
     text: str = Field(min_length=3, max_length=1000)
@@ -474,12 +593,27 @@ def guest_object(token: str, body: GuestObjection, db: Session = Depends(get_db)
     """The editor says a note is wrong. Auto Review judges it, biased toward the editor, and withdraws
     it from the gate if they are right - the release valve that keeps a wrong must-fix from trapping
     anyone. The asset must be in this request's folder."""
-    req = _live_request(db, token)
+    req = locked_request(db, _live_request(db, token).id)
     asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.deleted_at.is_(None)).first()
     if not asset or asset.folder_id != req.folder_id:
         raise HTTPException(status_code=403, detail="Not part of this request")
+    current = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status != ProcessingStatus.failed).order_by(AssetVersion.version_number.desc()).first()
+    if not current or (body.version_id and body.version_id != current.id):
+        raise HTTPException(409, 'Open the current version before replying to feedback.')
+    if body.comment_id:
+        try:
+            comment_id = uuid.UUID(body.comment_id)
+        except ValueError as error:
+            raise HTTPException(400, 'Invalid feedback reference.') from error
+        reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
+        note = db.query(Comment).filter(Comment.id == comment_id, Comment.asset_id == asset.id,
+            Comment.version_id == current.id, Comment.guest_author_id == reviewer.id,
+            Comment.deleted_at.is_(None)).first() if reviewer else None
+        if not note:
+            raise HTTPException(409, 'This feedback does not belong to the current version.')
     r = review_bridge.object_to_note(req.review_share_token, str(asset.id), body.comment_id, body.body,
-                                     body.text, body.name or req.last_uploader_name or "the editor")
+                                     body.text, body.name or req.last_uploader_name or "the editor", version_id=str(current.id))
     if r is None:
         raise HTTPException(status_code=503, detail="Could not reach the reviewer. Try again in a minute.")
     return r

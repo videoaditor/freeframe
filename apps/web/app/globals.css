@@ -543,3 +543,60 @@ button:not(:disabled), summary { cursor: pointer; }
 /* One focus indicator for the composite quick-rule field. */
 .quick-rule-input:focus-within { border-color: var(--text-secondary); }
 .quick-rule-input textarea:focus-visible { outline: none; }
+
+/* Compact completion mascot; analysis stays with the media, not the character. */
+.review-robot {
+  width: 128px;
+  height: 170.667px;
+  background: url('/images/review-robot.png') 0 0 / 400% 100% no-repeat;
+}
+.review-robot-dance { animation: review-robot-dance 1.4s steps(4) infinite; }
+@keyframes review-robot-dance { to { background-position: 133.333% 0; } }
+.review-frame-preview { box-shadow: 0 8px 24px -16px oklch(.3 .09 250 / .4); }
+.review-frame-preview > img, .review-frame-preview > video { filter: brightness(.55); }
+.review-frame-overlay { color: oklch(.83 .13 225); }
+.review-frame-grid { background-image: linear-gradient(to right, oklch(.8 .1 230 / .15) 1px, transparent 1px), linear-gradient(to bottom, oklch(.8 .1 230 / .15) 1px, transparent 1px); background-size: 33.333% 25%; }
+.review-analysis-scan { animation: review-analysis-scan 3.6s cubic-bezier(.65, 0, .35, 1) infinite; }
+.review-analysis-scan::before { content: ''; display: block; height: 1px; background: currentColor; box-shadow: 0 0 12px 3px oklch(.72 .17 240 / .35); }
+.review-frame-target { border-color: oklch(.85 .12 225 / .35); background: oklch(.75 .13 235 / .04); }
+.review-frame-target i { position: absolute; width: 10px; height: 10px; border-color: currentColor; border-style: solid; }
+.review-frame-target i:nth-child(1) { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 4px 0 0; }
+.review-frame-target i:nth-child(2) { top: -1px; right: -1px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+.review-frame-target i:nth-child(3) { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 4px; }
+.review-frame-target i:nth-child(4) { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+.review-analysis[data-paused="true"] .review-analysis-scan { animation-play-state: paused; }
+@keyframes review-analysis-scan {
+  0%, 100% { transform: translateY(8px); opacity: .2; }
+  50% { transform: translateY(calc(100% - 8px)); opacity: .9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-robot-dance, .review-analysis-scan { animation: none; }
+  .request-motion { display: none; }
+}
+.request-player {
+  --text-primary: oklch(0.98 0 0);
+  --text-secondary: oklch(0.8 0 0);
+  --text-tertiary: oklch(0.65 0 0);
+  --bg-primary: oklch(0.12 0 0);
+  --bg-secondary: oklch(0.18 0 0);
+  --bg-tertiary: oklch(0.23 0 0);
+}
+
+/* Request feedback stays alongside vertical video at tablet widths too. */
+.request-media { height: clamp(300px, 52dvh, 440px); }
+@media (min-width: 768px) { .request-media { height: clamp(400px, calc(100dvh - 310px), 560px); } }
+@media (hover: hover) and (pointer: fine) {
+  .review-note { position: relative; }
+  .review-note .report-bug-trigger { min-height: 28px; opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+  .review-note:hover .report-bug-trigger, .review-note:focus-within .report-bug-trigger { opacity: 1; pointer-events: auto; }
+}
+.request-confetti i { --confetti-x: 0px; --confetti-turn: 0deg; position: absolute; top: 0; left: 50%; width: 6px; height: 10px; border-radius: 2px; background: var(--accent); opacity: 0; animation: request-confetti 2s cubic-bezier(.23, 1, .32, 1) both; }
+.request-confetti i:nth-child(3n) { background: oklch(.76 .14 170); }
+.request-confetti i:nth-child(3n + 1) { background: oklch(.81 .13 80); }
+@keyframes request-confetti {
+  0% { transform: translate(0, 40px) rotate(0); opacity: 0; }
+  12% { opacity: .9; }
+  45% { transform: translate(var(--confetti-x), 0) rotate(var(--confetti-turn)); opacity: .9; }
+  100% { transform: translate(var(--confetti-x), 180px) rotate(var(--confetti-turn)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .request-confetti { display: none; } .review-note .report-bug-trigger { transition: none; } }

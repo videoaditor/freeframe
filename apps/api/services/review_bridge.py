@@ -90,10 +90,10 @@ def decide_suggestion(brand: str, suggestion_id: str, action: str, by: str) -> O
     })
 
 
-def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, text: str, who: str) -> Optional[dict]:
+def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, text: str, who: str, version_id: Optional[str] = None) -> Optional[dict]:
     return _call("POST", "/api/v1/objection", json={
         "share_token": share_token, "asset_id": asset_id, "comment_id": comment_id,
-        "body": body, "text": text, "who": who,
+        "body": body, "text": text, "who": who, "version_id": version_id,
     }, timeout=45)
 
 
