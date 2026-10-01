@@ -156,3 +156,56 @@ def test_existing_thumbnails_are_exposed_but_audio_waveforms_are_not_images(monk
     media.s3_key_thumbnail = 'waveform.json'
     assert rq._version_review(db, req, asset, version, None, None)['thumbnail_url'] is None
 
+
+
+@pytest.mark.parametrize('count', [True, False, -1, 0.5, None, '0'])
+def test_invalid_must_fix_counter_never_clears(count):
+    v = AssetVersion(id=uuid.uuid4(), processing_status=ProcessingStatus.ready)
+    assert rq.editor_review_state(v, {'version_id': str(v.id), 'reviewed': True, 'openMustFix': count}) == 'unavailable'
+
+
+@pytest.mark.parametrize('states,bridge,want', [
+    (['clear'], None, 'unavailable'),
+    (['clear'], {}, 'unavailable'),
+    (['clear'], {'status': 'clear', 'openMustFixes': True}, 'unavailable'),
+    (['reviewing'], {'status': 'clear', 'openMustFixes': 0}, 'reviewing'),
+    (['unavailable'], {'status': 'clear', 'openMustFixes': 0}, 'unavailable'),
+    (['held', 'unavailable', 'reviewing'], None, 'held'),
+    (['clear', 'clear'], {'status': 'clear', 'openMustFixes': 0}, 'clear'),
+    ([], {'status': 'clear', 'openMustFixes': 0}, 'reviewing'),
+])
+def test_owner_never_ready_for_missing_or_stale_review(states, bridge, want):
+    assets = [{'review_state': state, 'comments': []} for state in states]
+    assert rq._request_gate(assets, bridge)['status'] == want
+
+
+def test_visible_must_fix_overrides_clear():
+    assets = [{'review_state': 'clear', 'comments': [{'must_fix': True}]}]
+    assert rq._request_gate(assets, {'status': 'clear', 'openMustFixes': 0}) == {'status': 'held', 'open_must_fixes': 1}
+
+
+def test_unavailable_review_does_not_finish(monkeypatch):
+    req = request()
+    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_editor_review', lambda *a: {'assets': [{'asset_id':'a','version_id':'v2','review_state':'unavailable'}], 'gate': {'status':'unavailable','open_must_fixes':0}})
+    with pytest.raises(HTTPException) as err: rq.finish_request('t', MagicMock())
+    assert err.value.status_code == 409 and req.completed_at is None
+
+
+def test_unmeasured_object_never_becomes_submitted(monkeypatch):
+    req = request()
+    v = AssetVersion(id=uuid.uuid4(), asset_id=uuid.uuid4(), version_number=1, processing_status=ProcessingStatus.uploading)
+    record = RequestUpload(request_id=req.id, asset_id=v.asset_id, version_number=1, uploader_name='Editor', uploader_email='editor@example.com')
+    media = MagicMock(file_size_bytes=100)
+    monkeypatch.setattr(rq, '_writable_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_owned_media', lambda *a: (media, v))
+    monkeypatch.setattr(rq, '_record_uploader', lambda *a: None)
+    monkeypatch.setattr(rq, 'complete_multipart_upload', lambda *a: None)
+    monkeypatch.setattr(rq.s3_service, 'get_s3_client', lambda: MagicMock(head_object=MagicMock(side_effect=RuntimeError('storage unavailable'))))
+    db = MagicMock(); db.query.return_value.filter.return_value.first.return_value = media
+    db.query.return_value.filter.return_value.one.return_value = record
+    with pytest.raises(HTTPException) as err:
+        rq.guest_complete('t', rq.GuestComplete(s3_key='raw/a',upload_id='u',parts=[]), BackgroundTasks(), db)
+    assert err.value.status_code == 503
+    assert record.submitted_at is None and v.processing_status == ProcessingStatus.uploading

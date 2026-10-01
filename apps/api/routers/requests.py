@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from botocore.exceptions import ClientError
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -69,13 +70,25 @@ def asset_name_for(filename: str) -> str:
     return os.path.splitext(os.path.basename(filename or ""))[0].strip()[:255] or "Untitled"
 
 
-def owner_status(bridge: Optional[dict]) -> dict:
-    """What the owner's list shows. No answer from the review = ready (fail open)."""
-    if not bridge:
-        return {"status": "clear", "open_must_fixes": 0}
-    st = bridge.get("status")
-    return {"status": st if st in ("reviewing", "held", "clear") else "clear",
-            "open_must_fixes": int(bridge.get("openMustFixes") or 0)}
+def _request_gate(assets: list[dict], bridge: Optional[dict]) -> dict:
+    """One verdict for owner, editor and finish; missing evidence never means Ready."""
+    visible = sum(bool(c.get('must_fix') or c.get('weight') == 'must_fix') for a in assets for c in a.get('comments', []))
+    counts = [a.get('open_must_fixes', 0) for a in assets]
+    bridge_count = bridge.get('openMustFixes') if isinstance(bridge, dict) else None
+    valid = type(bridge_count) is int and bridge_count >= 0 and bridge.get('status') in ('reviewing', 'held', 'clear', 'unavailable')
+    count = max(visible, sum(n for n in counts if type(n) is int and n >= 0), bridge_count if valid else 0)
+    states = [a.get('review_state', 'unavailable') for a in assets]
+    if count or 'held' in states or (valid and bridge['status'] == 'held'):
+        state = 'held'
+    elif not assets:
+        state = 'reviewing'
+    elif not valid or bridge['status'] == 'unavailable' or any(st not in ('clear', 'reviewing') for st in states):
+        state = 'unavailable'
+    elif 'reviewing' in states or bridge['status'] == 'reviewing':
+        state = 'reviewing'
+    else:
+        state = 'clear'
+    return {'status': state, 'open_must_fixes': count}
 
 
 def project_brand(db: Session, project: Project) -> str:
@@ -120,7 +133,7 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
         "assets": assets,
         "state": request_state(req, datetime.now(timezone.utc)),
         "created_at": req.created_at.isoformat() if req.created_at else None,
-        **owner_status(st),
+        **(st or {"status": "reviewing", "open_must_fixes": 0}),
     }
 
 
@@ -172,10 +185,12 @@ def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = D
     reqs = q.order_by(UploadRequest.created_at.desc()).limit(100).all()
     statuses = review_bridge.request_status([r.review_share_token for r in reqs])
     projects = {p.id: p for p in db.query(Project).filter(Project.id.in_({r.project_id for r in reqs} or {uuid.uuid4()})).all()}
-    counts = {}
-    for r in reqs:
-        counts[r.id] = db.query(Asset).filter(Asset.folder_id == r.folder_id, Asset.deleted_at.is_(None)).count()
-    return [_request_out(r, projects.get(r.project_id), statuses.get(r.review_share_token), counts.get(r.id, 0)) for r in reqs]
+    assets = {r.id: _submitted_assets(db, r) for r in reqs}
+    stats = review_bridge.asset_stats([str(a.id) for items in assets.values() for a in items])
+    reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
+    return [_request_out(r, projects.get(r.project_id),
+        _request_gate(_review_assets(db, r, assets[r.id], reviewer, stats, include_media=False), statuses.get(r.review_share_token)),
+        len(assets[r.id])) for r in reqs]
 
 
 @router.delete("/requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -270,8 +285,7 @@ def locked_request(db, request_id):
 
 
 def _submitted_assets(db, req):
-    alive = select(AssetVersion.asset_id).where(AssetVersion.deleted_at.is_(None),
-        AssetVersion.processing_status != ProcessingStatus.failed)
+    alive = select(AssetVersion.asset_id).where(AssetVersion.deleted_at.is_(None))
     return db.query(Asset).filter(Asset.folder_id == req.folder_id, Asset.deleted_at.is_(None),
         Asset.id.in_(alive)).order_by(Asset.created_at).all()
 
@@ -431,14 +445,19 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
     _record_uploader(db, req, version, body)
-    complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
+    try:
+        complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
+    except ClientError as error:
+        # A previous complete may have stored bytes before its size check timed out.
+        if error.response.get('Error', {}).get('Code') != 'NoSuchUpload':
+            raise
     # The size was CLAIMED at initiate; presigned parts do not enforce it. Measure the object and
     # refuse (and delete) anything bigger than claimed - that is how the storage cap stays a cap.
     media = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
     try:
         real = s3_service.get_s3_client().head_object(Bucket=settings.s3_bucket, Key=body.s3_key)["ContentLength"]
-    except Exception:  # noqa: BLE001 - cannot measure: treat as the claim, the guard already checked it
-        real = media.file_size_bytes if media else 0
+    except Exception as error:
+        raise HTTPException(503, 'Your upload size could not be verified. Try submitting again.') from error
     if media and real > media.file_size_bytes * 1.01 + 1024:
         s3_service.delete_object(body.s3_key)
         version.processing_status = ProcessingStatus.failed
@@ -459,8 +478,13 @@ def guest_abort(token: str, body: GuestPart, db: Session = Depends(get_db)):
     _, version = _owned_media(db, req, body.s3_key)
     if version.processing_status != ProcessingStatus.uploading:
         return
-    abort_multipart_upload(body.s3_key, body.upload_id)
+    try:
+        abort_multipart_upload(body.s3_key, body.upload_id)
+    except ClientError as error:
+        if error.response.get('Error', {}).get('Code') != 'NoSuchUpload':
+            raise
     version.processing_status = ProcessingStatus.failed
+    version.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
 
@@ -468,16 +492,16 @@ def editor_review_state(version, evidence):
     """Only a verdict for these exact bytes may clear the editor's work."""
     if not version or version.processing_status != ProcessingStatus.ready:
         return 'unavailable' if version and version.processing_status == ProcessingStatus.failed else 'reviewing'
-    if not evidence or not evidence.get('version_id'):
+    if not isinstance(evidence, dict) or not evidence.get('version_id'):
         return 'unavailable'
     if evidence['version_id'] != str(version.id) or evidence.get('reviewed') is not True:
         return 'reviewing'
-    if not isinstance(evidence.get('openMustFix'), int) or evidence['openMustFix'] < 0:
+    if type(evidence.get('openMustFix')) is not int or evidence['openMustFix'] < 0:
         return 'unavailable'
     return 'held' if evidence['openMustFix'] else 'clear'
 
 
-def _version_review(db, req, asset, version, reviewer, evidence):
+def _version_review(db, req, asset, version, reviewer, evidence, include_media=True):
     comments = []
     if version and reviewer and version.processing_status == ProcessingStatus.ready:
         rows = db.query(Comment).filter(Comment.asset_id == asset.id, Comment.version_id == version.id,
@@ -495,7 +519,7 @@ def _version_review(db, req, asset, version, reviewer, evidence):
     media = db.query(MediaFile).filter(MediaFile.version_id == version.id).first() if version else None
     media_url = None
     thumbnail_url = None
-    if media and version.processing_status in (ProcessingStatus.ready, ProcessingStatus.processing):
+    if include_media and media and version.processing_status != ProcessingStatus.uploading:
         media_url = s3_service.generate_presigned_get_url(media.s3_key_raw if asset.asset_type == AssetType.video else media.s3_key_processed or media.s3_key_raw)
         if media.s3_key_thumbnail and asset.asset_type != AssetType.audio:
             thumbnail_url = s3_service.generate_presigned_get_url(media.s3_key_thumbnail)
@@ -504,27 +528,34 @@ def _version_review(db, req, asset, version, reviewer, evidence):
             'version_id': str(version.id) if version else None, 'version': version.version_number if version else 0,
             'processing': version.processing_status.value if version else 'uploading',
             'media_url': media_url, 'thumbnail_url': thumbnail_url, 'duration_seconds': media.duration_seconds if media else None,
-            'comments': comments, 'review_state': state}
+            'comments': comments, 'review_state': state,
+            'open_must_fixes': evidence['openMustFix'] if state in ('held', 'clear') and evidence else sum(bool(c.get('must_fix')) for c in comments)}
+
+
+def _review_assets(db, req, assets, reviewer, stats, include_media=True):
+    out = []
+    for asset in assets:
+        versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None)) \
+            .order_by(AssetVersion.version_number.desc()).all()
+        current = versions[0] if versions else None
+        entry = _version_review(db, req, asset, current, reviewer, stats.get(str(asset.id)), include_media)
+        # A ready/failed record without successful transfer evidence cannot be a delivery.
+        record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
+            RequestUpload.asset_id == asset.id, RequestUpload.version_number == current.version_number).first() if current else None
+        if current and current.processing_status != ProcessingStatus.uploading and (not record or not record.submitted_at):
+            entry['review_state'] = 'unavailable'
+        entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
+        out.append(entry)
+    return out
 
 
 def _editor_review(db, req):
     assets = _submitted_assets(db, req)
     stats = review_bridge.asset_stats([str(a.id) for a in assets])
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
-    out = []
-    for asset in assets:
-        versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None)) \
-            .order_by(AssetVersion.version_number.desc()).all()
-        current = next((v for v in versions if v.processing_status != ProcessingStatus.failed), versions[0] if versions else None)
-        entry = _version_review(db, req, asset, current, reviewer, stats.get(str(asset.id)))
-        entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
-        out.append(entry)
+    out = _review_assets(db, req, assets, reviewer, stats)
     bridge = review_bridge.request_status([req.review_share_token]).get(req.review_share_token)
-    held = any(a['review_state'] == 'held' for a in out) or (bridge or {}).get('status') == 'held'
-    clear = bool(out) and all(a['review_state'] == 'clear' for a in out) and (bridge or {}).get('status') == 'clear'
-    gate = {'status': 'held' if held else 'clear' if clear else 'reviewing',
-            'open_must_fixes': max(int((bridge or {}).get('openMustFixes') or 0), sum(c.get('must_fix', False) for a in out for c in a['comments']))}
-    return {'assets': out, 'gate': gate, 'review_share_token': req.review_share_token,
+    return {'assets': out, 'gate': _request_gate(out, bridge), 'review_share_token': req.review_share_token,
             'completed_at': req.completed_at.isoformat() if req.completed_at else None}
 
 

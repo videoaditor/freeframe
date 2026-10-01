@@ -14,7 +14,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type GateStatus = 'reviewing' | 'held' | 'clear'
+export type GateStatus = 'reviewing' | 'held' | 'clear' | 'unavailable'
 
 export interface FileRequest {
   id: string
@@ -106,6 +106,7 @@ export function formatBytes(b: number): string {
 export function statusLabel(r: Pick<FileRequest, 'status' | 'open_must_fixes' | 'assets' | 'state'>): { label: string; tone: 'neutral' | 'progress' | 'warn' | 'ok' } {
   if (r.state !== 'live') return { label: r.state === 'revoked' ? 'Closed' : 'Expired', tone: 'neutral' }
   if (!r.assets) return { label: 'Waiting for files', tone: 'neutral' }
+  if (r.status === 'unavailable') return { label: 'Review unavailable', tone: 'warn' }
   if (r.status === 'reviewing') return { label: 'Reviewing', tone: 'progress' }
   if (r.status === 'held') {
     const n = r.open_must_fixes

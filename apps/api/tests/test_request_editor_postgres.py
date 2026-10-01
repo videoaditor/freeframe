@@ -85,7 +85,13 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
             assert init['version_id'] in old['media_url']
             with pytest.raises(HTTPException): rq.finish_request('token', db)
             db.rollback()
-            v2 = db.get(AssetVersion, uuid.UUID(revision['version_id'])); v2.processing_status = ProcessingStatus.ready; db.commit()
+            v2 = db.get(AssetVersion, uuid.UUID(revision['version_id']))
+            v2.processing_status = ProcessingStatus.failed; db.commit()
+            failed = rq.guest_review('token', db)
+            assert failed['assets'][0]['version_id'] == revision['version_id']
+            assert failed['gate']['status'] == 'unavailable'
+            assert rq.list_requests(None, db, owner)[0]['status'] == 'unavailable'
+            v2.processing_status = ProcessingStatus.ready; db.commit()
             stats[init['asset_id']] = {'version_id': revision['version_id'], 'reviewed': True, 'openMustFix': 0}
             abandoned = rq.guest_initiate('token', rq.GuestInitiate(original_filename='cancelled.mp4', mime_type='video/mp4', file_size_bytes=100), db)
             monkeypatch.setattr(rq, 'abort_multipart_upload', lambda *a: None)
