@@ -29,11 +29,12 @@ Meaningful red/green regressions include missing editor endpoints, V2 identity d
 
 ## Browser evidence and its limits
 
-All screenshots below use **synthetic local data**, a real native video player and simulated review HTTP responses. They prove presentation and local interaction only. Date: 2026-10-01, synthetic anonymous Editor role, FreeFrame implementation through `fcc72a1`, plus failed-processing replacement viewed at `cb13c06`. Browser viewport 1280×900 and 390×844; Light/Dark viewed. The fixture is ignored and excluded from production builds.
+All screenshots below use **synthetic local data**, a real native video player and simulated review HTTP responses. They prove presentation and local interaction only. Date: 2026-10-01, synthetic anonymous Editor role, FreeFrame implementation through `fcc72a1`, plus failed-processing replacement viewed at `cb13c06`. Browser widths 1280px and 390px (phone height844px); Light/Dark viewed. The fixture is ignored and excluded from production builds.
 
 | URL / case | Expected and observed | Evidence |
 | --- | --- | --- |
 | `http://localhost:3146/r/launch-check?state=held&theme=light` | Video + exact current feedback, explicit revision action, readable mobile layout | [desktop](images/autoreview-launch-20261001/editor-desktop-light.jpg), [phone light](images/autoreview-launch-20261001/editor-mobile-light.jpg), [phone dark](images/autoreview-launch-20261001/editor-mobile-dark.jpg) |
+| `?state=board&theme=light` | Unavailable stays in In review; correct folder URL retained; Ready and human approval explained | [owner board](images/autoreview-launch-20261001/owner-unavailable-desktop-light.jpg) |
 | Same fixture, v1 history selected | Historic media/notes identified as reference; current v2 notes do not appear | [history](images/autoreview-launch-20261001/editor-history-desktop.jpg) |
 | Revision action | Opens uploader for selected asset despite changed filename; returns to prior feedback | [revision + corrected dark accent contrast](images/autoreview-launch-20261001/revision-mobile-dark.jpg) |
 | `?state=unavailable&theme=dark` | File-safe unavailable copy + Check again; no completion claim | [unavailable](images/autoreview-launch-20261001/review-unavailable-desktop-dark.jpg) |
