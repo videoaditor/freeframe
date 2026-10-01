@@ -23,6 +23,7 @@ class UserResponse(BaseModel):
     status: UserStatus
     email_verified: bool = False
     is_superadmin: bool = False
+    is_staff: bool = True
     preferences: dict = {}
 
     model_config = {"from_attributes": True}

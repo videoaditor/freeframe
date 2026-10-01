@@ -71,16 +71,16 @@ interface AssetGridProps {
 
 // Grid column classes based on card size
 const gridColsMap = {
-  S: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
-  M: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-  L: 'grid-cols-1 sm:grid-cols-1 lg:grid-cols-2',
+  S: 'grid-cols-[repeat(auto-fill,minmax(min(100%,140px),1fr))]',
+  M: 'grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))]',
+  L: 'grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))]',
 }
 
 // Aspect ratio classes
 const aspectMap = {
   landscape: 'aspect-[16/10]',
   square: 'aspect-square',
-  portrait: 'aspect-[3/4]',
+  portrait: 'aspect-[9/16]',
 }
 
 export function AssetGrid({

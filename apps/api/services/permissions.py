@@ -52,6 +52,10 @@ def implicit_project_role(user: User) -> ProjectRole | None:
     """
     if not settings.instance_wide_project_access:
         return None
+    # A customer account (self-signup, platform v2) is not staff: it holds only the roles its
+    # memberships give it. `is not False` so a legacy object without the attribute stays staff.
+    if getattr(user, "is_staff", True) is False and not user.is_superadmin:
+        return None
     return ProjectRole.owner if user.is_superadmin else ProjectRole.editor
 
 
@@ -98,8 +102,16 @@ def require_project_role(
 
 # ── Asset-level ────────────────────────────────────────────────────────────────
 
-def is_public_project(db: Session, project_id: uuid.UUID) -> bool:
-    """Check if a project is public."""
+def is_staff(user) -> bool:
+    """Platform v2: a self-signed-up customer is not staff. Anything that an account got for merely
+    existing - public projects, the people search - is staff-only from here on."""
+    return getattr(user, "is_staff", True) is not False
+
+
+def is_public_project(db: Session, project_id: uuid.UUID, user: User) -> bool:
+    """Public projects grant a read fallback only to staff, never customers."""
+    if not is_staff(user):
+        return False
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.deleted_at.is_(None),
@@ -126,8 +138,8 @@ def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     if direct:
         return True
 
-    # 4. Public project — any authenticated user can view
-    if is_public_project(db, asset.project_id):
+    # 4. Public project — any authenticated STAFF user can view (never a customer account)
+    if is_public_project(db, asset.project_id, user):
         return True
 
     return False

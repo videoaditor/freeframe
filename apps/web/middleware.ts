@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/setup']
-const PUBLIC_PREFIXES = ['/invite/', '/share/']
+// '/' is the public WeTransfer-style front door (platform v2); '/r/' is a file-request link.
+const PUBLIC_ROUTES = ['/', '/login', '/setup', '/whop', '/whop/session']
+const PUBLIC_PREFIXES = ['/invite/', '/share/', '/r/']
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -48,7 +49,8 @@ export async function middleware(request: NextRequest) {
   const refreshToken = request.cookies.get('ff_refresh_token')?.value
 
   if (!accessToken && !refreshToken) {
-    const loginUrl = new URL('/login', request.url)
+    const whop = request.cookies.get('ff_auth_provider')?.value === 'whop' || request.headers.has('x-whop-user-token')
+    const loginUrl = new URL(whop ? '/whop' : '/login', request.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)
   }

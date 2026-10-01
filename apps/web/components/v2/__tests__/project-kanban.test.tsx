@@ -1,0 +1,86 @@
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { ProjectKanban } from '../project-kanban'
+import type { FileRequest } from '@/lib/platform'
+
+const request = (id: string, overrides: Partial<FileRequest> = {}): FileRequest => ({
+  id, title: id, token: id, url: `https://example.test/r/${id}`, project_id: 'p1', project_name: 'Northline',
+  brief_excerpt: null, last_uploader_name: 'Jamie', assets: 1, state: 'live', status: 'reviewing',
+  open_must_fixes: 0, created_at: null, ...overrides,
+})
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+it('places every request in its actual stage and keeps closed deliveries out of live lanes', () => {
+  render(<ProjectKanban requests={[
+    request('Waiting', { assets: 0, status: 'clear' }), request('Reviewing'),
+    request('Fixing', { status: 'held', open_must_fixes: 2 }), request('Done', { status: 'clear' }),
+    request('Closed', { state: 'revoked', status: 'clear' }), request('Expired', { state: 'expired' }),
+  ]} paused={false} onShare={vi.fn()} />)
+  for (const [stage, title] of [['With editor', 'Waiting'], ['In review', 'Reviewing'], ['Corrections', 'Fixing'], ['Ready to go', 'Done']]) {
+    expect(within(screen.getByRole('region', { name: stage })).getByRole('link', { name: title })).toBeInTheDocument()
+  }
+  expect(within(screen.getByRole('region', { name: 'Ready to go' })).queryByText('Closed')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByText('Closed requests'))
+  expect(screen.getByRole('link', { name: 'Closed' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Share Closed' })).not.toBeInTheDocument()
+})
+
+it('shares the selected request and moves it when the backend status changes', () => {
+  const onShare = vi.fn()
+  const r = request('Morning ritual')
+  const view = render(<ProjectKanban requests={[r]} paused={false} onShare={onShare} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Share Morning ritual' }))
+  expect(onShare).toHaveBeenCalledWith(r)
+  view.rerender(<ProjectKanban requests={[{ ...r, status: 'held', open_must_fixes: 3 }]} paused={false} onShare={onShare} />)
+  const lane = screen.getByRole('region', { name: 'Corrections' })
+  expect(within(lane).getByText('3 fixes to make')).toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('Morning ritual moved to Corrections')
+  view.rerender(<ProjectKanban requests={[{ ...r, status: 'clear' }]} paused={false} onShare={onShare} />)
+  expect(within(screen.getByRole('region', { name: 'Ready to go' })).getByRole('link', { name: r.title })).toBeInTheDocument()
+})
+
+it.each([false, true])('respects paused motion (%s) on real stage changes', paused => {
+  const animate = vi.fn(() => ({ cancel: vi.fn() }))
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
+  const original = HTMLElement.prototype.animate
+  HTMLElement.prototype.animate = animate as unknown as typeof original
+  const r = request('Morning ritual')
+  const view = render(<ProjectKanban requests={[r]} paused={paused} onShare={vi.fn()} />)
+  expect(animate).not.toHaveBeenCalled()
+  view.rerender(<ProjectKanban requests={[{ ...r, status: 'clear' }]} paused={paused} onShare={vi.fn()} />)
+  expect(animate).toHaveBeenCalledTimes(paused ? 0 : 1)
+  HTMLElement.prototype.animate = original
+  vi.unstubAllGlobals()
+})
+
+it('keeps reduced-motion updates instantaneous', () => {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+  const animate = vi.fn()
+  const original = HTMLElement.prototype.animate
+  HTMLElement.prototype.animate = animate
+  const r = request('Morning ritual')
+  const view = render(<ProjectKanban requests={[r]} paused={false} onShare={vi.fn()} />)
+  view.rerender(<ProjectKanban requests={[{ ...r, status: 'clear' }]} paused={false} onShare={vi.fn()} />)
+  expect(animate).not.toHaveBeenCalled()
+  expect(screen.getByRole('status')).toHaveTextContent('moved to Ready to go')
+  HTMLElement.prototype.animate = original
+  vi.unstubAllGlobals()
+})
+
+it('puts finished deliveries first and opens their own request folder', () => {
+  render(<ProjectKanban requests={[request('Finished', { status: 'clear', folder_id: 'delivery-3' })]} paused={false} onShare={vi.fn()} />)
+  expect(screen.getAllByRole('region').map(region => region.getAttribute('aria-label'))).toEqual([
+    'Ready to go', 'Corrections', 'In review', 'With editor',
+  ])
+  expect(screen.getByRole('link', { name: 'Finished' })).toHaveAttribute('href', '/projects/p1?folder=delivery-3')
+  expect(screen.getByRole('link', { name: 'Preview Finished' })).toHaveAttribute('href', '/projects/p1?folder=delivery-3')
+  expect(screen.getByRole('button', { name: 'Share Finished' })).toHaveTextContent('Share')
+})
+
+it('the ready shortcut shows only ready deliveries, without empty other stages', () => {
+  render(<ProjectKanban requests={[request('Finished', { status: 'clear' }), request('Waiting', { assets: 0 })]} paused={false} onShare={vi.fn()} focusReady />)
+  expect(screen.getAllByRole('region')).toHaveLength(1)
+  expect(screen.getByRole('region', { name: 'Ready to go' })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Waiting' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Finished' })).toHaveAttribute('href', '/projects/p1')
+})

@@ -48,7 +48,7 @@ async function request<T>(
 
   // On 401, attempt a token refresh and retry once
   if (response.status === 401) {
-    const newToken = await refreshAccessToken()
+    const newToken = await refreshAccessToken(token)
     if (newToken) {
       response = await execute(newToken)
     }
@@ -113,7 +113,7 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   let response = await execute(token)
 
   if (response.status === 401) {
-    const newToken = await refreshAccessToken()
+    const newToken = await refreshAccessToken(token)
     if (newToken) response = await execute(newToken)
   }
 

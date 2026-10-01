@@ -50,6 +50,8 @@ export interface User {
   avatar_url: string | null;
   status: UserStatus;
   is_superadmin: boolean;
+  /** Platform v2: false for a self-signed-up customer, who sees only their own projects. */
+  is_staff?: boolean;
   email_verified: boolean;
   invite_token?: string | null;
   preferences: Record<string, unknown>;

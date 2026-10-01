@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
+  Home,
+  BookOpen,
+  Timer,
   Layers,
   Bell,
   Upload,
@@ -32,7 +35,12 @@ interface NavItem {
   icon: React.ElementType
 }
 
+// Platform v2 order (serial position): what came back, what is checked, what it saved, then the
+// raw projects underneath.
 const navItems: NavItem[] = [
+  { href: '/home', label: 'Overview', icon: Home },
+  { href: '/rules', label: 'Brand rules', icon: BookOpen },
+  { href: '/insights', label: 'Time saved', icon: Timer },
   { href: '/projects', label: 'Projects', icon: Layers },
 ]
 
@@ -66,42 +74,20 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <>
     <aside
       className={cn(
-        'fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-border',
+        'fixed left-0 top-0 z-30 hidden h-screen flex-col border-r border-border md:flex',
         'bg-bg-secondary transition-[width] duration-200 overflow-hidden',
-        collapsed ? 'w-[52px]' : 'w-[220px]',
+        collapsed ? 'w-[72px]' : 'w-[220px]',
       )}
     >
       {/* Logo */}
       <div
         className={cn(
-          'flex h-12 items-center shrink-0 border-b border-border',
+          'flex h-16 items-center shrink-0 border-b border-border',
           collapsed ? 'justify-center px-0' : 'px-4 gap-2.5',
         )}
       >
-        {/* Logo: theme-aware custom logo, or default FreeFrame icons */}
-        {customLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={customLogo}
-            alt={orgName}
-            className="h-7 w-7 shrink-0 object-contain rounded"
-          />
-        ) : (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-icon.png"
-              alt={orgName}
-              className="h-7 w-7 shrink-0 object-contain logo-dark"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-icon-dark.png"
-              alt={orgName}
-              className="h-7 w-7 shrink-0 object-contain logo-light"
-            />
-          </>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={customLogo || '/autoreview-icon.png'} alt={orgName} className="h-8 w-8 shrink-0 rounded-lg object-contain" />
         {!collapsed && (
           <span className="text-sm font-semibold text-text-primary tracking-tight">
             {orgName}
@@ -110,7 +96,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-5 px-3 space-y-2">
         {navItems.map((item) => {
           const isActive =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
@@ -119,10 +105,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => setNotifOpen(false)}
               className={cn(
                 'group relative flex items-center rounded-md transition-colors duration-100',
-                collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2.5 px-2.5 h-9',
+                collapsed ? 'justify-center h-11 w-11 mx-auto' : 'gap-3 px-3 h-11',
                 isActive
                   ? 'bg-bg-hover text-text-primary'
                   : 'text-text-secondary hover:bg-bg-hover/60 hover:text-text-primary',
@@ -144,7 +132,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           onClick={() => setNotifOpen((v) => !v)}
           className={cn(
             'group relative flex w-full items-center rounded-md transition-colors duration-100',
-            collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2.5 px-2.5 h-9',
+            collapsed ? 'justify-center h-11 w-11 mx-auto' : 'gap-3 px-3 h-11',
             notifOpen
               ? 'bg-bg-hover text-text-primary'
               : 'text-text-secondary hover:bg-bg-hover/60 hover:text-text-primary',
@@ -171,7 +159,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           onClick={() => { setNotifOpen(false); togglePanel() }}
           className={cn(
             'group relative flex w-full items-center rounded-md transition-colors duration-100',
-            collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2.5 px-2.5 h-9',
+            collapsed ? 'justify-center h-11 w-11 mx-auto' : 'gap-3 px-3 h-11',
             panelOpen
               ? 'bg-bg-hover text-text-primary'
               : 'text-text-secondary hover:bg-bg-hover/60 hover:text-text-primary',
@@ -278,6 +266,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
 
+        <div className={cn('flex items-center gap-1.5 py-2 text-[10px] text-text-tertiary', collapsed ? 'justify-center' : 'px-2.5')} title="By Aditor">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/aditor-logo.png" alt="Aditor" className="h-4 w-4 object-contain opacity-70" />
+          {!collapsed && <span>by Aditor</span>}
+        </div>
         {/* Collapse toggle */}
         <button
           onClick={onToggle}
@@ -293,6 +286,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
     </aside>
 
+    <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-bg-secondary pb-[env(safe-area-inset-bottom)] md:hidden">
+      {navItems.map(item => <Link key={item.href} href={item.href} aria-current={pathname.startsWith(item.href) ? 'page' : undefined} className={cn('flex min-h-[72px] flex-col items-center justify-center gap-1 text-[11px]', pathname.startsWith(item.href) ? 'font-semibold text-accent' : 'text-text-secondary')}><item.icon size={20} /><span>{item.label}</span></Link>)}
+    </nav>
     {/* Notification Drawer */}
     <NotificationDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
   </>

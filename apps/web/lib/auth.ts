@@ -26,18 +26,16 @@ export function getRefreshToken(): string | null {
 const EXPIRY_LEEWAY_SECONDS = 30
 
 /**
- * Read the `exp` claim without verifying the signature - verification is the
- * server's job; the client only needs to know whether sending this is futile.
- * Returns null for anything unparseable, which callers treat as expired.
+ * Read a claim without verifying the signature; the server still authenticates
+ * the token. The client uses this only to reject expired or cross-account retries.
  */
-function readExpiry(token: string): number | null {
-  const payload = token.split('.')[1]
+function readTokenClaim(token: string | null, claim: string): unknown {
+  const payload = token?.split('.')[1]
   if (!payload) return null
   try {
     // JWT uses base64url; atob wants base64.
     const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp
-    return typeof exp === 'number' ? exp : null
+    return (JSON.parse(json) as Record<string, unknown>)[claim]
   } catch {
     return null
   }
@@ -51,15 +49,22 @@ function readExpiry(token: string): number | null {
 export function getLiveAccessToken(): string | null {
   const token = getAccessToken()
   if (!token) return null
-  const exp = readExpiry(token)
-  if (exp === null) return null
+  const exp = readTokenClaim(token, 'exp')
+  if (typeof exp !== 'number') return null
   return exp - EXPIRY_LEEWAY_SECONDS > Date.now() / 1000 ? token : null
 }
 
-export function setTokens(access: string, refresh: string): void {
+export function setTokens(access: string, refresh: string, provider: 'email' | 'whop' = 'email'): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(ACCESS_TOKEN_KEY, access)
   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+  if (provider === 'whop') {
+    localStorage.setItem('ff_auth_provider', 'whop')
+    document.cookie = 'ff_auth_provider=whop; path=/; max-age=604800; SameSite=Lax'
+  } else {
+    localStorage.removeItem('ff_auth_provider')
+    document.cookie = 'ff_auth_provider=; path=/; max-age=0'
+  }
   // Set cookies so middleware can check auth on server side
   document.cookie = `${ACCESS_TOKEN_KEY}=${access}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
   document.cookie = `${REFRESH_TOKEN_KEY}=${refresh}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
@@ -72,7 +77,19 @@ export function clearTokens(): void {
   // Clear auth cookies
   document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
   document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
-  window.location.href = '/login'
+  window.location.href = localStorage.getItem('ff_auth_provider') === 'whop' ? '/whop' : '/login'
+}
+
+/** Start a Whop identity exchange without inheriting a previous owner's session. */
+export function resetWhopEntry(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  localStorage.removeItem('ff-uploads')
+  localStorage.removeItem('ff-branding')
+  localStorage.setItem('ff_auth_provider', 'whop')
+  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
+  document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
+  document.cookie = 'ff_auth_provider=whop; path=/; max-age=604800; SameSite=Lax'
 }
 
 // Deduplicate concurrent refresh calls — when access token expires, multiple
@@ -105,9 +122,19 @@ export async function refreshAccessTokenQuietly(): Promise<string | null> {
  * the browser sent to /login. Correct behind the dashboard, where every route
  * needs an account anyway.
  */
-export async function refreshAccessToken(): Promise<string | null> {
+function sameAccount(original: string | null, current: string | null): boolean {
+  if (original === current) return true
+  const subject = readTokenClaim(original, 'sub')
+  return typeof subject === 'string' && !!subject && subject === readTokenClaim(current, 'sub')
+}
+
+export async function refreshAccessToken(expectedAccessToken = getAccessToken()): Promise<string | null> {
+  // A delayed 401 belongs to its original account, even if another tab has signed in.
+  if (!sameAccount(expectedAccessToken, getAccessToken())) return null
+  const originalSession = getRefreshToken()
   const token = await refreshAccessTokenQuietly()
-  if (!token) clearTokens()
+  if (!sameAccount(expectedAccessToken, getAccessToken())) return null
+  if (!token && getRefreshToken() === originalSession) clearTokens()
   return token
 }
 
@@ -135,13 +162,16 @@ async function _doRefresh(): Promise<string | null> {
       body: JSON.stringify({ refresh_token: refreshToken }),
     })
 
+    if (getRefreshToken() !== refreshToken) return null
     if (!response.ok) return null
 
     const data = await response.json()
+    // A Whop entry or another login may have replaced this session while we waited.
+    if (getRefreshToken() !== refreshToken) return null
     const newAccessToken: string = data.access_token
     const newRefreshToken: string = data.refresh_token ?? refreshToken
 
-    setTokens(newAccessToken, newRefreshToken)
+    setTokens(newAccessToken, newRefreshToken, localStorage.getItem('ff_auth_provider') === 'whop' ? 'whop' : 'email')
     return newAccessToken
   } catch {
     return null

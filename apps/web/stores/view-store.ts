@@ -45,7 +45,7 @@ export const useViewStore = create<ViewStore>()(
     (set) => ({
       layout: 'grid',
       cardSize: 'M',
-      aspectRatio: 'landscape',
+      aspectRatio: 'portrait',
       thumbnailScale: 'fit',
       showCardInfo: true,
       titleLines: '1',

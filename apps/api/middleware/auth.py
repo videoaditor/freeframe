@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 import secrets as _secrets
 
+from ..services.whop_auth import require_customer_entitlement
 from ..services.auth_service import decode_token, get_user_by_id, get_user_by_email
 from ..models.user import User, UserStatus
 from ..config import settings
@@ -36,6 +37,7 @@ def _service_key_user(request: Request, db: Session) -> Optional[User]:
     user = get_user_by_email(db, settings.service_api_key_email)
     if not user or user.status == UserStatus.deactivated:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Service account unavailable")
+    require_customer_entitlement(user)
     return user
 
 
@@ -56,6 +58,7 @@ def get_current_user(
     user = get_user_by_id(db, uuid.UUID(payload["sub"]))
     if not user or user.status == UserStatus.deactivated:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deactivated")
+    require_customer_entitlement(user)
     return user
 
 def get_optional_user(
@@ -81,6 +84,7 @@ def get_optional_user(
         user = get_user_by_id(db, uuid.UUID(payload["sub"]))
         if not user or user.status == UserStatus.deactivated:
             return None
+        require_customer_entitlement(user)
         return user
     except Exception:
         return None

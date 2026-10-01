@@ -36,6 +36,8 @@ function Segment<T extends string>({
       {options.map((opt) => (
         <button
           key={opt.value}
+          aria-label={opt.label || opt.value}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
             'flex items-center justify-center px-3 py-1.5 text-xs transition-colors min-w-[36px]',

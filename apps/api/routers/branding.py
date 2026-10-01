@@ -81,6 +81,13 @@ def upsert_branding(
     current_user: User = Depends(get_current_user),
 ):
     require_project_role(db, project_id, current_user, ProjectRole.editor)
+    if body.logo_s3_key:
+        try:
+            logo_id = uuid.UUID(body.logo_s3_key.rsplit("/", 1)[-1].removesuffix(".webp"))
+        except ValueError:
+            raise HTTPException(400, "Upload a logo for this project first") from None
+        if body.logo_s3_key != f"branding/{project_id}/logo/{logo_id}.webp":
+            raise HTTPException(400, "The logo must belong to this project")
     branding = _get_or_create_branding(db, project_id)
     update_data = body.model_dump(exclude_none=True)
     for field, value in update_data.items():

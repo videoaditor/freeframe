@@ -115,7 +115,7 @@ def list_assets(
 ):
     # Allow access if user holds a role on the project OR the project is public
     role = effective_project_role(db, project_id, current_user)
-    if not role and not is_public_project(db, project_id):
+    if not role and not is_public_project(db, project_id, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
 
     query = db.query(Asset).filter(

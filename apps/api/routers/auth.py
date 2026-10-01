@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import logging
 import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from ..database import get_db
 from ..schemas.auth import (
     LoginRequest, TokenResponse,
@@ -14,6 +15,7 @@ from ..schemas.auth import (
     AcceptInviteRequest, InviteInfoResponse,
     ChangePasswordRequest,
 )
+from ..services.whop_auth import exchange_whop_token, resolve_customer, store_owner_session, require_customer_entitlement
 from ..services.auth_service import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -102,6 +104,26 @@ def _resolve_against_directory(db: Session, email: str, user: User | None) -> Us
     return user
 
 
+def _create_customer(db: Session, email: str) -> Optional[User]:
+    """A self-signed-up customer account: verified by the magic code it is about to receive."""
+    # Stored as typed (trimmed), exactly like an invite, so the existing exact-match lookups find it.
+    user = User(
+        email=email.strip(),
+        name=email.split("@")[0][:255] or "New user",
+        status=UserStatus.pending_verification,
+        is_staff=False,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Someone else holds this address - never hand that account out from a signup path.
+        db.rollback()
+        return None
+    db.refresh(user)
+    return user
+
+
 @router.post("/send-magic-code", response_model=SendMagicCodeResponse, dependencies=[Depends(rate_limit("send_magic_code", 5, 600))])
 def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
     """
@@ -114,10 +136,17 @@ def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
     Every outcome returns the same response, so this endpoint can't be used to
     enumerate registered emails.
     """
-    user = get_user_by_email(db, body.email)
+    existing = get_user_by_email(db, body.email)
+    user = existing
 
     if directory_service.is_configured():
         user = _resolve_against_directory(db, body.email, user)
+
+    # Platform v2: someone NEW may sign up as a CUSTOMER. Never staff - they see only what they
+    # create. Only when no account exists at all: an existing account the directory just refused
+    # stays refused, and is never "re-created". Answers like every other outcome (no enumeration).
+    if existing is None and user is None and settings.self_signup_enabled:
+        user = _create_customer(db, body.email)
 
     if not user:
         return SendMagicCodeResponse(
@@ -260,6 +289,21 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/whop", response_model=TokenResponse, dependencies=[Depends(rate_limit("whop_signin", 300, 60))])
+def whop_session(request: Request, db: Session = Depends(get_db)):
+    token = request.headers.get("x-whop-user-token")
+    if not token:
+        raise HTTPException(401, "Open Aditor Review from Whop to sign in")
+    owner = exchange_whop_token(token)
+    user = resolve_customer(db, owner)
+    store_owner_session(user, owner)
+    return TokenResponse(
+        access_token=create_access_token(str(user.id), token_version=user.token_version),
+        refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
+        needs_password=False,
+    )
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
     payload = decode_token(body.refresh_token)
@@ -268,6 +312,7 @@ def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
     user = get_user_by_id(db, uuid.UUID(payload["sub"]))
     if not user or user.status == UserStatus.deactivated:
         raise HTTPException(status_code=401, detail="User not found")
+    require_customer_entitlement(user)
     if payload.get("ver", 1) != user.token_version:
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     return TokenResponse(

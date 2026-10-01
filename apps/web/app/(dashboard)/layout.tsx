@@ -17,7 +17,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [commandOpen, setCommandOpen] = React.useState(false);
   const { fetchUser } = useAuthStore();
   const { fetchHistory } = useUploadStore();
@@ -43,7 +43,7 @@ export default function DashboardLayout({
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-primary">
+    <div className={cn("flex h-screen overflow-hidden bg-bg-primary", ["/home", "/rules"].includes(pathname) && "owner-workspace")}>
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((c) => !c)}
@@ -52,8 +52,8 @@ export default function DashboardLayout({
       {/* Main content area */}
       <main
         className={cn(
-          "flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring",
-          sidebarCollapsed ? "ml-[52px]" : "ml-[220px]",
+          "dashboard-main flex min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring",
+          sidebarCollapsed ? "ml-[72px]" : "ml-[220px]",
         )}
       >
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
