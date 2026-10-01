@@ -1,5 +1,7 @@
 'use client'
 
+import { authHeaders } from '@/lib/auth-headers'
+
 import * as React from 'react'
 import {
   Lock,
@@ -107,7 +109,7 @@ async function fetchShareInfo(
     }
   } catch {}
   if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`
+    Object.assign(headers, authHeaders(accessToken))
   }
 
   const response = await fetch(url, { headers })

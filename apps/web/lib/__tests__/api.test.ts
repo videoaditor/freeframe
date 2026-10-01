@@ -49,6 +49,7 @@ describe('API client', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer my-token',
+          'X-FreeFrame-Token': 'my-token',
         }),
       }),
     )
@@ -105,6 +106,7 @@ describe('API client', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: `Bearer ${newToken}`,
+          'X-FreeFrame-Token': newToken,
         }),
       }),
     )

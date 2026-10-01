@@ -1,5 +1,7 @@
 "use client";
 
+import { authHeaders } from '@/lib/auth-headers'
+
 import * as React from "react";
 import * as Switch from "@radix-ui/react-switch";
 import useSWR from "swr";
@@ -611,7 +613,7 @@ export function ShareLinkContent({
       const headers: Record<string, string> = {};
       try {
         const t = localStorage.getItem('ff_access_token');
-        if (t) headers['Authorization'] = `Bearer ${t}`;
+        Object.assign(headers, authHeaders(t));
       } catch {}
       fetch(`${API_URL}/share/${token}/assets?page=1&per_page=50`, { headers })
         .then((r) => r.ok ? r.json() : Promise.reject())

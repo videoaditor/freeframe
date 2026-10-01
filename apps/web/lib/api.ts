@@ -1,4 +1,5 @@
 import { getAccessToken, refreshAccessToken } from './auth'
+import { authHeaders } from './auth-headers'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -29,9 +30,7 @@ async function request<T>(
       'Content-Type': 'application/json',
       ...options?.headers,
     }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
+    Object.assign(headers, authHeaders(token))
     return headers
   }
 
@@ -97,7 +96,7 @@ async function request<T>(
 async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const buildHeaders = (token: string | null): Record<string, string> => {
     const headers: Record<string, string> = {}
-    if (token) headers['Authorization'] = `Bearer ${token}`
+    Object.assign(headers, authHeaders(token))
     return headers
   }
 

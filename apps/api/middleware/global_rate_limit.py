@@ -69,6 +69,8 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
     def _get_identity(self, request: Request) -> str:
         """Extract user ID from JWT or fall back to IP."""
         auth_header = request.headers.get("authorization", "")
+        if not auth_header and request.headers.get("x-freeframe-token"):
+            auth_header = f"Bearer {request.headers['x-freeframe-token']}"
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
             try:
