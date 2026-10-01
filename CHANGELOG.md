@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ready status now requires successful review of every current submitted version; outages, malformed evidence and failed revisions retain file access without claiming a pass.
-- Retention cleanup removes request records before reclaiming their folders and assets.
+- Retention cleanup removes request records before reclaiming their folders and assets, and preserves failed delivery evidence until normal retention applies.
+- Editors can replace failed processing attempts; canceled uploads no longer hold a clean request open.
 - Whop sign-in explains missing member entry, denied access and account conflicts with an appropriate recovery action.
 
 ### Added

@@ -148,3 +148,27 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
         engine.dispose()
         with admin.begin() as conn: conn.execute(text(f'DROP SCHEMA {schema} CASCADE'))
         admin.dispose()
+
+
+def test_completion_migration_backfills_only_proven_transfers():
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    path = Path(__file__).parents[1] / 'alembic/versions/d0e1f2a3b4c5_request_completion.py'
+    spec = importlib.util.spec_from_file_location('request_completion_migration', path)
+    migration = importlib.util.module_from_spec(spec); spec.loader.exec_module(migration)
+    engine = create_engine(os.environ['ITERATIONS_TEST_DATABASE_URL'])
+    schema = 'migration_test_' + uuid.uuid4().hex
+    try:
+        with engine.connect() as conn, conn.begin() as transaction:
+            conn.execute(text(f'CREATE SCHEMA {schema}; SET LOCAL search_path TO {schema}'))
+            conn.execute(text('CREATE TABLE upload_requests (id uuid); CREATE TABLE request_uploads (asset_id uuid, version_number integer, created_at timestamptz); CREATE TABLE asset_versions (asset_id uuid, version_number integer, deleted_at timestamptz, processing_status text)'))
+            for number, state in enumerate(['uploading', 'processing', 'ready', 'failed'], 1):
+                conn.execute(text("INSERT INTO request_uploads VALUES (:asset, :number, now()); INSERT INTO asset_versions VALUES (:asset, :number, NULL, :state)"), {'asset': str(uuid.uuid4()), 'number': number, 'state': state})
+            with Operations.context(MigrationContext.configure(conn)):
+                migration.upgrade()
+            assert conn.execute(text('SELECT version_number FROM request_uploads WHERE submitted_at IS NOT NULL ORDER BY version_number')).scalars().all() == [2, 3]
+            transaction.rollback()  # synthetic schema and DDL never survive this test
+    finally:
+        engine.dispose()
