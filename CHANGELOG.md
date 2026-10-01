@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Ready status now requires successful review of every current submitted version; outages, malformed evidence and failed revisions retain file access without claiming a pass.
 - Retention cleanup removes request records before reclaiming their folders and assets.
+- Whop sign-in explains missing member entry, denied access and account conflicts with an appropriate recovery action.
 
 ### Added
 - **`n8n_feedback_events` names the card of each event** - three columns are appended after the unchanged `freeframe-feedback.v1` contract: `folder_id`, `folder_name` and `trello_card_id` (the Trello short link from the folder description). A consumer that follows up on review comments could only match a new round to the commented asset by file name, so a round uploaded into another project with the same generic names (`Hook 1`, `Hook 2`, …) looked like nothing had been delivered. The card is the identity that survives a move between projects. `n8n_read` still reads only the two views.

@@ -41,7 +41,7 @@ export function SubmissionSuccess({ token, brand }: { token: string; brand: stri
     <p className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-text-secondary">{brand} might reach out later, but consider your job done!</p>
   </section>
 }
-function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, processingText, progress }: { progress?: { completed: number; total: number; unit: string }; mediaUrl?: string; thumbnailUrl?: string | null; unavailable?: boolean; onRefresh: () => void | Promise<void>; processingText?: string }) {
+function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, processingText }: { mediaUrl?: string; thumbnailUrl?: string | null; unavailable?: boolean; onRefresh: () => void | Promise<void>; processingText?: string }) {
   const [paused, setPaused] = React.useState(false)
   const [ratio, setRatio] = React.useState(9 / 16)
   const [failedThumbnail, setFailedThumbnail] = React.useState(false)
@@ -55,10 +55,6 @@ function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, proces
     </div>
     <h3 className="mt-5 text-lg font-semibold">{unavailable ? 'Review unavailable' : 'Review in progress'}</h3>
     <p role="status" className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-text-secondary">{unavailable ? 'Your file is safe. We cannot confirm the review yet.' : processingText || 'Checking the cut against the brief. Feedback will appear here when ready.'}</p>
-    {!unavailable && progress && progress.total > 0 && <div className="mt-4 text-left">
-      <p className="text-xs text-text-secondary">{progress.completed} of {progress.total} {progress.unit} checked</p>
-      <div role="progressbar" aria-label={`${progress.unit} checked`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.completed} aria-valuetext={`${progress.completed} of ${progress.total} ${progress.unit} checked`} className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-hover"><div className="h-full rounded-full bg-accent" style={{ width: `${progress.completed / progress.total * 100}%` }} /></div>
-    </div>}
     {(failed || unavailable) && <button className="mt-2 min-h-11 text-sm font-medium text-accent" onClick={() => { setFailed(false); setFailedThumbnail(false); setAttempt(n => n + 1); void onRefresh() }}>{unavailable ? 'Check again' : 'Retry preview'}</button>}
     {!unavailable && <button aria-label={paused ? 'Resume animation' : 'Pause animation'} title={paused ? 'Resume animation' : 'Pause animation'} className="request-motion absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-full text-text-tertiary hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => setPaused(v => !v)}>{paused ? <Play size={12} /> : <Pause size={12} />}</button>}
   </div>

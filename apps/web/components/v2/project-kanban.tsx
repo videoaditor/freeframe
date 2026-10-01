@@ -85,6 +85,7 @@ export function ProjectKanban({ requests, paused, onShare, focusReady = false }:
         </section>
       })}
     </div>
+    <p className="mt-3 text-sm text-text-secondary">Ready to go means the current videos passed review with no required changes. Brand approval is a separate decision in FreeFrame.</p>
     {!!closed.length && <details className="mt-4 rounded-2xl border border-border px-4">
       <summary className="min-h-11 cursor-pointer py-3 text-[0.8125rem] text-text-secondary"><span>Closed requests</span> <span className="ml-1">{closed.length}</span></summary>
       <ul className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">{closed.map(r => <ProjectCard key={r.id} request={r} stage="closed" onShare={() => onShare(r)} />)}</ul>
