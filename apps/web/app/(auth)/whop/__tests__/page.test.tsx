@@ -20,3 +20,18 @@ it('handles browser storage denial without hanging', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('browser storage')
   expect(auth.setTokens).not.toHaveBeenCalled()
 })
+
+
+it.each([401, 409, 403, 503])('offers recovery appropriate to HTTP %i without accepting a session', async status => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok:false, status, json:async()=>({detail:'Access could not be confirmed.'}) }))
+  render(<WhopPage />)
+  await screen.findByRole('alert')
+  if (status === 401) expect(screen.getByRole('link', {name:'Open in Whop'})).toHaveAttribute('href','https://whop.com/aditor-wisdom/exp_kLsfFtlUrXJejl/app/')
+  if (status === 409) {
+    expect(screen.getByRole('link', {name:'Team sign-in'})).toHaveAttribute('href','/login?from=/home')
+    expect(screen.getByText(/does not link or change your existing account/)).toBeVisible()
+  }
+  if (status === 503) expect(screen.getByRole('button', {name:'Try again'})).toBeVisible()
+  else expect(screen.queryByRole('button', {name:'Try again'})).toBeNull()
+  expect(auth.setTokens).not.toHaveBeenCalled()
+})
