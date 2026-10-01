@@ -80,3 +80,5 @@ Required configuration names: `SUITE_URL`, `WHOP_APP_ID`, `API_INTERNAL_URL`, `N
 | Repair preexisting retention FK cleanup | True PostgreSQL exposed request rows blocking purge; deletion remains retention-owned, application soft delete preserved |
 | Keep existing Worker type errors as a visible gate | Candidate adds no diagnostic messages; unrelated baseline defects can still hide runtime issues, so broad launch remains blocked |
 | Export from accepted landing `d20fca6` on Pages main | No design rebuild or publication; regenerate if approved landing source changes before acceptance |
+
+Reviewer scope rulings: live Whop/two-owner/phone/deployment stays with the original rollout owner (if wrong, real identity/reload faults remain unknown); iterations/performance remains excluded (if wrong, no speed guarantee/iteration generation); moving documentation was reconciled by the author after code review (if wrong, runbook may lag implementation, so rollout must inspect current state). No minor reviewer findings were deferred.
