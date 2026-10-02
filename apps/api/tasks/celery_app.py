@@ -31,6 +31,15 @@ celery_app.conf.update(
     broker_connection_retry=True,
     broker_connection_max_retries=5,
     broker_pool_limit=0,  # Disable connection pooling in web process to avoid stale connections
+    # A worker takes one job at a time instead of reserving four per slot. Reserved-but-waiting jobs
+    # count as unacknowledged, and with late acks (process_asset below) an unacknowledged job older
+    # than the visibility timeout is handed to another worker - a long queue would then run the
+    # same file twice.
+    worker_prefetch_multiplier=1,
+    # How long an unacknowledged job stays invisible before Redis redelivers it. Only matters after
+    # a worker is killed mid-job: redelivery then happens after this long. Must stay above the
+    # longest legitimate encode (see FFMPEG_ENCODE_TIMEOUT_SECONDS) or a slow job runs twice.
+    broker_transport_options={"visibility_timeout": 2 * 3600},
     # Define queues
     task_queues=(
         Queue("default"),

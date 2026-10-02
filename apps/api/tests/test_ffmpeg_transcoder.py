@@ -408,3 +408,49 @@ def test_thread_cap_is_at_least_one():
         reloaded = importlib.reload(mod)
         assert reloaded.FFMPEG_THREADS == 1
     importlib.reload(mod)
+
+
+# ─── stalled-download protection and encode time cap ──────────────────────────
+# A version sat in "Processing" for ~4 hours (2026-10-02). The encode reads its input over HTTP
+# with no read timeout, so a stalled connection hung ffmpeg until the flat 4-hour cap, holding one
+# of only two transcoding slots. Reproduced with real ffmpeg against a server that sends part of a
+# file and then goes silent: without these flags it hangs indefinitely, with them it gives up in
+# a few seconds and the job is retried.
+
+def test_input_read_timeout_and_reconnect_precede_the_input():
+    from packages.transcoder.ffmpeg_transcoder import FFMPEG_INPUT_RW_TIMEOUT_SECONDS
+
+    cmd = _transcode_and_get_cmd(["720p"])
+
+    i = cmd.index("-i")
+    assert cmd[cmd.index("-rw_timeout") + 1] == str(FFMPEG_INPUT_RW_TIMEOUT_SECONDS * 1_000_000)
+    for flag in ("-rw_timeout", "-reconnect", "-reconnect_streamed", "-reconnect_delay_max"):
+        assert flag in cmd, f"{flag} missing"
+        assert cmd.index(flag) < i, f"{flag} must precede -i to apply to the input"
+
+
+def test_encode_timeout_scales_with_duration_within_bounds():
+    from packages.transcoder.ffmpeg_transcoder import (
+        encode_timeout_seconds, FFMPEG_ENCODE_TIMEOUT_SECONDS, FFMPEG_ENCODE_TIMEOUT_MAX_SECONDS,
+    )
+
+    assert encode_timeout_seconds(130) == FFMPEG_ENCODE_TIMEOUT_SECONDS      # short clip: the floor
+    assert encode_timeout_seconds(None) == FFMPEG_ENCODE_TIMEOUT_SECONDS     # unknown length: the floor
+    assert encode_timeout_seconds(1200) == 4800                              # 20 min video: 4x
+    assert encode_timeout_seconds(7200) == FFMPEG_ENCODE_TIMEOUT_MAX_SECONDS # very long: capped at 4 h
+    assert FFMPEG_ENCODE_TIMEOUT_SECONDS < FFMPEG_ENCODE_TIMEOUT_MAX_SECONDS
+
+
+def test_encode_uses_the_scaled_timeout_not_a_flat_four_hours():
+    from packages.transcoder.ffmpeg_transcoder import FFMPEG_ENCODE_TIMEOUT_SECONDS
+
+    with patch("subprocess.run", side_effect=_mock_probe_side_effect(1920, 1080)) as mock_run:
+        s3_mock = MagicMock()
+        s3_mock.generate_presigned_url.return_value = "https://s3.example.com/uploads/video.mp4"
+        with patch("builtins.open", MagicMock()), patch("pathlib.Path.glob", return_value=[]), \
+             patch("pathlib.Path.rglob", return_value=[]), patch("pathlib.Path.mkdir"), \
+             patch("shutil.rmtree"):
+            asyncio.run(FFmpegTranscoder(s3_mock, "test-bucket").transcode(_make_job(["720p"])))
+
+    encode_calls = [c for c in mock_run.call_args_list if any("filter_complex" in str(a) for a in c[0][0])]
+    assert encode_calls[0][1]["timeout"] == FFMPEG_ENCODE_TIMEOUT_SECONDS   # the mocked probe says 6 s long
