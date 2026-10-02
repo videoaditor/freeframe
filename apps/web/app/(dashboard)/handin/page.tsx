@@ -39,7 +39,7 @@ import {
   type GateReview,
   type DeliveryStatus,
 } from "@/lib/handin";
-import { HandinResult } from "@/components/handin/handin-result";
+import { HandinResult, ProcessingFailureNotice } from "@/components/handin/handin-result";
 import { DeliverButton } from "@/components/handin/deliver-button";
 import { WorkspacePicker, type WorkspaceChoice } from "@/components/handin/workspace-picker";
 import { UploadZone } from "@/components/upload/upload-zone";
@@ -103,6 +103,18 @@ export default function HandinPage() {
   }, []);
 
   const startUpload = useUploadStore((s) => s.startUpload);
+  // The upload store keeps tracking each file's processing status after this page's own
+  // `waitForUpload` has already resolved (it resolves as soon as processing STARTS, not when it
+  // finishes) - the global SSE bridge + poll fallback keep it current. So a transcode that fails
+  // after this page has moved to "done" still shows up here, by asset id.
+  const uploadFiles = useUploadStore((s) => s.files);
+  const processingFailures = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of uploadFiles) {
+      if (f.status === "failed" && f.assetId) map[f.assetId] = f.error || "Processing failed";
+    }
+    return map;
+  }, [uploadFiles]);
   // Who is delivering, so the delivery comment carries their name. FreeFrame already knows the
   // signed-in editor; the editor never types it.
   const user = useAuthStore((s) => s.user);
@@ -382,12 +394,16 @@ export default function HandinPage() {
   }
 
   if (!isHandinConfigured()) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "Hand-in page rendered with no review gate configured (NEXT_PUBLIC_REVIEW_GATE_URL is empty in this build).",
+    );
     return (
       <div className="mx-auto max-w-2xl p-8">
         <h1 className="text-lg font-medium text-text-primary">Hand in</h1>
         <p className="mt-2 text-sm text-text-tertiary">
-          This build has no review service configured, so hand-in is off. Set
-          NEXT_PUBLIC_REVIEW_GATE_URL to turn it on.
+          Hand-in isn&apos;t available right now. Try feedback.aditor.ai directly, or contact
+          support.
         </p>
       </div>
     );
@@ -412,6 +428,7 @@ export default function HandinPage() {
             reviews={assets.map((a) => ({
               label: assets.length > 1 ? a.name : undefined,
               review: reviews[a.id] ?? null,
+              failedDetail: processingFailures[a.id],
             }))}
           />
           {/* A way back into FreeFrame itself: open the folder these videos landed in, inside the
