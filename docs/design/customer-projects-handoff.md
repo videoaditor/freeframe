@@ -24,10 +24,16 @@ Keep existing semantic OKLCH light/dark tokens, 4/8 spacing, 0.875rem headings a
 None. Customer Projects contains brand workspaces and their own submitted files; the Overview already provides the request board. No automatic import of internal Trello deliveries.
 
 ## Verification checklist
-- [ ] Customer empty/list/error states and request action regression tests
-- [ ] Staff workspace-only view and Upload unchanged
-- [ ] Customer folder creation excludes the internal Trello requirement and announcement
-- [ ] Screenshots inspected at desktop and mobile, light and dark
-- [ ] Backend suite and frontend tests, type check, lint and build
+- [x] Customer empty/list/error states and request action regression tests
+- [x] Staff workspace-only view and Upload unchanged
+- [x] Customer folder creation excludes the internal Trello requirement and announcement
+- [x] Screenshots inspected at desktop and mobile, light and dark (375px mobile: no horizontal overflow)
+- [x] Backend: 358 passed, 48 skipped without live test PostgreSQL. Frontend: 438 passed; type check, lint and production build pass. Preview API contract checks: four passed.
+
+## Evidence
+![Before: live customer empty state, account area excluded](customer-projects-before.jpg)
+![After: local synthetic customer's accessible brand projects](customer-projects-after.jpg)
+
+The after image uses synthetic local data, not the live customer's projects. A request created from Sunday Studio preselected that brand and appeared in both the folder tree and main grid without a reload. Phone and second-owner production acceptance remain open; these UI checks do not replace them.
 
 HIG deviation: reuse existing web card/empty-state components rather than redesign their typography. This is a role/workflow correction.
