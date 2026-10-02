@@ -68,7 +68,7 @@ celery_app.conf.beat_schedule = {
     },
     "fail-stuck-processing": {
         "task": "fail_stuck_processing",
-        "schedule": crontab(minute="*/15"),
+        "schedule": crontab(minute="*/5"),
     },
     "cleanup-soft-deleted": {
         "task": "cleanup_soft_deleted",

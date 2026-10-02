@@ -136,14 +136,18 @@ class Settings(BaseSettings):
     stale_upload_timeout_hours: int = 4
 
     # Watchdog for versions stuck in `processing`. Nothing else ever touches that status: a worker
-    # killed mid-transcode loses the task (it is acked at start), and a dispatch that never reached
-    # the broker is only logged, so either leaves the version "Processing" forever and the editor
-    # waiting with no way out. After this many minutes (counted from the version row's creation,
-    # i.e. upload + queue + transcode) it is marked `failed` so the UI says so. Minutes. 0 disables.
-    # Keep it above the slowest real upload-to-ready seen under queue contention (~64 min) and
-    # below stale_upload_timeout_hours, so the failure is visible before the reaper reclaims it. A
-    # genuinely slow job that finishes later still flips the version back to `ready`.
-    stuck_processing_timeout_minutes: int = 120
+    # killed mid-transcode loses the task, and a dispatch that never reached the broker is only
+    # logged, so either leaves the version "Processing" forever and the editor waiting with no way
+    # out. Two limits, both counted from the version row's creation (upload + queue + transcode):
+    #  - stuck_processing_lost_minutes: from this age on, the watchdog asks the queue and the workers
+    #    whether the job still exists; if nothing knows about it on two checks in a row, the version
+    #    is failed. Catches a lost job in minutes without touching one that is merely slow.
+    #  - stuck_processing_timeout_minutes: absolute limit; anything still processing is failed.
+    # 0 disables the watchdog. Keep the absolute limit below stale_upload_timeout_hours so the
+    # failure stays visible before the reaper reclaims it. A genuinely slow job that finishes
+    # later still flips the version back to `ready`.
+    stuck_processing_lost_minutes: int = 10
+    stuck_processing_timeout_minutes: int = 60
 
     # Retention GC: rows soft-deleted (deleted_at) longer than this are hard-deleted and their
     # S3 objects reclaimed. Days. 0 (or negative) DISABLES the sweep (matches the reaper convention).

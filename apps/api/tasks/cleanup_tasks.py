@@ -1,7 +1,10 @@
 from ..models.upload_request import UploadRequest, RequestUpload
+import json
 import logging
+import re
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from sqlalchemy import text, select
 
@@ -350,31 +353,109 @@ def reap_stale_uploads():
         db.close()
 
 
-def _fail_stuck_processing(db) -> list[tuple[str, str, str]]:
-    """Mark versions stuck in `processing` as `failed`. Mutates `db` but does NOT commit - the
-    caller owns the transaction. Returns (project_id, asset_id, version_id) per version so the
-    caller can announce it after the commit.
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_TRANSCODE_QUEUES = ("transcoding",)
+_STRIKE_TTL_SECONDS = 30 * 60
 
-    No re-dispatch on purpose: a job that is merely slow would then run twice against the same
-    output prefix. Failing it surfaces the problem to the editor; if the original job does finish
-    later it sets the version back to `ready` itself."""
-    minutes = settings.stuck_processing_timeout_minutes
-    if minutes <= 0:
-        log.info("watchdog: disabled (stuck_processing_timeout_minutes=%s)", minutes)
+
+def _known_job_version_ids() -> Optional[set[str]]:
+    """Ids of every version a transcode job still exists for: waiting in the queue, or held by a
+    worker (running, prefetched, or waiting out a retry delay). None when that cannot be
+    determined (broker unreachable, no worker answered) - the caller then never fails a version
+    on a guess."""
+    import redis as sync_redis
+
+    ids: set[str] = set()
+    try:
+        r = sync_redis.from_url(settings.redis_url, decode_responses=True, socket_timeout=5)
+        try:
+            for queue in _TRANSCODE_QUEUES:
+                # A queued job's headers carry its arguments (asset id, version id) as plain text.
+                for raw in r.lrange(queue, 0, -1):
+                    ids.update(_UUID_RE.findall(raw))
+        finally:
+            r.close()
+        inspector = celery_app.control.inspect(timeout=5)
+        answered = False
+        for listing in (inspector.active(), inspector.reserved(), inspector.scheduled()):
+            if listing is None:
+                continue
+            answered = True
+            for tasks in listing.values():
+                ids.update(_UUID_RE.findall(json.dumps(tasks, default=str)))
+        if not answered:
+            return None  # no worker replied: cannot tell "lost" from "workers are busy or down"
+    except Exception:  # noqa: BLE001 - an unreadable broker must never fail a version
+        log.warning("watchdog: could not ask the broker which jobs exist", exc_info=True)
+        return None
+    return ids
+
+
+class _RedisStrikes:
+    """Remembers a version the watchdog could not find a job for, so it is failed only if it is
+    still missing on the NEXT check. The first sighting alone proves nothing: an upload that has
+    just finished is `processing` for a moment before its job reaches the queue."""
+
+    def __init__(self):
+        import redis as sync_redis
+        self._r = sync_redis.from_url(settings.redis_url, decode_responses=True, socket_timeout=5)
+
+    def flagged(self, version_id: str) -> bool:
+        return bool(self._r.exists(f"watchdog:lost:{version_id}"))
+
+    def flag(self, version_id: str) -> None:
+        self._r.set(f"watchdog:lost:{version_id}", "1", ex=_STRIKE_TTL_SECONDS)
+
+    def clear(self, version_id: str) -> None:
+        self._r.delete(f"watchdog:lost:{version_id}")
+
+
+def _fail_stuck_processing(db, known_ids: Optional[set[str]] = None, strikes=None) -> list[tuple[str, str, str, str]]:
+    """Mark versions stuck in `processing` as `failed`. Mutates `db` but does NOT commit - the
+    caller owns the transaction. Returns (project_id, asset_id, version_id, reason) per version so
+    the caller can announce it after the commit.
+
+    - Older than stuck_processing_timeout_minutes: failed, whatever else is known.
+    - Older than stuck_processing_lost_minutes: failed only if no queue entry or worker has the
+      job (`known_ids`) on two checks in a row (`strikes`). Unknown `known_ids` (None): left alone.
+
+    No re-dispatch on purpose: a job that is merely slow would then run twice. Failing it surfaces
+    the problem to the editor; if the original job does finish later it sets the version back to
+    `ready` itself."""
+    hard = settings.stuck_processing_timeout_minutes
+    lost = settings.stuck_processing_lost_minutes
+    if hard <= 0:
+        log.info("watchdog: disabled (stuck_processing_timeout_minutes=%s)", hard)
         return []
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    now = datetime.now(timezone.utc)
+    hard_cutoff = now - timedelta(minutes=hard)
+    lost_cutoff = now - timedelta(minutes=min(lost, hard)) if lost > 0 else hard_cutoff
     rows = db.query(AssetVersion, Asset.project_id).join(Asset, Asset.id == AssetVersion.asset_id).filter(
         AssetVersion.processing_status == ProcessingStatus.processing,
         AssetVersion.deleted_at.is_(None),
-        AssetVersion.created_at < cutoff,
+        AssetVersion.created_at < lost_cutoff,
     ).all()
-    stuck = []
+    failed = []
     for v, project_id in rows:
+        vid = str(v.id)
+        if v.created_at < hard_cutoff:
+            reason = f"no result after {hard} minutes"
+        elif known_ids is None or strikes is None:
+            continue  # cannot tell a lost job from a slow one, so wait for the absolute limit
+        elif vid in known_ids:
+            strikes.clear(vid)
+            continue
+        elif not strikes.flagged(vid):
+            strikes.flag(vid)
+            continue
+        else:
+            reason = "no worker or queue has this job any more"
         v.processing_status = ProcessingStatus.failed
-        stuck.append((str(project_id), str(v.asset_id), str(v.id)))
-        log.warning("watchdog: version %s of asset %s stuck in processing for over %d min - marked failed",
-                    v.id, v.asset_id, minutes)
-    return stuck
+        if strikes is not None:
+            strikes.clear(vid)
+        failed.append((str(project_id), str(v.asset_id), vid, reason))
+        log.warning("watchdog: version %s of asset %s marked failed: %s", vid, v.asset_id, reason)
+    return failed
 
 
 @celery_app.task(name="fail_stuck_processing")
@@ -382,18 +463,20 @@ def fail_stuck_processing():
     """Periodic beat task: stop a version showing "Processing" forever."""
     db = SessionLocal()
     try:
-        stuck = _fail_stuck_processing(db)
+        known, strikes = None, None
+        try:
+            known, strikes = _known_job_version_ids(), _RedisStrikes()
+        except Exception:  # noqa: BLE001 - without Redis only the absolute limit applies
+            log.warning("watchdog: broker unavailable, applying only the absolute limit", exc_info=True)
+        failed = _fail_stuck_processing(db, known, strikes)
         db.commit()
     finally:
         db.close()
     # After the commit, so a UI that refetches on the event sees the committed `failed` state.
     from .transcode_tasks import _publish_event
-    for project_id, asset_id, _version_id in stuck:
-        _publish_event(project_id, "transcode_failed", {
-            "asset_id": asset_id,
-            "error": f"no result after {settings.stuck_processing_timeout_minutes} minutes",
-        })
-    return len(stuck)
+    for project_id, asset_id, _version_id, reason in failed:
+        _publish_event(project_id, "transcode_failed", {"asset_id": asset_id, "error": reason})
+    return len(failed)
 
 
 def _run_cleanup(db) -> PurgeCounts:
