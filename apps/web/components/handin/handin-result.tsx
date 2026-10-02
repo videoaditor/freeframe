@@ -184,8 +184,8 @@ export function ProcessingFailureNotice({ label, detail }: { label?: string; det
       <h2 className="font-medium text-text-primary">Craft review</h2>
       {label && <p className="mt-0.5 truncate text-xs text-text-tertiary">{label}</p>}
       <p className="mt-2 text-text-secondary">
-        This file failed to process, so there is no review to show. Try re-uploading it, or
-        contact support if it keeps happening.
+        This file failed to process. Try re-uploading it. If that doesn&apos;t work, write into
+        Bug Catches.
       </p>
     </section>
   );
