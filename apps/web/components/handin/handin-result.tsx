@@ -30,6 +30,8 @@
 import * as React from "react";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import type { GateReview } from "@/lib/handin";
+import type { StageView } from "@/lib/stages";
+import { StageStrip } from "@/components/review/stage-strip";
 
 /**
  * The link, and only the link.
@@ -122,7 +124,15 @@ function FindingList({ title, items }: { title: string; items: string[] }) {
  * so the editor can tell which review belongs to which cut. A single-video
  * hand-in passes no label and reads exactly as before.
  */
-export function ReviewPanel({ review, label }: { review: GateReview | null; label?: string }) {
+export function ReviewPanel({
+  review,
+  label,
+  stageView,
+}: {
+  review: GateReview | null;
+  label?: string;
+  stageView?: StageView;
+}) {
   return (
     <section
       data-testid="handin-review"
@@ -130,12 +140,17 @@ export function ReviewPanel({ review, label }: { review: GateReview | null; labe
     >
       <h2 className="text-sm font-medium text-text-primary">Craft review</h2>
       {label && <p className="mt-0.5 truncate text-xs text-text-tertiary">{label}</p>}
+      {stageView && <StageStrip view={stageView} className="mt-2" />}
 
       {review === null || review.state === "pending" ? (
-        <p className="mt-2 text-sm text-text-tertiary">
-          {(review?.note ?? "").trim() ||
-            "The review will appear here when it is ready."}
-        </p>
+        // With a stage strip the generic "will appear here" line says nothing the strip does not,
+        // so only a SPECIFIC note (trouble reaching Trello, a deliberate skip) is kept beside it.
+        stageView && /^the review will appear here/i.test((review?.note ?? "").trim() || "The review will appear here") ? null : (
+          <p className="mt-2 text-sm text-text-tertiary">
+            {(review?.note ?? "").trim() ||
+              "The review will appear here when it is ready."}
+          </p>
+        )
       ) : (
         <>
           <p className="mt-1 text-xs text-text-tertiary">
@@ -168,7 +183,15 @@ export function ReviewPanel({ review, label }: { review: GateReview | null; labe
  * logs, not someone waiting on a hand-in. That detail still goes to the
  * console, so it is not lost, just not shown.
  */
-export function ProcessingFailureNotice({ label, detail }: { label?: string; detail?: string }) {
+export function ProcessingFailureNotice({
+  label,
+  detail,
+  stageView,
+}: {
+  label?: string;
+  detail?: string;
+  stageView?: StageView;
+}) {
   React.useEffect(() => {
     if (detail) {
       // eslint-disable-next-line no-console
@@ -183,6 +206,7 @@ export function ProcessingFailureNotice({ label, detail }: { label?: string; det
     >
       <h2 className="font-medium text-text-primary">Craft review</h2>
       {label && <p className="mt-0.5 truncate text-xs text-text-tertiary">{label}</p>}
+      {stageView && <StageStrip view={stageView} hideProblem className="mt-2" />}
       <p className="mt-2 text-text-secondary">
         This file failed to process. Try re-uploading it. If that doesn&apos;t work, write into
         Bug Catches.
@@ -201,6 +225,8 @@ export interface HandinReviewItem {
   review: GateReview | null;
   label?: string;
   failedDetail?: string;
+  /** Where this video is: upload, processing, reviewing, done. Optional so older callers are unchanged. */
+  stageView?: StageView;
 }
 
 /**
@@ -225,9 +251,9 @@ export function HandinResult({
       <ShareLinkPanel url={shareUrl} />
       {reviews.map((item, i) =>
         item.failedDetail !== undefined ? (
-          <ProcessingFailureNotice key={i} label={item.label} detail={item.failedDetail} />
+          <ProcessingFailureNotice key={i} label={item.label} detail={item.failedDetail} stageView={item.stageView} />
         ) : (
-          <ReviewPanel key={i} review={item.review} label={item.label} />
+          <ReviewPanel key={i} review={item.review} label={item.label} stageView={item.stageView} />
         ),
       )}
     </div>

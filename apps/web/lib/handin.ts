@@ -14,6 +14,8 @@
  * is still open. `deliver-status` reports that state; it can never withhold the link.
  */
 
+import { parseReviewStage, type ReviewStageData } from '@/lib/stages'
+
 /**
  * Where the gate lives. A build arg rather than a literal so a self-hoster who
  * is not Aditor builds a web image with no Aditor host compiled into it, and so
@@ -42,8 +44,8 @@ export interface GateCard {
 }
 
 export type GateReview =
-  | { state: 'pending'; note?: string }
-  | { state: 'ready'; score?: number; worthFixing?: string[]; niceToHave?: string[] }
+  | { state: 'pending'; note?: string; stage?: ReviewStageData; unreachable?: boolean }
+  | { state: 'ready'; score?: number; worthFixing?: string[]; niceToHave?: string[]; stage?: ReviewStageData }
 
 /**
  * Resolve a pasted Trello link.
@@ -78,16 +80,20 @@ export async function lookUpCard(url: string): Promise<GateCard> {
  * editor is leave them reading "not back yet" next to a link that already works.
  */
 export async function fetchReview(assetId: string): Promise<GateReview> {
+  const waiting = 'The review will appear here when it is ready.'
   try {
     const res = await fetch(`${GATE_BASE}/api/gate/review?asset=${encodeURIComponent(assetId)}`)
     if (!res.ok) {
-      return { state: 'pending', note: 'The review will appear here when it is ready.' }
+      // Still `pending` for the link and the old note, but marked unreachable so the stage strip
+      // shows "status unavailable" instead of a review that is quietly "running".
+      return { state: 'pending', note: waiting, unreachable: true }
     }
     const data = (await res.json()) as GateReview
-    if (data && data.state === 'ready') return data
-    return { state: 'pending', note: (data as { note?: string })?.note ?? 'The review will appear here when it is ready.' }
+    const stage = parseReviewStage(data)
+    if (data && data.state === 'ready') return stage ? { ...data, stage } : data
+    return { state: 'pending', note: (data as { note?: string })?.note ?? waiting, ...(stage ? { stage } : {}) }
   } catch {
-    return { state: 'pending', note: 'The review will appear here when it is ready.' }
+    return { state: 'pending', note: waiting, unreachable: true }
   }
 }
 

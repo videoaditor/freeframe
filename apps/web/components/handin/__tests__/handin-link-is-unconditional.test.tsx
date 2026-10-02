@@ -141,3 +141,42 @@ describe('hand-in - the findings use the review page headings', () => {
     expect(screen.getByText('Nice to have')).toBeInTheDocument()
   })
 })
+
+describe('hand-in - the stage strip never touches the link', () => {
+  const LINK = 'https://freeframe.aditor.ai/share/tok123'
+  const NOW = 1_800_000_000_000
+
+  it('shows the link above the strip whatever stage the review is in', async () => {
+    const { computeStages } = await import('@/lib/stages')
+    const stages = [
+      computeStages({ file: 'uploading', startedAt: NOW, review: null, now: NOW }),
+      computeStages({ file: 'processing', startedAt: NOW - 50 * 60_000, review: null, now: NOW }),
+      computeStages({ file: 'ready', startedAt: NOW, review: 'unreachable', now: NOW }),
+      computeStages({ file: 'ready', startedAt: NOW, review: { stage: 'failed', failedKind: 'on-our-side' }, now: NOW }),
+      computeStages({ file: 'ready', startedAt: NOW, review: { stage: 'done', clean: false }, now: NOW }),
+    ]
+    for (const stageView of stages) {
+      const { unmount } = render(<HandinResult shareUrl={LINK} reviews={[{ review: { state: 'pending' }, stageView }]} />)
+      expect(screen.getByTestId('handin-share-link')).toBeInTheDocument()
+      expect(screen.getByDisplayValue(LINK)).toBeInTheDocument()
+      const result = screen.getByTestId('handin-result')
+      const link = screen.getByTestId('handin-share-link')
+      const strip = screen.getByTestId('stage-strip')
+      expect(result.firstElementChild).toBe(link)
+      expect(link.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      unmount()
+    }
+  })
+
+  it('keeps a specific note (trouble reaching Trello) beside the strip, drops only the generic line', async () => {
+    const { computeStages } = await import('@/lib/stages')
+    const stageView = computeStages({ file: 'ready', startedAt: NOW, review: { stage: 'waiting' }, now: NOW })
+    const { unmount } = render(
+      <HandinResult shareUrl={LINK} reviews={[{ review: { state: 'pending', note: "We're having trouble reaching Trello to start your review." }, stageView }]} />,
+    )
+    expect(screen.getByText(/having trouble reaching Trello/)).toBeInTheDocument()
+    unmount()
+    render(<HandinResult shareUrl={LINK} reviews={[{ review: { state: 'pending', note: 'The review will appear here.' }, stageView }]} />)
+    expect(screen.queryByText(/The review will appear here/)).toBeNull()
+  })
+})

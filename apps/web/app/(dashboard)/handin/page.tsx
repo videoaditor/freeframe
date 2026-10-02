@@ -40,6 +40,7 @@ import {
   type DeliveryStatus,
 } from "@/lib/handin";
 import { HandinResult, ProcessingFailureNotice } from "@/components/handin/handin-result";
+import { computeStages, isTerminalReview, type FileFacts, type ReviewFacts, type StageView } from "@/lib/stages";
 import { DeliverButton } from "@/components/handin/deliver-button";
 import { WorkspacePicker, type WorkspaceChoice } from "@/components/handin/workspace-picker";
 import { UploadZone } from "@/components/upload/upload-zone";
@@ -103,6 +104,13 @@ export default function HandinPage() {
   }, []);
 
   const startUpload = useUploadStore((s) => s.startUpload);
+
+  // Redraw the minutes in the stage strip without asking anybody anything.
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
   // The upload store keeps tracking each file's processing status after this page's own
   // `waitForUpload` has already resolved (it resolves as soon as processing STARTS, not when it
   // finishes) - the global SSE bridge + poll fallback keep it current. So a transcode that fails
@@ -115,6 +123,36 @@ export default function HandinPage() {
     }
     return map;
   }, [uploadFiles]);
+
+  /**
+   * Where each handed-in video is: Upload, Processing, Reviewing, Done. Joins what this browser's
+   * upload tracker knows (the file) with what the review tool says (the review). A review that
+   * could not be reached is "unavailable", never a review quietly still running.
+   */
+  const stageFor = (assetId: string): StageView => {
+    const up = uploadFiles.find((f) => f.assetId === assetId);
+    const file: FileFacts = !up
+      ? "unknown"
+      : up.status === "complete"
+        ? "ready"
+        : up.status === "processing"
+          ? "processing"
+          : up.status === "failed"
+            ? "failed"
+            : up.status === "uploading" || up.status === "pending"
+              ? "uploading"
+              : "unknown";
+    const r = reviews[assetId];
+    const review: ReviewFacts = !r
+      ? null
+      : r.state === "pending" && r.unreachable
+        ? "unreachable"
+        : (r.stage ??
+          (r.state === "ready"
+            ? { stage: "done", clean: !(r.worthFixing ?? []).length && !(r.niceToHave ?? []).length }
+            : { stage: "waiting" }));
+    return computeStages({ file, startedAt: up?.createdAt, review, now: nowMs });
+  };
   // Who is delivering, so the delivery comment carries their name. FreeFrame already knows the
   // signed-in editor; the editor never types it.
   const user = useAuthStore((s) => s.user);
@@ -188,7 +226,9 @@ export default function HandinPage() {
         for (const [id, r] of results) next[id] = r;
         return next;
       });
-      return results.every(([, r]) => r.state === "ready");
+      // Done only when every review is final: a `ready` whose stage is still `reading` is an
+      // EARLIER version's notes while the new one is being read, so keep asking.
+      return results.every(([, r]) => r.state === "ready" && isTerminalReview(r.stage));
     }
 
     let timer: ReturnType<typeof setInterval> | undefined;
@@ -429,6 +469,7 @@ export default function HandinPage() {
               label: assets.length > 1 ? a.name : undefined,
               review: reviews[a.id] ?? null,
               failedDetail: processingFailures[a.id],
+              stageView: stageFor(a.id),
             }))}
           />
           {/* A way back into FreeFrame itself: open the folder these videos landed in, inside the

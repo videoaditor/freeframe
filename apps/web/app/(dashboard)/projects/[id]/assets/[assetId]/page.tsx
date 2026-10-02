@@ -13,6 +13,7 @@ import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput } from '@/components/review/comment-input'
 // ApprovalBar removed for now
 import { VersionSwitcher } from '@/components/review/version-switcher'
+import { VersionStage } from '@/components/review/version-stage'
 import { ShareDialog } from '@/components/review/share-dialog'
 import { CompareOverlay } from '@/components/review/compare/compare-overlay'
 import { useReviewStore } from '@/stores/review-store'
@@ -452,6 +453,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           </button>
         </div>
       </div>
+
+      {/* Where the newest version is: upload, processing, review */}
+      {asset && <VersionStage assetId={asset.id} versions={versions} />}
 
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       {compareOpen && asset && currentVersion && canCompare(asset.asset_type, versions) ? (
