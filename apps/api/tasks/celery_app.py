@@ -75,6 +75,10 @@ celery_app.conf.beat_schedule = {
         "task": "reap_stale_uploads",
         "schedule": crontab(minute="0"),  # every hour
     },
+    "fail-stuck-processing": {
+        "task": "fail_stuck_processing",
+        "schedule": crontab(minute="*/5"),
+    },
     "cleanup-soft-deleted": {
         "task": "cleanup_soft_deleted",
         "schedule": crontab(minute=0, hour=3),  # daily at 03:00 UTC
