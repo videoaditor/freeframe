@@ -28,7 +28,12 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+# acks_late: the job is confirmed to the broker only when it finishes. Confirmed on receipt (the
+# default), a worker that restarts or dies mid-encode - a deploy, an out-of-memory kill - loses the
+# job outright and the version stays "Processing" forever; unconfirmed, the broker redelivers it.
+# reject_on_worker_lost is deliberately NOT set: a file that kills its worker every time would then
+# be redelivered in a loop.
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, acks_late=True)
 def process_asset(self, asset_id: str, version_id: str):
     """Main processing task dispatched after upload completes."""
     db = SessionLocal()
