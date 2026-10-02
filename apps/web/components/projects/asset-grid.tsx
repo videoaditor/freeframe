@@ -42,6 +42,7 @@ interface AssetGridProps {
   fileSizes?: Record<string, number>
   selectedAssetId?: string | null
   onUpload?: () => void
+  uploadLabel?: string
   onAssetSelect?: (asset: Asset, e?: React.MouseEvent) => void
   onAssetOpen?: (asset: Asset) => void
   folders?: Folder[]
@@ -94,6 +95,7 @@ export function AssetGrid({
   fileSizes = {},
   selectedAssetId,
   onUpload,
+  uploadLabel = 'Upload',
   onAssetSelect,
   onAssetOpen,
   folders,
@@ -351,8 +353,9 @@ export function AssetGrid({
           <EmptyState
             icon={Layers}
             title="No assets"
-            description="Upload your first asset to get started."
-            action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
+            className={uploadLabel === 'Upload' ? undefined : '[&_button]:min-h-11'}
+            description={uploadLabel === 'Upload' ? 'Upload your first asset to get started.' : 'Request files from your editor to get started.'}
+            action={onUpload ? { label: uploadLabel, onClick: onUpload } : undefined}
           />
         </div>
       ) : layout === 'grid' && filtered.length > 0 ? (

@@ -187,7 +187,10 @@ def create_folder(
     # nobody finds out until somebody asks why a review never came.
     #
     # Off unless an instance sets the pattern, exactly like the project rule.
-    _check_folder_description_requirement(body.description)
+    # Customers collect editor deliveries through requests, without internal Trello automation.
+    customer = getattr(current_user, "is_staff", True) is False
+    if not customer:
+        _check_folder_description_requirement(body.description)
 
     folder = Folder(
         project_id=project_id,
@@ -200,7 +203,7 @@ def create_folder(
     db.flush()
     # A standing link for the automation, created WITH the hand-in so nobody has to remember.
     # Off unless a webhook URL is configured. See services/automation_share.py.
-    link = automation_share.create_standing_folder_link(db, project_id, folder.id, current_user.id)
+    link = None if customer else automation_share.create_standing_folder_link(db, project_id, folder.id, current_user.id)
     db.commit()
     db.refresh(folder)
     # Announce AFTER the commit: a webhook that fires for a folder the database then rolls back

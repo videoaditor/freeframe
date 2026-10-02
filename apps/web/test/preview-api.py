@@ -98,7 +98,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_): pass
     def send(self, value, code=200):
         body=json.dumps(value).encode(); self.send_response(code)
-        for k,v in {'Content-Type':'application/json','Access-Control-Allow-Origin':'http://localhost:3200','Access-Control-Allow-Headers':'authorization,content-type','Access-Control-Allow-Methods':'GET,POST,PATCH,PUT,OPTIONS','Access-Control-Expose-Headers':'ETag','ETag':'preview-part','Content-Length':str(len(body))}.items(): self.send_header(k,v)
+        for k,v in {'Content-Type':'application/json','Access-Control-Allow-Origin':'http://localhost:3200','Access-Control-Allow-Headers':'authorization,content-type,x-freeframe-token','Access-Control-Allow-Methods':'GET,POST,PATCH,PUT,OPTIONS','Access-Control-Expose-Headers':'ETag','ETag':'preview-part','Content-Length':str(len(body))}.items(): self.send_header(k,v)
         self.end_headers(); self.wfile.write(body)
     def do_OPTIONS(self): self.send({})
     def do_PATCH(self):

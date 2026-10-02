@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectCard } from "@/components/projects/project-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { RequestSheet } from "@/components/v2/request-sheet";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePageTitle } from "@/hooks/use-page-title";
 import type { Project, ProjectType } from "@/types";
@@ -210,6 +211,8 @@ export default function ProjectsPage() {
   usePageTitle("Projects");
   const router = useRouter();
   const { user, isSuperAdmin } = useAuthStore();
+  const isCustomer = user?.is_staff === false;
+  const [requestOpen, setRequestOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -223,6 +226,7 @@ export default function ProjectsPage() {
 
   const {
     data: projects,
+    error,
     isLoading,
     mutate,
   } = useSWR<Project[]>("/projects", () => api.get<Project[]>("/projects"));
@@ -260,10 +264,10 @@ export default function ProjectsPage() {
   // still opens by direct link (/projects/<id>), via instance-wide access. Superadmins keep the full
   // view so they can still find and clean up the junk (the folder consolidation).
   const showJunkSections = isSuperAdmin;
-  const hasVisibleProjects = showJunkSections
+  const hasVisibleProjects = isCustomer || showJunkSections
     ? !!(projects && projects.length > 0)
     : workspaces.length > 0;
-  const shownCount = showJunkSections ? (projects?.length ?? 0) : workspaces.length;
+  const shownCount = isCustomer || showJunkSections ? (projects?.length ?? 0) : workspaces.length;
 
   const resetForm = () => {
     setForm({ name: "", description: "", project_type: "personal" });
@@ -300,12 +304,12 @@ export default function ProjectsPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-text-primary">Projects</h1>
           {shownCount > 0 && (
             <p className="mt-0.5 text-sm text-text-tertiary">
-              {shownCount} {showJunkSections ? "project" : "workspace"}
+              {shownCount} {isCustomer || showJunkSections ? "project" : "workspace"}
               {shownCount !== 1 ? "s" : ""}
             </p>
           )}
@@ -342,9 +346,9 @@ export default function ProjectsPage() {
           {/* Editors hand in through /handin, which files into the right brand workspace and
               delivers to the Trello card. This is their primary action; only an admin creates a
               workspace (the New Project dialog below). */}
-          <Button size="sm" onClick={() => router.push("/handin")}>
-            <Upload className="h-4 w-4" />
-            Upload
+          <Button size="sm" className={isCustomer ? "min-h-11" : undefined} onClick={() => isCustomer ? setRequestOpen(true) : router.push("/handin")}>
+            {isCustomer ? <Plus className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+            {isCustomer ? "Request files" : "Upload"}
           </Button>
 
           {isSuperAdmin && (
@@ -439,9 +443,19 @@ export default function ProjectsPage() {
             </div>
           ))}
         </div>
+      ) : error ? (
+        <EmptyState title="Unable to load projects. Try again." action={{ label: "Retry", onClick: () => mutate() }} />
       ) : !hasVisibleProjects ? (
         <div className="rounded-xl border border-border bg-bg-secondary">
-          {isSuperAdmin ? (
+          {isCustomer ? (
+            <EmptyState
+              icon={FolderOpen}
+              title="No projects yet"
+              className="[&_button]:min-h-11"
+              description="Request files from your editor. Their uploads appear in your brand workspace."
+              action={{ label: "Request files", onClick: () => setRequestOpen(true) }}
+            />
+          ) : isSuperAdmin ? (
             <EmptyState
               icon={FolderOpen}
               title="No workspaces yet"
@@ -465,7 +479,19 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {workspaces.length > 0 && (
+          {isCustomer && (
+            <ProjectSection
+              title="Brand workspaces"
+              icon={<Building2 className="h-4 w-4 text-text-tertiary" />}
+              projects={projects ?? []}
+              viewMode={viewMode}
+              emptyMessage=""
+              showRole
+              userId={user?.id}
+              onMutate={() => mutate()}
+            />
+          )}
+          {!isCustomer && workspaces.length > 0 && (
             <ProjectSection
               title="Workspaces"
               icon={<Building2 className="h-4 w-4 text-text-tertiary" />}
@@ -481,7 +507,7 @@ export default function ProjectsPage() {
           {/* The junk sections (per-card projects that are not brand workspaces) are shown to
               superadmins ONLY - they need them to find and clean up the ~90 stray projects. Editors
               get the Workspaces-only view above; a stray project stays reachable by direct link. */}
-          {showJunkSections && myProjects.length > 0 && (
+          {!isCustomer && showJunkSections && myProjects.length > 0 && (
           <ProjectSection
             title="My Projects"
             icon={<FolderOpen className="h-4 w-4 text-text-tertiary" />}
@@ -492,7 +518,7 @@ export default function ProjectsPage() {
             onMutate={() => mutate()}
           />
           )}
-          {showJunkSections && sharedProjects.length > 0 && (
+          {!isCustomer && showJunkSections && sharedProjects.length > 0 && (
             <ProjectSection
               title="Shared with Me"
               icon={<Share2 className="h-4 w-4 text-text-tertiary" />}
@@ -504,7 +530,7 @@ export default function ProjectsPage() {
               onMutate={() => mutate()}
             />
           )}
-          {showJunkSections && publicProjects.length > 0 && (
+          {!isCustomer && showJunkSections && publicProjects.length > 0 && (
             <ProjectSection
               title="Public Projects"
               icon={<Globe className="h-4 w-4 text-text-tertiary" />}
@@ -517,6 +543,7 @@ export default function ProjectsPage() {
           )}
         </div>
       )}
+      {isCustomer && <RequestSheet open={requestOpen} onOpenChange={setRequestOpen} onCreated={() => mutate()} />}
     </div>
   );
 }
