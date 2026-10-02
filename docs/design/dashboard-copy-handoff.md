@@ -36,9 +36,17 @@ Keep semantic h1, navigation links, icon labels and focus states. Preserve contr
 None: apply Alan’s explicit preference for direct copy and remove the duplicate page label.
 
 ## 9. Review checklist
-- [ ] Actual browser screenshots at mobile and desktop widths viewed.
-- [ ] Root toolbar names the app, content names the page once.
-- [ ] Account/search and primary actions remain accessible.
-- [ ] Detail breadcrumbs still navigate parents.
-- [ ] Existing functional empty/loading/error copy retained.
+- [x] Actual browser screenshots at mobile and desktop widths viewed.
+- [x] Root toolbar names the app, content names the page once.
+- [x] Account/search and primary actions remain accessible.
+- [x] Detail breadcrumbs still navigate parents.
+- [x] Existing functional empty/loading/error copy retained.
 No new component or motion decisions. References: Apple HIG Writing and existing UI skills.
+
+| Before | After | Why |
+|---|---|---|
+| Page name in toolbar and h1 | Configured app name in toolbar, existing h1 once | Separate app identity from page identity |
+| Decorative overview/rules slogans | Functional headings and instructions | Reduce reading and use direct language |
+| Nested and folder breadcrumb links | Existing links retained | Preserve parent navigation |
+
+Verification: source review found no important issues. Live 390px light-theme layout screenshot viewed: title/action fit, toolbar actions and bottom tabs remain accessible, no horizontal overflow. Desktop Whop dark-theme reload verified: same owner workspace and loaded metrics, toolbar app name, one content title. Brand rules at390px also verified without the decorative subtitle. Before/after screenshots exclude account details. Browser resizing tests layout only; Alan separately supplied successful native iPhone sign-in evidence.
