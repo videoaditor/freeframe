@@ -15,6 +15,23 @@ from unittest.mock import MagicMock
 import pytest
 
 
+def test_customer_folder_does_not_require_or_announce_an_internal_trello_card(monkeypatch):
+    from apps.api.routers import folders
+    from apps.api.config import settings
+    from apps.api.schemas.folder import FolderCreate
+    db = MagicMock()
+    user = MagicMock(id=uuid.uuid4(), is_staff=False)
+    monkeypatch.setattr(settings, 'require_folder_description_pattern', r'trello\.com/c/')
+    monkeypatch.setattr(folders, 'require_project_role', lambda *args: None)
+    monkeypatch.setattr(folders, '_folder_to_response', lambda db, folder: folder)
+    announce = MagicMock()
+    monkeypatch.setattr(folders.automation_share, 'create_standing_folder_link', announce)
+    folder = folders.create_folder(uuid.uuid4(), FolderCreate(name='Launch files'), db, user)
+    assert folder.name == 'Launch files'
+    announce.assert_not_called()
+    db.commit.assert_called_once()
+
+
 def test_no_standing_folder_link_when_no_webhook_is_configured():
     from apps.api.services import automation_share
     from apps.api.config import settings

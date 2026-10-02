@@ -47,6 +47,7 @@ import {
   ShareLinkSettingsPanel,
 } from "@/components/projects/share-link-detail";
 import { NameDialog } from "@/components/projects/name-dialog";
+import { RequestSheet } from "@/components/v2/request-sheet";
 import { ShareCreateDialog } from "@/components/projects/share-create-dialog";
 import { ProjectMembersDialog } from "@/components/projects/project-members-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -125,6 +126,8 @@ export default function ProjectDetailPage() {
 
   const { files: uploadFiles, startUpload, startVersionUpload } = useUploadStore();
   const { user } = useAuthStore();
+  const isCustomer = user?.is_staff === false;
+  const [requestOpen, setRequestOpen] = React.useState(false);
 
   const {
     tree,
@@ -728,7 +731,7 @@ export default function ProjectDetailPage() {
               authorNames={authorNames}
               fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
-              onUpload={() => router.push("/handin")}
+              onUpload={canUpload ? () => isCustomer ? setRequestOpen(true) : router.push("/handin") : undefined}
               onAssetSelect={(asset, e) => {
                 e?.stopPropagation();
                 setSelectedAsset(asset as AssetResponse);
@@ -871,9 +874,9 @@ export default function ProjectDetailPage() {
                   {/* Uploading goes through the hand-in page, so every upload carries its Trello
                       card and gets reviewed. See apps/web/app/(dashboard)/handin. */}
                   {canUpload && (
-                    <Button size="sm" onClick={() => router.push("/handin")}>
-                      <Upload className="h-4 w-4" />
-                      Upload
+                    <Button size="sm" className={isCustomer ? "min-h-11" : undefined} onClick={() => isCustomer ? setRequestOpen(true) : router.push("/handin")}>
+                      {isCustomer ? <Plus className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                      {isCustomer ? "Request files" : "Upload"}
                     </Button>
                   )}
                   {/* Saskia, 2026-09-16: a folder that's already been reviewed needs a way to take
@@ -1210,6 +1213,7 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Create folder dialog */}
+      {isCustomer && <RequestSheet open={requestOpen} onOpenChange={setRequestOpen} initialProjectId={projectId} onCreated={() => { mutateAssets(); mutateSubfolders(); }} />}
       <NameDialog
         open={folderDialogOpen}
         onOpenChange={setFolderDialogOpen}
@@ -1218,11 +1222,11 @@ export default function ProjectDetailPage() {
         submitLabel="Create"
         /* The card box appears only where an instance asks for one. Requiring the link server-side
          * while giving nobody somewhere to type it would just stop people creating folders. */
-        extraField={
+        extraField={!isCustomer ? (
           FOLDER_LINK_LABEL
             ? { label: FOLDER_LINK_LABEL, placeholder: FOLDER_LINK_PLACEHOLDER, required: true }
             : undefined
-        }
+        ) : undefined}
         onSubmit={async (name, description) => {
           await createFolder(name, folderDialogParentId, description);
           mutateAssets();

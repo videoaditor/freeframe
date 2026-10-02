@@ -21,10 +21,11 @@ import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
 import { BrandLogo } from './brand-logo'
 
-export function RequestSheet({ open, onOpenChange, onCreated }: {
+export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated?: (r: FileRequest) => void
+  initialProjectId?: string
 }) {
   const user = useAuthStore((s) => s.user)
   const isCustomer = user?.is_staff === false
@@ -35,7 +36,7 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
     [projects, isCustomer],
   )
 
-  const [projectId, setProjectId] = React.useState('')
+  const [projectId, setProjectId] = React.useState(initialProjectId || '')
   const [newBrand, setNewBrand] = React.useState('')
   const [title, setTitle] = React.useState('')
   const [briefFile, setBriefFile] = React.useState<File | null>(null)
@@ -50,7 +51,8 @@ export function RequestSheet({ open, onOpenChange, onCreated }: {
   React.useEffect(() => {
     if (!open) return
     setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError('')
-  }, [open])
+    if (initialProjectId) setProjectId(initialProjectId)
+  }, [open, initialProjectId])
   React.useEffect(() => { if (!projectId && brands.length) setProjectId(brands[0].id) }, [brands, projectId])
   // Only once the list has loaded - otherwise the brand-name field flashes up and steals focus.
   const needsBrand = !!projects && !brands.length
