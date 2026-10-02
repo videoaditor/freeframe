@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 
 ### Fixed
+- Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Production containers provide the non-root user home required by Gunicorn's control socket.
 - Ready status now requires successful review of every current submitted version; outages, malformed evidence and failed revisions retain file access without claiming a pass.
 - Retention cleanup removes request records before reclaiming their folders and assets, and preserves failed delivery evidence until normal retention applies.

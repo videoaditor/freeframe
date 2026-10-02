@@ -100,7 +100,7 @@ it('uses one compact disclosure per editor and keeps extra metrics inside it', (
   expect(row.querySelector('details')).not.toHaveAttribute('open')
   expect(row).toHaveTextContent('1.1 versions per video')
   expect(screen.getByRole('button', { name: 'Invite via file request' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Never say the same thing twice/ })).toHaveAttribute('href', '/rules')
+  expect(screen.getByRole('link', { name: /Brand guidelines/ })).toHaveAttribute('href', '/rules')
 })
 
 it('does not fall back to an upload link when a delivery token is missing', () => {
