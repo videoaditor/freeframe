@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { useViewStore } from '@/stores/view-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
+import { useBrandingStore } from '@/stores/branding-store'
 
 interface HeaderProps {
   onSearchOpen: () => void
@@ -59,14 +60,16 @@ export function Header({ onSearchOpen }: HeaderProps) {
   const pathname = usePathname()
   const { rightPanelOpen, toggleRightPanel } = useViewStore()
   const { labels, extraCrumbs } = useBreadcrumbStore()
+  const orgName = useBrandingStore(s => s.orgName)
+  const rootPage = ['/home', '/rules', '/insights', '/projects'].includes(pathname) && extraCrumbs.length === 0
   const urlCrumbs = buildBreadcrumbs(pathname, labels)
   const breadcrumbs = [...urlCrumbs, ...extraCrumbs.map((c) => ({ label: c.label, href: c.href ?? '' }))]
 
   return (
     <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4 sm:px-8">
       {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1 text-[13px]">
-        {breadcrumbs.map((crumb, index) => {
+      <nav className="min-w-0 flex items-center gap-1 text-[13px]">
+        {rootPage ? <span className="truncate font-medium text-text-primary">{orgName}</span> : breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1
           return (
             <React.Fragment key={`${crumb.href}-${index}`}>

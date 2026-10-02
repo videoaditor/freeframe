@@ -5,7 +5,6 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowUpRight, Plus, Timer, BookOpen, CheckCheck, Search, X, ArrowRight, Pause, Play, Trophy, Crown, ChevronDown } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { editorAccuracy, getEditors, getTimeSaved, hours, listRequests, type FileRequest, type TimeSaved } from '@/lib/platform'
 import { RequestSheet } from '@/components/v2/request-sheet'
@@ -18,7 +17,6 @@ type Filter = 'All' | 'Ready'
 
 export default function HomePage() {
   usePageTitle('Overview')
-  const user = useAuthStore(s => s.user)
   const [sheet, setSheet] = React.useState(false)
   const [sharing, setSharing] = React.useState<FileRequest | null>(null)
   const [filter, setFilter] = React.useState<Filter>('All')
@@ -43,8 +41,7 @@ export default function HomePage() {
     <div className="owner-overview mx-auto w-full max-w-[1320px] px-4 pb-12 pt-6 sm:px-8 lg:px-12 lg:pt-10">
       <div className="flex flex-wrap items-center justify-between gap-5">
         <div>
-          <p className="text-[0.9375rem] text-text-secondary">Your creative work, in a good place.</p>
-          <h1 className="mt-1 text-[2.125rem] font-semibold leading-tight tracking-[-0.035em]">Overview<span className="text-accent">.</span></h1>
+          <h1 className="text-[2.125rem] font-semibold leading-tight tracking-[-0.035em]">Overview<span className="text-accent">.</span></h1>
         </div>
         <button type="button" onClick={() => setSheet(true)} className="press inline-flex h-12 items-center gap-2 rounded-full bg-accent px-5 text-[0.9375rem] font-semibold text-text-inverse hover:bg-accent-hover">
           <Plus size={18} /> Request files
@@ -133,10 +130,9 @@ export default function HomePage() {
             )}
             <details className="mt-2 border-t border-border text-[0.75rem] leading-relaxed text-text-secondary"><summary className="min-h-11 cursor-pointer py-3">How this is measured</summary><p className="mt-2">Share a file request. Editors enter their name and email and join after their first upload.</p><p className="mt-2">Only reviewed first versions count. Pending or unavailable reviews are excluded. A new version is not a new video. Fewer than 5 reviewed videos is marked as a small sample. The overview averages each rated editor equally, over all available history. The notification marks editors at least 20 percentage points above or below that average. It appears only with at least 3 editors who each have 5 reviewed videos; smaller samples never receive a marker.</p></details>
           </section>
-          <Link href="/rules" className="guidelines-nudge press group"><span className="guidelines-book" aria-hidden="true"><BookOpen size={23} /></span><div className="min-w-0 flex-1"><p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-accent">Your playbook</p><h2 className="mt-1 text-[0.9375rem] font-semibold leading-snug tracking-tight">Never say the same thing twice</h2><p className="mt-1 text-[0.75rem] text-text-secondary">Check your brand guidelines.</p></div><ArrowRight size={17} className="shrink-0 text-accent" /></Link>
+          <Link href="/rules" className="guidelines-nudge press group"><span className="guidelines-book" aria-hidden="true"><BookOpen size={23} /></span><div className="min-w-0 flex-1"><h2 className="text-[0.9375rem] font-semibold leading-snug tracking-tight">Brand guidelines</h2><p className="mt-1 text-[0.75rem] text-text-secondary">Review and update your brand rules.</p></div><ArrowRight size={17} className="shrink-0 text-accent" /></Link>
         </aside>
       </div>
-      <p className="mt-8 text-[0.75rem] text-text-secondary">{user?.name ? `${user.name.split(' ')[0]}’s workspace` : 'Your workspace'} <span className="px-1.5">·</span> A little less reviewing. A little more creating.</p>
       <RequestSheet open={sheet} onOpenChange={setSheet} onCreated={() => mutate()} />
       <Dialog.Root open={!!sharing} onOpenChange={open => { if (!open) setSharing(null) }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" /><Dialog.Content className="owner-sheet sheet-in fixed inset-x-4 top-[15vh] z-50 mx-auto max-h-[75vh] max-w-lg overflow-y-auto rounded-3xl border border-border bg-bg-elevated p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-[1.375rem] font-semibold tracking-tight">{sharing?.assets ? 'Share files' : 'Share upload link'}</Dialog.Title><Dialog.Description className="mt-1 text-[0.9375rem] text-text-secondary">{sharing?.title}</Dialog.Description></div><Dialog.Close aria-label="Close share dialog" className="press grid h-11 w-11 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div>
