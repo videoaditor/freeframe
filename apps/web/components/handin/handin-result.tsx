@@ -155,10 +155,52 @@ export function ReviewPanel({ review, label }: { review: GateReview | null; labe
   );
 }
 
-/** One video's review, with the file name to label it when a hand-in has several. */
+/**
+ * A video whose processing failed on the server (transcode gave up after retries).
+ *
+ * Distinct from `ReviewPanel`'s "pending" state: that one is still coming, this
+ * one is never coming. An editor staring at "The review will appear here when it
+ * is ready" forever, for a file that died minutes ago, is the exact silent
+ * failure this notice exists to close.
+ *
+ * The message stays editor-actionable - try again, or ask for help - and never
+ * repeats the backend's own error text, which is written for someone reading
+ * logs, not someone waiting on a hand-in. That detail still goes to the
+ * console, so it is not lost, just not shown.
+ */
+export function ProcessingFailureNotice({ label, detail }: { label?: string; detail?: string }) {
+  React.useEffect(() => {
+    if (detail) {
+      // eslint-disable-next-line no-console
+      console.error(`Hand-in: asset processing failed${label ? ` (${label})` : ""}: ${detail}`);
+    }
+  }, [label, detail]);
+
+  return (
+    <section
+      data-testid="handin-processing-failed"
+      className="mt-6 rounded-lg border border-red-500/40 bg-red-500/5 p-4 text-sm"
+    >
+      <h2 className="font-medium text-text-primary">Craft review</h2>
+      {label && <p className="mt-0.5 truncate text-xs text-text-tertiary">{label}</p>}
+      <p className="mt-2 text-text-secondary">
+        This file failed to process. Try re-uploading it. If that doesn&apos;t work, write into
+        Bug Catches.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * One video's review, with the file name to label it when a hand-in has several.
+ *
+ * `failedDetail` set means processing itself never finished - there is no review
+ * to wait for, and no review to render. It takes priority over `review`.
+ */
 export interface HandinReviewItem {
   review: GateReview | null;
   label?: string;
+  failedDetail?: string;
 }
 
 /**
@@ -181,9 +223,13 @@ export function HandinResult({
   return (
     <div data-testid="handin-result">
       <ShareLinkPanel url={shareUrl} />
-      {reviews.map((item, i) => (
-        <ReviewPanel key={i} review={item.review} label={item.label} />
-      ))}
+      {reviews.map((item, i) =>
+        item.failedDetail !== undefined ? (
+          <ProcessingFailureNotice key={i} label={item.label} detail={item.failedDetail} />
+        ) : (
+          <ReviewPanel key={i} review={item.review} label={item.label} />
+        ),
+      )}
     </div>
   );
 }
