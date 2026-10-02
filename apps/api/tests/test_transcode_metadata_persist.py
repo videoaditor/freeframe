@@ -46,3 +46,20 @@ def test_process_audio_persists_duration():
 
     assert media_file.duration_seconds == 12.5
     assert media_file.s3_key_processed == "k.mp3"
+
+
+def test_process_asset_is_confirmed_late_and_workers_do_not_hoard_jobs():
+    """A worker killed mid-encode must not silently lose the job (acks_late), and with late acks a
+    worker reserving several jobs per slot would let a long queue time out its own reservations
+    and run the same file twice - so one job at a time and a visibility timeout above any encode."""
+    from apps.api.tasks.celery_app import celery_app
+    from apps.api.tasks.transcode_tasks import process_asset
+    from packages.transcoder.ffmpeg_transcoder import encode_timeout_seconds
+
+    assert process_asset.acks_late is True
+    assert process_asset.reject_on_worker_lost is not True   # would loop on a file that kills its worker
+    assert celery_app.conf.worker_prefetch_multiplier == 1
+    # A job unconfirmed for longer than this is handed to a second worker, so no encode of a video
+    # up to 30 minutes long may be allowed to outlive its own reservation.
+    visibility = celery_app.conf.broker_transport_options["visibility_timeout"]
+    assert encode_timeout_seconds(30 * 60) <= visibility

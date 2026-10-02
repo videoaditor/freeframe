@@ -27,6 +27,31 @@ logger = logging.getLogger("transcoder.ffmpeg")
 # box, where starving the pool would cost real throughput.
 FFMPEG_THREADS = max(1, int(os.getenv("FFMPEG_THREADS", "2")))
 
+# The encode reads its input straight from storage over HTTP (a presigned URL). With no read
+# timeout, a stalled connection leaves ffmpeg waiting until the whole-encode timeout below - up to
+# 4 hours - while holding one of the few transcoding slots, and the editor's version sits in
+# "Processing" the entire time. A read that makes no progress for FFMPEG_INPUT_RW_TIMEOUT_SECONDS
+# now fails (and Celery retries the job) instead of hanging; short drops are reconnected
+# transparently. Only long-standing options (reconnect* since ffmpeg 3.x, rw_timeout older),
+# because the production image installs Debian's ffmpeg, not the newest one.
+FFMPEG_INPUT_RW_TIMEOUT_SECONDS = max(5, int(os.getenv("FFMPEG_INPUT_RW_TIMEOUT_SECONDS", "60")))
+INPUT_NET_ARGS = [
+    "-rw_timeout", str(FFMPEG_INPUT_RW_TIMEOUT_SECONDS * 1_000_000),  # microseconds
+    "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30",
+]
+
+# Wall-clock cap for the whole encode. It used to be a flat 4 hours, so a hung or crawling ffmpeg
+# kept a transcoding slot (of only 2) busy for 4 hours. The cap now scales with the video's
+# length - a long video legitimately needs longer - but never below this floor, never above 4 h.
+FFMPEG_ENCODE_TIMEOUT_SECONDS = max(600, int(os.getenv("FFMPEG_ENCODE_TIMEOUT_SECONDS", "2700")))
+FFMPEG_ENCODE_TIMEOUT_MAX_SECONDS = 14400
+
+
+def encode_timeout_seconds(duration_seconds: Optional[float]) -> int:
+    """Whole-encode timeout for a video of this length: 4x its duration, within [floor, 4 h]."""
+    scaled = int(4 * (duration_seconds or 0))
+    return min(FFMPEG_ENCODE_TIMEOUT_MAX_SECONDS, max(FFMPEG_ENCODE_TIMEOUT_SECONDS, scaled))
+
 
 def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
     """Parse ffprobe JSON (-show_streams -show_format) into VideoMetadata.
@@ -191,6 +216,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 "ffmpeg", "-y",
                 # Applies to the next file specified, i.e. the input decoder.
                 "-threads", str(FFMPEG_THREADS),
+                *INPUT_NET_ARGS,
                 "-i", input_url,
                 "-filter_complex", filter_complex,
                 "-filter_complex_threads", str(FFMPEG_THREADS),
@@ -227,8 +253,7 @@ class FFmpegTranscoder(BaseTranscoder):
             for q in qualities:
                 (hls_dir / q).mkdir(exist_ok=True)
 
-            # Timeout scales with expected duration - 4 hours for very large files
-            self._run(ffmpeg_cmd, timeout=14400, label="ffmpeg")
+            self._run(ffmpeg_cmd, timeout=encode_timeout_seconds(meta.duration_seconds if meta else 0), label="ffmpeg")
 
             # 4. Upload HLS files to S3
             uploaded_keys = []
