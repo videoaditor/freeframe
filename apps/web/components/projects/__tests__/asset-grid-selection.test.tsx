@@ -29,6 +29,13 @@ const assets = [makeAsset('a'), makeAsset('b'), makeAsset('c')]
 // selection, not just the tiny checkbox, while opening stays on double-click
 // (or the dedicated title-click affordance).
 describe('AssetGrid card-wide selection (Frame.io-style)', () => {
+  it('uses the customer request action for an empty project', () => {
+    const onUpload = vi.fn()
+    render(<AssetGrid assets={[]} projectId="p1" uploadLabel="Request files" onUpload={onUpload} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Request files' }))
+    expect(onUpload).toHaveBeenCalledOnce()
+    expect(screen.queryByText('Upload your first asset to get started.')).not.toBeInTheDocument()
+  })
   it('plain click on the card selects only that asset, replacing prior selection', () => {
     const onAssetSelect = vi.fn()
     const onAssetOpen = vi.fn()

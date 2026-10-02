@@ -14,7 +14,7 @@ afterEach(cleanup)
 it('starts a request in the brand whose project the owner opened', async () => {
   vi.mocked(api.get).mockResolvedValue([{ id: 'brand1', name: 'Northline' }, { id: 'brand2', name: 'Sunday Studio' }])
   render(<SWRConfig value={{ provider: () => new Map() }}><RequestSheet open initialProjectId="brand2" onOpenChange={vi.fn()} /></SWRConfig>)
-  await screen.findByText('Sunday Studio')
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Brand' })).toHaveTextContent('Sunday Studio'))
   fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'New delivery' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
   await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'brand2' })))

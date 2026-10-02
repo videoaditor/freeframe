@@ -732,6 +732,7 @@ export default function ProjectDetailPage() {
               fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
               onUpload={canUpload ? () => isCustomer ? setRequestOpen(true) : router.push("/handin") : undefined}
+              uploadLabel={isCustomer ? "Request files" : "Upload"}
               onAssetSelect={(asset, e) => {
                 e?.stopPropagation();
                 setSelectedAsset(asset as AssetResponse);
@@ -1213,7 +1214,7 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Create folder dialog */}
-      {isCustomer && <RequestSheet open={requestOpen} onOpenChange={setRequestOpen} initialProjectId={projectId} onCreated={() => { mutateAssets(); mutateSubfolders(); }} />}
+      {isCustomer && <RequestSheet open={requestOpen} onOpenChange={setRequestOpen} initialProjectId={projectId} onCreated={() => { mutateAssets(); mutateSubfolders(); mutateTree(); }} />}
       <NameDialog
         open={folderDialogOpen}
         onOpenChange={setFolderDialogOpen}
