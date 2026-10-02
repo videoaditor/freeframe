@@ -135,6 +135,16 @@ class Settings(BaseSettings):
     # the tab crashes or reloads instead of throwing a catchable JS error).
     stale_upload_timeout_hours: int = 4
 
+    # Watchdog for versions stuck in `processing`. Nothing else ever touches that status: a worker
+    # killed mid-transcode loses the task (it is acked at start), and a dispatch that never reached
+    # the broker is only logged, so either leaves the version "Processing" forever and the editor
+    # waiting with no way out. After this many minutes (counted from the version row's creation,
+    # i.e. upload + queue + transcode) it is marked `failed` so the UI says so. Minutes. 0 disables.
+    # Keep it above the slowest real upload-to-ready seen under queue contention (~64 min) and
+    # below stale_upload_timeout_hours, so the failure is visible before the reaper reclaims it. A
+    # genuinely slow job that finishes later still flips the version back to `ready`.
+    stuck_processing_timeout_minutes: int = 120
+
     # Retention GC: rows soft-deleted (deleted_at) longer than this are hard-deleted and their
     # S3 objects reclaimed. Days. 0 (or negative) DISABLES the sweep (matches the reaper convention).
     soft_delete_retention_days: int = 30

@@ -350,6 +350,52 @@ def reap_stale_uploads():
         db.close()
 
 
+def _fail_stuck_processing(db) -> list[tuple[str, str, str]]:
+    """Mark versions stuck in `processing` as `failed`. Mutates `db` but does NOT commit - the
+    caller owns the transaction. Returns (project_id, asset_id, version_id) per version so the
+    caller can announce it after the commit.
+
+    No re-dispatch on purpose: a job that is merely slow would then run twice against the same
+    output prefix. Failing it surfaces the problem to the editor; if the original job does finish
+    later it sets the version back to `ready` itself."""
+    minutes = settings.stuck_processing_timeout_minutes
+    if minutes <= 0:
+        log.info("watchdog: disabled (stuck_processing_timeout_minutes=%s)", minutes)
+        return []
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    rows = db.query(AssetVersion, Asset.project_id).join(Asset, Asset.id == AssetVersion.asset_id).filter(
+        AssetVersion.processing_status == ProcessingStatus.processing,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.created_at < cutoff,
+    ).all()
+    stuck = []
+    for v, project_id in rows:
+        v.processing_status = ProcessingStatus.failed
+        stuck.append((str(project_id), str(v.asset_id), str(v.id)))
+        log.warning("watchdog: version %s of asset %s stuck in processing for over %d min - marked failed",
+                    v.id, v.asset_id, minutes)
+    return stuck
+
+
+@celery_app.task(name="fail_stuck_processing")
+def fail_stuck_processing():
+    """Periodic beat task: stop a version showing "Processing" forever."""
+    db = SessionLocal()
+    try:
+        stuck = _fail_stuck_processing(db)
+        db.commit()
+    finally:
+        db.close()
+    # After the commit, so a UI that refetches on the event sees the committed `failed` state.
+    from .transcode_tasks import _publish_event
+    for project_id, asset_id, _version_id in stuck:
+        _publish_event(project_id, "transcode_failed", {
+            "asset_id": asset_id,
+            "error": f"no result after {settings.stuck_processing_timeout_minutes} minutes",
+        })
+    return len(stuck)
+
+
 def _run_cleanup(db) -> PurgeCounts:
     """Full cleanup pass: expire long-dead share links, then hard-delete aged soft-deletes.
     Mutates db; the caller (task wrapper or admin endpoint) owns the commit. Guarded by a

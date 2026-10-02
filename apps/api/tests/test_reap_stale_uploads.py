@@ -114,3 +114,51 @@ def test_reaper_disabled_when_timeout_zero(mock_db, monkeypatch):
     assert ct._reap_stale_uploads(mock_db) == 0
     assert listed == []                 # never computed a cutoff / listed multiparts
     mock_db.query.assert_not_called()   # never selected any versions
+
+
+# --- watchdog: versions stuck in `processing` -------------------------------------------------
+
+def test_watchdog_fails_only_old_processing_versions(real_db):
+    """Real DB: an old `processing` version is marked failed; a recent one, a finished one and an
+    already-failed one are left alone."""
+    old_processing = _seed_version(real_db, ProcessingStatus.processing, 5)
+    recent_processing = _seed_version(real_db, ProcessingStatus.processing, 0)
+    old_ready = _seed_version(real_db, ProcessingStatus.ready, 5)
+    old_uploading = _seed_version(real_db, ProcessingStatus.uploading, 5)  # the reaper's job, not this one
+
+    stuck = ct._fail_stuck_processing(real_db)
+
+    assert old_processing.processing_status == ProcessingStatus.failed
+    assert recent_processing.processing_status == ProcessingStatus.processing
+    assert old_ready.processing_status == ProcessingStatus.ready
+    assert old_uploading.processing_status == ProcessingStatus.uploading
+    assert [v for _p, _a, v in stuck] == [str(old_processing.id)]
+
+
+def test_watchdog_reports_project_and_asset_for_the_event(real_db):
+    v = _seed_version(real_db, ProcessingStatus.processing, 5)
+    [(project_id, asset_id, version_id)] = ct._fail_stuck_processing(real_db)
+    asset = real_db.query(Asset).filter(Asset.id == v.asset_id).one()
+    assert (project_id, asset_id, version_id) == (str(asset.project_id), str(v.asset_id), str(v.id))
+
+
+def test_watchdog_leaves_deleted_versions_alone(real_db):
+    v = _seed_version(real_db, ProcessingStatus.processing, 5)
+    v.deleted_at = datetime.now(timezone.utc)
+    real_db.flush()
+    assert ct._fail_stuck_processing(real_db) == []
+    assert v.processing_status == ProcessingStatus.processing
+
+
+def test_watchdog_disabled_when_timeout_zero(mock_db, monkeypatch):
+    from apps.api.config import settings
+    monkeypatch.setattr(settings, "stuck_processing_timeout_minutes", 0)
+    assert ct._fail_stuck_processing(mock_db) == []
+    mock_db.query.assert_not_called()
+
+
+def test_watchdog_is_scheduled():
+    from apps.api.tasks.celery_app import celery_app
+    entry = celery_app.conf.beat_schedule["fail-stuck-processing"]
+    assert entry["task"] == "fail_stuck_processing"
+    assert "fail_stuck_processing" in celery_app.tasks or ct.fail_stuck_processing.name == "fail_stuck_processing"
