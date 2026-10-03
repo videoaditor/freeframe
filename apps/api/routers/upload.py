@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime, timezone
 from ..database import get_db
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, get_identity_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
 from ..models.folder import Folder
@@ -24,6 +24,17 @@ from ..schemas.upload import (
 from ..services.storage import upload_guard_error
 
 router = APIRouter(prefix="/upload", tags=["upload"])
+
+
+def _campaign_upload_access(db, version):
+    from ..services.campaign_access import require_project_access
+    asset = db.get(Asset, version.asset_id)
+    if asset is None or asset.deleted_at is not None:
+        raise HTTPException(404, 'Asset not found')
+    project = db.get(Project, asset.project_id)
+    if project is None or project.deleted_at is not None:
+        raise HTTPException(404, 'Project not found')
+    require_project_access(db, project.created_by)
 
 @router.post("/initiate", response_model=InitiateUploadResponse)
 def initiate_upload(
@@ -136,7 +147,7 @@ def presign_part(
     version = db.query(AssetVersion).filter(AssetVersion.id == media_file.version_id).first()
     if not version or version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
-
+    _campaign_upload_access(db, version)
     url = presign_upload_part(body.s3_key, body.upload_id, body.part_number)
     return PresignPartResponse(presigned_url=url, part_number=body.part_number)
 
@@ -146,7 +157,7 @@ def complete_upload(
     body: CompleteUploadRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_identity_user),
 ):
     # Validate DB first
     version = db.query(AssetVersion).filter(
@@ -157,6 +168,13 @@ def complete_upload(
         raise HTTPException(status_code=404, detail="Version not found")
     if version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
+    media = db.query(MediaFile).filter(MediaFile.version_id == version.id,
+                                      MediaFile.s3_key_raw == body.s3_key).first()
+    if not media or version.asset_id != body.asset_id:
+        raise HTTPException(403, 'Not authorized for this upload')
+    if version.processing_status != ProcessingStatus.uploading:
+        return CompleteUploadResponse(status='processing', asset_id=version.asset_id, version_id=version.id)
+    _campaign_upload_access(db, version)
 
     # Then complete S3 multipart
     complete_multipart_upload(body.s3_key, body.upload_id, [p.model_dump() for p in body.parts])
@@ -181,7 +199,7 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
 def abort_upload(
     body: AbortUploadRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_identity_user),
 ):
     version = db.query(AssetVersion).filter(
         AssetVersion.id == body.version_id,
@@ -191,6 +209,12 @@ def abort_upload(
         raise HTTPException(status_code=404, detail="Version not found")
     if version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
+    media = db.query(MediaFile).filter(MediaFile.version_id == version.id,
+                                      MediaFile.s3_key_raw == body.s3_key).first()
+    if not media:
+        raise HTTPException(403, 'Not authorized for this upload')
+    if version.processing_status != ProcessingStatus.uploading:
+        return
 
     abort_multipart_upload(body.s3_key, body.upload_id)
     version.processing_status = ProcessingStatus.failed

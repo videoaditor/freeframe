@@ -51,13 +51,13 @@ export function ProductFeedback() {
   return (
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="ghost" size="lg" className="w-full justify-start px-3">
+        <Button variant="ghost" size="lg" className="shrink-0 justify-start px-3">
           <MessageSquare size={18} aria-hidden="true" />Give feedback
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 max-h-[90dvh] overflow-y-auto rounded-t-2xl border border-border bg-bg-secondary p-6 text-text-primary shadow-xl sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:max-h-none sm:w-[440px] sm:rounded-none">
+        <Dialog.Content className="owner-sheet fixed inset-x-0 bottom-0 z-50 max-h-[90dvh] overflow-y-auto rounded-t-2xl border border-border bg-bg-secondary p-6 text-text-primary shadow-xl sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:max-h-none sm:w-[440px] sm:rounded-none">
           <div className="flex items-center justify-between gap-4">
             <Dialog.Title className="text-[1.375rem] font-semibold leading-7">Give feedback</Dialog.Title>
             <Dialog.Close asChild><Button variant="ghost" size="lg" className="h-11 w-11 shrink-0 p-0" aria-label="Close feedback"><X size={20} /></Button></Dialog.Close>

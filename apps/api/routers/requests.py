@@ -188,9 +188,11 @@ def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = D
     assets = {r.id: _submitted_assets(db, r) for r in reqs}
     stats = review_bridge.asset_stats([str(a.id) for items in assets.values() for a in items])
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
-    return [_request_out(r, projects.get(r.project_id),
+    out = [_request_out(r, projects.get(r.project_id),
         _request_gate(_review_assets(db, r, assets[r.id], reviewer, stats, include_media=False), statuses.get(r.review_share_token)),
         len(assets[r.id])) for r in reqs]
+    db.commit()  # Persist observed campaign usage after assembling the response.
+    return out
 
 
 @router.delete("/requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -265,7 +267,7 @@ def import_rules(body: RulesImport, db: Session = Depends(get_db), current_user:
 
 # ── Editor: the public side of a request ───────────────────────────────────────
 
-def _live_request(db: Session, token: str) -> UploadRequest:
+def _live_request(db: Session, token: str, *, recovery=False) -> UploadRequest:
     req = db.query(UploadRequest).filter(UploadRequest.token == token).first()
     if not req:
         raise HTTPException(status_code=404, detail="This link does not exist.")
@@ -277,6 +279,9 @@ def _live_request(db: Session, token: str) -> UploadRequest:
     folder = db.query(Folder).filter(Folder.id == req.folder_id, Folder.deleted_at.is_(None)).first()
     if project is None or folder is None:
         raise HTTPException(status_code=410, detail="This link was closed by its owner.")
+    from ..services.campaign_access import require_project_access
+    if not recovery:
+        require_project_access(db, project.created_by)
     return req
 
 
@@ -439,11 +444,16 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
 
 @router.post("/r/{token}/upload/complete", dependencies=[Depends(rate_limit("request_upload", 60, 600))])
 def guest_complete(token: str, body: GuestComplete, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    req = _writable_request(db, token)
+    req = locked_request(db, _live_request(db, token, recovery=True).id)
     _, version = _owned_media(db, req, body.s3_key)
     # Completing twice (a retried request) must not re-trigger processing on a finished version.
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
+    # Only acknowledge already accepted bytes after cutoff. New completion still
+    # requires active campaign access; cleanup remains available separately.
+    _live_request(db, token)
+    if req.completed_at:
+        raise HTTPException(409, 'This request is complete.')
     _record_uploader(db, req, version, body)
     try:
         complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
@@ -474,7 +484,7 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
 
 @router.post("/r/{token}/upload/abort", status_code=status.HTTP_204_NO_CONTENT)
 def guest_abort(token: str, body: GuestPart, db: Session = Depends(get_db)):
-    req = locked_request(db, _live_request(db, token).id)
+    req = locked_request(db, _live_request(db, token, recovery=True).id)
     _, version = _owned_media(db, req, body.s3_key)
     if version.processing_status != ProcessingStatus.uploading:
         return
@@ -549,6 +559,8 @@ def _review_assets(db, req, assets, reviewer, stats, include_media=True):
             entry['review_state'] = 'unavailable'
         entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
         out.append(entry)
+    from ..services.campaign_usage import record_request_successes
+    record_request_successes(db, req, out)
     return out
 
 
@@ -564,7 +576,9 @@ def _editor_review(db, req):
 
 @router.get("/r/{token}/review", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def guest_review(token: str, db: Session = Depends(get_db)):
-    return _editor_review(db, _live_request(db, token))
+    out = _editor_review(db, _live_request(db, token))
+    db.commit()
+    return out
 
 
 @router.get("/r/{token}/assets/{asset_id}/versions/{version_id}", dependencies=[Depends(rate_limit("request_view", 120, 600))])

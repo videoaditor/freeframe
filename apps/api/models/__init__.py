@@ -12,3 +12,4 @@ from .activity import Mention, ActivityLog, Notification
 from .upload_request import UploadRequest, RequestUpload
 
 from .product_feedback import ProductFeedback, FeedbackDigest
+from .campaign_review import CampaignReview

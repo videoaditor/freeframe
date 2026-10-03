@@ -16,6 +16,7 @@ from ..schemas.auth import (
     ChangePasswordRequest,
 )
 from ..services.whop_auth import exchange_whop_token, resolve_customer, store_owner_session, require_customer_entitlement
+from ..middleware.auth import get_identity_user
 from ..services.auth_service import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -312,7 +313,7 @@ def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
     user = get_user_by_id(db, uuid.UUID(payload["sub"]))
     if not user or user.status == UserStatus.deactivated:
         raise HTTPException(status_code=401, detail="User not found")
-    require_customer_entitlement(user)
+    require_customer_entitlement(user, allow_expired=True)
     if payload.get("ver", 1) != user.token_version:
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     return TokenResponse(
@@ -323,8 +324,19 @@ def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_identity_user)):
     return current_user
+
+
+@router.get('/campaign')
+def campaign_status(db: Session = Depends(get_db), current_user: User = Depends(get_identity_user)):
+    from ..services.campaign_access import context
+    from ..services.campaign_usage import refresh_usage, recommendation
+    campaign = context(current_user)
+    if campaign is None:
+        return {'campaign': None}
+    count = refresh_usage(db, current_user)
+    return {'campaign': campaign, 'reviewedAds': count, 'recommendedPlan': recommendation(count)}
 
 
 @router.patch("/me/preferences", response_model=UserResponse)
