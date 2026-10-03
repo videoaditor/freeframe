@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Server-controlled review engine selection for new file requests, with trusted project/request identity and explicit unavailable review on invalid configuration.
 - Review step progress, elapsed time and measured analysis-duration ranges for comparable videos. The introductory scan parks after one cycle, with subtle status motion and explicit longer-than-usual handling.
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 

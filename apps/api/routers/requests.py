@@ -167,8 +167,11 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
     db.commit()
     db.refresh(req)
     # After the commit, and fail-open: a request the review never heard of is still a working link.
-    review_bridge.register_request(link.token, brand, req.title, body.brief_text, body.brief_url, body.brief_pdf_base64)
-    return _request_out(req, project)
+    registered = review_bridge.register_request(
+        link.token, brand, req.title, body.brief_text, body.brief_url, body.brief_pdf_base64,
+        tenant_id=f"freeframe:project:{project.id}", request_id=str(req.id), engine=settings.review_engine,
+    )
+    return _request_out(req, project, None if registered else {"status": "unavailable", "open_must_fixes": 0})
 
 
 @router.get("/requests")
