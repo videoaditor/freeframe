@@ -15,21 +15,27 @@ export function ProductFeedback() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(false)
   const [receipt, setReceipt] = useState<string | null>(null)
-  const submissionId = useRef<string | null>(null)
+  const attempt = useRef<{ id: string; fingerprint: string } | null>(null)
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     if (sending || !message.trim()) return
-    submissionId.current ??= crypto.randomUUID()
+    const payload = { kind, message: message.trim(), page_path: pathname }
+    const fingerprint = JSON.stringify(payload)
+    // A lost receipt can hide a committed report. Reuse its ID only for the
+    // same payload, so an edited draft cannot be acknowledged as the old report.
+    if (attempt.current?.fingerprint !== fingerprint) {
+      attempt.current = { id: crypto.randomUUID(), fingerprint }
+    }
     setSending(true)
     setError(false)
     try {
       const result = await api.post<{ id: string; status: 'received' }>('/product-feedback', {
-        submission_id: submissionId.current, kind, message: message.trim(), page_path: pathname,
+        submission_id: attempt.current.id, ...payload,
       })
       setReceipt(result.id)
       setMessage('')
-      submissionId.current = null
+      attempt.current = null
     } catch {
       setError(true)
     } finally {

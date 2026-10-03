@@ -53,3 +53,36 @@ it('returns focus to trigger on escape and preserves the draft', async () => {
   await user.click(trigger)
   expect(screen.getByLabelText('Your feedback')).toHaveValue('Draft')
 })
+
+it.each(['message', 'kind'] as const)('uses a fresh submission ID when %s changes after a lost receipt', async (changedField) => {
+  const saved = new Map<string, { kind: string; message: string }>()
+  let firstReceipt = true
+  vi.mocked(api.post).mockImplementation(async (_path, body) => {
+    const report = body as { submission_id: string; kind: string; message: string }
+    if (!saved.has(report.submission_id)) saved.set(report.submission_id, report)
+    if (firstReceipt) {
+      firstReceipt = false
+      throw new Error('Response lost after persistence')
+    }
+    return { id: report.submission_id, status: 'received' }
+  })
+  const user = userEvent.setup()
+  render(<ProductFeedback />)
+  await user.click(screen.getByRole('button', { name: 'Give feedback' }))
+  await user.type(screen.getByLabelText('Your feedback'), 'The upload stopped.')
+  await user.click(screen.getByRole('button', { name: 'Send feedback' }))
+  await screen.findByRole('alert')
+  if (changedField === 'message') {
+    await user.type(screen.getByLabelText('Your feedback'), ' It happens with audio files.')
+  } else {
+    await user.click(screen.getByLabelText('Suggest an improvement'))
+  }
+  await user.click(screen.getByRole('button', { name: 'Send feedback' }))
+  await screen.findByText('Feedback received')
+  expect(saved.size).toBe(2)
+  const latest = Array.from(saved.values())[1]
+  expect(latest).toMatchObject({
+    kind: changedField === 'kind' ? 'idea' : 'bug',
+    message: changedField === 'message' ? 'The upload stopped. It happens with audio files.' : 'The upload stopped.',
+  })
+})
