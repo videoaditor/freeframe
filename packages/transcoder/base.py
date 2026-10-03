@@ -9,6 +9,7 @@ class TranscodeJob:
     input_s3_key: str
     output_s3_prefix: str
     qualities: list[str] = field(default_factory=lambda: ["1080p", "720p", "360p"])
+    make_thumbnail: bool = True
 
 @dataclass
 class TranscodeResult:

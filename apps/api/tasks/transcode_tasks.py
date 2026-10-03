@@ -62,9 +62,10 @@ def process_asset(self, asset_id: str, version_id: str):
         output_prefix = f"processed/{asset.project_id}/{asset_id}/{version_id}"
         s3 = get_s3_client()
 
+        upgrade_later = False
         try:
             if asset.asset_type in (AssetType.video,):
-                _process_video(db, asset, version, media_file, s3, output_prefix)
+                upgrade_later = _process_video(db, asset, version, media_file, s3, output_prefix)
             elif asset.asset_type == AssetType.audio:
                 _process_audio(db, asset, version, media_file, s3, output_prefix)
             elif asset.asset_type in (AssetType.image, AssetType.image_carousel):
@@ -88,7 +89,18 @@ def process_asset(self, asset_id: str, version_id: str):
             except Exception:  # noqa: BLE001 - never fail a finished transcode over a webhook
                 logger.warning("asset-ready announce failed for %s", asset_id, exc_info=True)
 
+            # The full-quality ladder goes to the BACK of the queue: every file already waiting
+            # gets its quick pass (and so its review) before any file gets its 1080p.
+            if upgrade_later:
+                try:
+                    upgrade_video_renditions.delay(asset_id, version_id)
+                except Exception:  # noqa: BLE001 - the 360p version stays playable without it
+                    logger.warning("could not queue full renditions for %s", asset_id, exc_info=True)
+
         except Exception as exc:
+            # A failed flush leaves the session unusable ("PendingRollbackError"), and then marking
+            # the version failed raised too: no retry, version stuck in "Processing" for ever.
+            db.rollback()
             version.processing_status = ProcessingStatus.failed
             db.commit()
             _publish_event(str(asset.project_id), "transcode_failed", {
@@ -101,7 +113,23 @@ def process_asset(self, asset_id: str, version_id: str):
         db.close()
 
 
-def _process_video(db, asset, version, media_file, s3, output_prefix):
+# TWO PASSES, so the review never waits for 1080p.
+#
+# Auto Review only sees a version once it is `ready`, and it reads the 360p `ai_proxy.mp4`. It used
+# to become ready only after the full 1080p/720p/360p ladder of the original, two jobs at a time -
+# so a hand-in of large five-minute cuts waited 40+ minutes, mostly in the queue, for an encode the
+# review never reads. The quick pass makes only 360p (plus the proxy and poster) and marks the
+# version ready; `upgrade_video_renditions` then builds the full ladder into the version's main
+# prefix and switches playback over. The quick output lives under QUICK_SUFFIX inside that prefix,
+# so deleting the version still removes both.
+FULL_QUALITIES = ["1080p", "720p", "360p"]
+QUICK_QUALITIES = ["360p"]
+QUICK_SUFFIX = "quick"
+UPGRADE_MIN_SOURCE_HEIGHT = 720  # below this the ladder trims to 360p anyway (see the transcoder)
+
+
+def _process_video(db, asset, version, media_file, s3, output_prefix) -> bool:
+    """Quick pass. Returns True when a full-quality upgrade should follow."""
     from packages.transcoder.ffmpeg_transcoder import FFmpegTranscoder
     from packages.transcoder.base import TranscodeJob
 
@@ -110,8 +138,8 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
         media_id=str(asset.id),
         version_id=str(version.id),
         input_s3_key=media_file.s3_key_raw,
-        output_s3_prefix=output_prefix,
-        qualities=["1080p", "720p", "360p"],
+        output_s3_prefix=f"{output_prefix}/{QUICK_SUFFIX}",
+        qualities=QUICK_QUALITIES,
     )
     result = _run_async(transcoder.transcode(job))
     if not result.success:
@@ -129,6 +157,51 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
     if result.fps:
         media_file.fps = result.fps
     db.flush()
+    return (result.height or 0) >= UPGRADE_MIN_SOURCE_HEIGHT
+
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=300, acks_late=True)
+def upgrade_video_renditions(self, asset_id: str, version_id: str):
+    """Second pass: the full ladder into the main prefix, then switch playback to it.
+
+    The version is already `ready` and reviewed on its 360p copy, so this never touches
+    processing_status: on any failure the version simply stays at 360p.
+    """
+    from packages.transcoder.ffmpeg_transcoder import FFmpegTranscoder
+    from packages.transcoder.base import TranscodeJob
+
+    db = SessionLocal()
+    try:
+        version = db.query(AssetVersion).filter(AssetVersion.id == uuid.UUID(version_id)).first()
+        asset = db.query(Asset).filter(Asset.id == uuid.UUID(asset_id)).first()
+        media_file = db.query(MediaFile).filter(MediaFile.version_id == uuid.UUID(version_id)).first() if version else None
+        if not (version and asset and media_file):
+            return  # deleted meanwhile
+        output_prefix = f"processed/{asset.project_id}/{asset_id}/{version_id}"
+        quick_prefix = f"{output_prefix}/{QUICK_SUFFIX}"
+        if version.processing_status != ProcessingStatus.ready or media_file.s3_key_processed != quick_prefix:
+            return  # reprocessed, failed, or already upgraded
+        raw_key = media_file.s3_key_raw
+        db.commit()  # release the connection for the length of the encode
+
+        transcoder = FFmpegTranscoder(get_s3_client(), settings.s3_bucket, settings.s3_endpoint)
+        result = _run_async(transcoder.transcode(TranscodeJob(
+            media_id=asset_id, version_id=version_id, input_s3_key=raw_key,
+            output_s3_prefix=output_prefix, qualities=FULL_QUALITIES, make_thumbnail=False,
+        )))
+        if not result.success:
+            if self.request.retries < self.max_retries:
+                raise self.retry(exc=RuntimeError(result.error))
+            logger.warning("full renditions failed for %s, staying at 360p: %s", asset_id, result.error)
+            return
+
+        db.refresh(media_file)
+        if media_file.s3_key_processed != quick_prefix:
+            return  # changed while we encoded; leave it alone
+        media_file.s3_key_processed = output_prefix
+        db.commit()
+    finally:
+        db.close()
 
 
 def _process_audio(db, asset, version, media_file, s3, output_prefix):
