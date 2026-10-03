@@ -10,3 +10,5 @@ from .branding import ProjectBranding, WatermarkSettings
 from .instance_settings import InstanceSettings
 from .activity import Mention, ActivityLog, Notification
 from .upload_request import UploadRequest, RequestUpload
+
+from .product_feedback import ProductFeedback, FeedbackDigest
