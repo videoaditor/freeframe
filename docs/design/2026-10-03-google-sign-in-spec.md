@@ -41,10 +41,10 @@ email); no spine call in this spec (Alan's decision).
   · **Verifiziert:** `python -m pytest apps/api/tests/ -v` incl. new `test_google_auth.py`
   (mocked token endpoint): existing user, new user with flag on, new user with flag off → 401,
   deactivated → 401, wrong aud / bad iss / unverified email → 401, unconfigured → 404/disabled.
-- **T2 Web** — button in `login-form.tsx` (hidden unless `/auth/google/config` says enabled) →
-  `/login/google` route builds the Google authorize URL (`openid email`, `prompt=select_account`,
-  random `state` in a short-lived SameSite=Lax cookie) → `/login/google/callback` page checks state,
-  POSTs code to the API, `setTokens(..., 'email')`, routes like a successful magic code. Errors →
+- **T2 Web** — `GoogleButton` in `login-form.tsx` (hidden unless `/auth/google/config` says enabled)
+  builds the Google authorize URL (`openid email`, `prompt=select_account`, random `state` kept in
+  sessionStorage for the round trip) → Google returns to the public page `/login/google`, which checks
+  state, POSTs the code to the API, `setTokens(...)`, and lands like a successful magic code. Errors →
   back to `/login` with one readable message. Google brand guidelines for the button (white, "G" logo,
   "Continue with Google"). · **Verifiziert:** `pnpm --filter web build`, `test`, `tsc --noEmit`,
   `lint`; component test: button hidden when disabled, state mismatch → error message.

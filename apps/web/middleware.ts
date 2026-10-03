@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // '/' is the public WeTransfer-style front door (platform v2); '/r/' is a file-request link.
-const PUBLIC_ROUTES = ['/', '/login', '/setup', '/whop', '/whop/session']
+const PUBLIC_ROUTES = ['/', '/login', '/login/google', '/setup', '/whop', '/whop/session']
 const PUBLIC_PREFIXES = ['/invite/', '/share/', '/r/']
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
