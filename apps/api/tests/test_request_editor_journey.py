@@ -53,6 +53,44 @@ def test_complete_requires_identity_before_s3_finalization(monkeypatch):
     complete.assert_not_called()
 
 
+@pytest.mark.parametrize('identity_at_initiate', [False, True])
+def test_complete_submits_and_processes_with_deferred_or_existing_identity(monkeypatch, identity_at_initiate):
+    from sqlalchemy.exc import NoResultFound
+    req = request()
+    version = AssetVersion(id=uuid.uuid4(), asset_id=uuid.uuid4(), version_number=1,
+                           processing_status=ProcessingStatus.uploading)
+    media = MagicMock(file_size_bytes=100)
+    persisted = RequestUpload(request_id=req.id, asset_id=version.asset_id, version_number=1,
+                              uploader_name='Editor', uploader_email='editor@example.com') if identity_at_initiate else None
+    uploads, media_query = MagicMock(), MagicMock()
+    uploads.filter.return_value = uploads
+    uploads.first.return_value = persisted
+    uploads.one.side_effect = NoResultFound() if persisted is None else None
+    uploads.one.return_value = persisted
+    media_query.filter.return_value.first.return_value = media
+    db = MagicMock()
+    db.query.side_effect = lambda model: uploads if model is RequestUpload else media_query
+    added = []
+    db.add.side_effect = added.append
+    monkeypatch.setattr(rq, '_writable_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_owned_media', lambda *a: (media, version))
+    complete = MagicMock()
+    monkeypatch.setattr(rq, 'complete_multipart_upload', complete)
+    monkeypatch.setattr(rq.s3_service, 'get_s3_client', lambda: MagicMock(head_object=lambda **k: {'ContentLength': 100}))
+    tasks = BackgroundTasks()
+    identity = {} if identity_at_initiate else {'name': 'Editor', 'email': 'editor@example.com'}
+    result = rq.guest_complete('t', rq.GuestComplete(s3_key='raw/a', upload_id='u', parts=[], **identity), tasks, db)
+    record = persisted if identity_at_initiate else added[0]
+    assert result['status'] == 'processing'
+    assert record.uploader_name == 'Editor' and record.uploader_email == 'editor@example.com'
+    assert record.submitted_at is not None
+    assert version.processing_status == ProcessingStatus.processing
+    assert len(tasks.tasks) == 1
+    assert tasks.tasks[0].args == (version.asset_id, version.id)
+    db.commit.assert_called_once()
+    complete.assert_called_once_with('raw/a', 'u', [])
+
+
 def test_finished_request_rejects_new_upload_but_remains_live(monkeypatch):
     req = request()
     req.completed_at = datetime.now(timezone.utc)
@@ -200,7 +238,7 @@ def test_unmeasured_object_never_becomes_submitted(monkeypatch):
     media = MagicMock(file_size_bytes=100)
     monkeypatch.setattr(rq, '_writable_request', lambda *a: req)
     monkeypatch.setattr(rq, '_owned_media', lambda *a: (media, v))
-    monkeypatch.setattr(rq, '_record_uploader', lambda *a: None)
+    monkeypatch.setattr(rq, '_record_uploader', lambda *a: record)
     monkeypatch.setattr(rq, 'complete_multipart_upload', lambda *a: None)
     monkeypatch.setattr(rq.s3_service, 'get_s3_client', lambda: MagicMock(head_object=MagicMock(side_effect=RuntimeError('storage unavailable'))))
     db = MagicMock(); db.query.return_value.filter.return_value.first.return_value = media

@@ -314,19 +314,20 @@ def _writable_request(db, token):
     return req
 
 
-def _record_uploader(db, req, version, identity):
+def _record_uploader(db, req, version, identity) -> RequestUpload:
     record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
         RequestUpload.asset_id == version.asset_id, RequestUpload.version_number == version.version_number).first()
     if identity.name is None:
         if not record:
             raise HTTPException(422, 'Add your name and email to submit these files.')
-        return
+        return record
     if not record:
         record = RequestUpload(request_id=req.id, asset_id=version.asset_id, version_number=version.version_number)
         db.add(record)
     record.uploader_name = identity.name.strip()
     record.uploader_email = str(identity.email).lower()
     req.last_uploader_name, req.last_uploader_email = record.uploader_name, record.uploader_email
+    return record
 
 
 class GuestIdentity(BaseModel):
@@ -444,7 +445,7 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     # Completing twice (a retried request) must not re-trigger processing on a finished version.
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
-    _record_uploader(db, req, version, body)
+    record = _record_uploader(db, req, version, body)
     try:
         complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
     except ClientError as error:
@@ -463,8 +464,6 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
         version.processing_status = ProcessingStatus.failed
         db.commit()
         raise HTTPException(status_code=413, detail="The file is larger than announced. Upload it again.")
-    record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
-        RequestUpload.asset_id == version.asset_id, RequestUpload.version_number == version.version_number).one()
     record.submitted_at = datetime.now(timezone.utc)
     version.processing_status = ProcessingStatus.processing
     db.commit()

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 
 ### Fixed
+- File-request uploads complete successfully when the editor supplies their name and email at submission, instead of failing before processing starts.
 - Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Customer Projects uses file requests and lists all accessible brand projects; customer folders no longer require or announce an internal Trello card. Staff hand-in behavior is unchanged.
 - Production containers provide the non-root user home required by Gunicorn's control socket.
