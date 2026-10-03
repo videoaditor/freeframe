@@ -106,7 +106,8 @@ def test_durable_delivery_lease_recovery_and_replacement(monkeypatch):
         admin.dispose()
 
 
-def test_simple_handin_seal_owner_scope_and_private_library_boundaries(monkeypatch):
+@pytest.mark.parametrize("autoflush", [True, False])
+def test_simple_handin_seal_owner_scope_and_private_library_boundaries(monkeypatch, autoflush):
     from fastapi import BackgroundTasks,HTTPException
     from unittest.mock import MagicMock
     from apps.api.database import Base
@@ -121,7 +122,7 @@ def test_simple_handin_seal_owner_scope_and_private_library_boundaries(monkeypat
     admin=create_engine(os.environ['ITERATIONS_TEST_DATABASE_URL']);schema='handin_'+uuid.uuid4().hex
     with admin.begin() as conn:conn.execute(text(f'CREATE SCHEMA {schema}'))
     engine=create_engine(os.environ['ITERATIONS_TEST_DATABASE_URL'],connect_args={'options':f'-csearch_path={schema}'})
-    Session=sessionmaker(bind=engine)
+    Session=sessionmaker(bind=engine,autoflush=autoflush)
     monkeypatch.setattr(routes,'require_connected',lambda:None)
     monkeypatch.setattr(rq.review_bridge,'register_request',lambda *a,**kw:{'ok':True})
     monkeypatch.setattr(rq,'upload_guard_error',lambda *a:None)

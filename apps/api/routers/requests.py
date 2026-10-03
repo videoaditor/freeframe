@@ -477,6 +477,8 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
     _record_uploader(db, req, version, body)
+    # Identity can arrive only at completion; SessionLocal disables autoflush.
+    db.flush()
     try:
         complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
     except ClientError as error:

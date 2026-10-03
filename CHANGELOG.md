@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 
 ### Fixed
+- Parts uploads now complete when editors add their name and email after the transfer has started.
 - Editor navigation and direct management routes now show submission work instead of owner tools; brand-rule APIs require workspace ownership.
 - Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Customer Projects uses file requests and lists all accessible brand projects; customer folders no longer require or announce an internal Trello card. Staff hand-in behavior is unchanged.
