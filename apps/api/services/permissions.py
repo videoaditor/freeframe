@@ -231,6 +231,14 @@ def validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:
     this — the token alone only proves the caller holds *some* valid link, not that this
     particular asset is within its shared scope.
     """
+    if getattr(asset, "iteration_pending", False) is True and link.asset_id != asset.id:
+        raise HTTPException(403, "This assembled ad has not cleared its final review")
+    if getattr(asset, "iteration_source", False) is True:
+        from ..models.upload_request import UploadRequest
+        request = db.query(UploadRequest).filter(UploadRequest.folder_id == asset.folder_id,
+            UploadRequest.review_share_token == link.token, UploadRequest.revoked_at.is_(None)).first()
+        if not request:
+            raise HTTPException(403, "This source belongs to a private submission")
     if link.folder_id:
         if asset.folder_id != link.folder_id:
             if not asset.folder_id or not _is_descendant_of(db, asset.folder_id, link.folder_id):

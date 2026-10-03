@@ -600,3 +600,26 @@ button:not(:disabled), summary { cursor: pointer; }
   100% { transform: translate(var(--confetti-x), 180px) rotate(var(--confetti-turn)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .request-confetti { display: none; } .review-note .report-bug-trigger { transition: none; } }
+
+/* Hand-in uses the public AutoReview orange in both owner and editor contexts. */
+.handin-workspace {
+  background: var(--bg-primary);
+  --accent: oklch(0.69 0.205 33);
+  --accent-hover: oklch(0.74 0.18 33);
+  --accent-muted: oklch(0.69 0.205 33 / 0.14);
+  --text-inverse: oklch(0.15 0.004 285);
+  --bg-primary: oklch(0.146 0.004 285);
+  --bg-secondary: oklch(0.185 0.006 285);
+  --text-primary: oklch(0.97 0.003 285);
+  --text-secondary: oklch(0.74 0.006 285);
+}
+[data-theme="light"] .handin-workspace {
+  --accent: oklch(0.56 0.195 33);
+  --accent-hover: oklch(0.51 0.185 33);
+  --accent-muted: oklch(0.56 0.195 33 / 0.1);
+  --text-inverse: oklch(1 0 0);
+  --bg-primary: oklch(0.99 0.002 285);
+  --bg-secondary: oklch(0.96 0.003 285);
+  --text-primary: oklch(0.22 0.006 285);
+  --text-secondary: oklch(0.44 0.008 285);
+}

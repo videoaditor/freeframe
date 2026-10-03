@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
-from sqlalchemy import String, Enum, DateTime, ForeignKey, Integer, BigInteger, Float, func, UniqueConstraint, Index
+from sqlalchemy import Boolean, String, Enum, DateTime, ForeignKey, Integer, BigInteger, Float, func, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 try:
@@ -36,6 +36,9 @@ class Asset(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     asset_type: Mapped[AssetType] = mapped_column(Enum(AssetType), nullable=False)
+    iteration_pending: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    iteration_derived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    iteration_source: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     status: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus), default=AssetStatus.draft)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
@@ -57,6 +60,7 @@ class AssetVersion(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id"), nullable=False, index=True)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    iteration_review_ready: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     processing_status: Mapped[ProcessingStatus] = mapped_column(Enum(ProcessingStatus), default=ProcessingStatus.uploading)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

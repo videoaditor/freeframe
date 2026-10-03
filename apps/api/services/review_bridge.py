@@ -50,10 +50,11 @@ def brand_slug(name: str) -> str:
 
 
 def register_request(share_token: str, brand: str, title: str, brief_text: str = "",
-                     brief_url: str = "", brief_pdf_base64: str = "") -> Optional[dict]:
+                     brief_url: str = "", brief_pdf_base64: str = "", receive_iterations: bool = False, brief_source_token: str = "") -> Optional[dict]:
     return _call("POST", "/api/v1/requests", json={
-        "share_token": share_token, "brand": brand, "title": title,
+        "share_token": share_token, "brand": brand, "title": title, "receive_iterations": receive_iterations,
         "brief_text": brief_text, "brief_url": brief_url, "brief_pdf_base64": brief_pdf_base64,
+        **({"brief_source_token":brief_source_token} if brief_source_token else {}),
     }, timeout=60)
 
 
@@ -109,3 +110,24 @@ def asset_stats(asset_ids: list[str]) -> dict[str, dict]:
         if isinstance(values, dict):
             assets.update({key: value for key, value in values.items() if key in asset_ids and isinstance(value, dict)})
     return assets
+
+
+def plan_iterations(**brief):
+    return _call("POST", "/api/v1/iterations/plan", json=brief, timeout=120)
+
+
+def review_iteration(payload):
+    return _call("POST", "/api/v1/iterations/review", json=payload, timeout=240)
+
+
+def deliver_iterations(payload):
+    """Keep policy/version conflicts distinct from retryable provider failures."""
+    if not is_configured():return None
+    try:
+        response=httpx.post(settings.review_bridge_url.rstrip('/')+'/api/v1/iterations/deliver',
+            headers={'authorization':f'Bearer {settings.review_bridge_secret}'},json=payload,timeout=90,follow_redirects=False)
+        if response.status_code==409:return {'review_conflict':True}
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return None

@@ -83,6 +83,8 @@ app.include_router(folders.router)
 app.include_router(hls_proxy.router)
 app.include_router(instance_settings.router)
 app.include_router(upload_requests.router)
+from .routers import iterations
+app.include_router(iterations.router)
 
 @app.get("/health")
 def health():

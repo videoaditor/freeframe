@@ -25,6 +25,8 @@
  */
 
 import * as React from "react";
+import { PartsHandin } from "@/components/handin/parts-handin";
+import { partsEnabled } from "@/lib/iterations";
 import Link from "next/link";
 import useSWR from "swr";
 import { Check, Film, FolderOpen, Loader2, Upload } from "lucide-react";
@@ -71,7 +73,7 @@ function formatSize(bytes: number): string {
 
 type Phase = "form" | "working" | "done";
 
-export default function HandinPage() {
+function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
   usePageTitle("Hand in");
 
   const [cardUrl, setCardUrl] = React.useState("");
@@ -314,6 +316,7 @@ export default function HandinPage() {
     e.preventDefault();
     if (!files.length || !workspace) return;
 
+    onStarted?.();
     setPhase("working");
     setError(null);
 
@@ -668,4 +671,17 @@ export default function HandinPage() {
       )}
     </div>
   );
+}
+
+export default function HandinPage() {
+  const [mode, setMode] = React.useState<'components' | 'complete'>('components');
+  const [locked, setLocked] = React.useState(false);
+  const lock = React.useCallback(() => setLocked(true), []);
+  if (!partsEnabled) return <CompleteHandinPage />;
+  return <div className="owner-workspace handin-workspace min-h-full">
+    <div className="mx-auto flex max-w-[1040px] gap-2 px-5 pt-6 sm:px-8" aria-label="Submission format">
+      {(['components', 'complete'] as const).map(value => <button key={value} disabled={locked} aria-pressed={mode === value} onClick={() => setMode(value)} className={`press min-h-11 rounded-full px-4 text-sm font-medium ${mode === value ? 'bg-bg-hover text-text-primary' : 'text-text-secondary'}`}>{value === 'components' ? 'Separate parts' : 'Complete ads'}</button>)}
+    </div>
+    {mode === 'components' ? <PartsHandin onStarted={lock} /> : <CompleteHandinPage onStarted={lock} />}
+  </div>;
 }

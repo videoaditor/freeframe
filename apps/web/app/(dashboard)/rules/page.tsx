@@ -4,6 +4,8 @@ import * as React from 'react'
 import useSWR from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowRight, BookOpen, Check, ChevronDown, ArrowUp, Sparkles, X } from 'lucide-react'
+import Link from 'next/link'
+import { ownsProject, canManageWorkspace } from '@/lib/workspace-access'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -18,10 +20,11 @@ export default function RulesPage() {
   usePageTitle('Brand rules')
   const user = useAuthStore(s => s.user)
   const { data: projects, error, mutate } = useSWR<Project[]>('/projects', (k: string) => api.get<Project[]>(k))
-  const brands = React.useMemo(() => (projects || []).filter(p => user?.is_staff === false || p.is_workspace).sort((a, b) => a.name.localeCompare(b.name)), [projects, user])
+  const brands = React.useMemo(() => (projects || []).filter(p => ownsProject(user, p) && (user?.is_staff === false || p.is_workspace)).sort((a, b) => a.name.localeCompare(b.name)), [projects, user])
   const [selection, setSelection] = React.useState('')
   const brand = brands.find(p => p.id === selection) || brands[0]
 
+  if (projects && !canManageWorkspace(user, projects)) return <div className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">Your editing workspace</h1><p className="mt-3 text-text-secondary">Brand rules are managed by the workspace owner. Your review includes the rules that apply to your work.</p><Link href="/handin" className="mt-4 inline-flex min-h-11 items-center text-accent">Go to Hand in</Link></div>
   return <div className="brand-playbook mx-auto w-full max-w-[1320px] px-4 pb-12 pt-6 sm:px-8 lg:px-12 lg:pt-10">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h1 className="text-[2.125rem] font-semibold leading-tight tracking-[-0.035em]">Brand rules<span className="text-accent">.</span></h1></div>
