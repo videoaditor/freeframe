@@ -16,6 +16,8 @@ import {
   User,
   ChevronsLeft,
 } from 'lucide-react'
+import { partsEnabled } from '@/lib/iterations'
+import { canManageWorkspace } from '@/lib/workspace-access'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 import { useUploadStore } from '@/stores/upload-store'
@@ -27,7 +29,7 @@ import { NotificationDrawer } from './notification-drawer'
 import useSWR from 'swr'
 import { api } from '@/lib/api'
 import { StorageUsage, StorageRing } from '@/components/shared/storage-usage'
-import type { InstanceSettings } from '@/types'
+import type { InstanceSettings, Project } from '@/types'
 
 interface NavItem {
   href: string
@@ -37,7 +39,7 @@ interface NavItem {
 
 // Platform v2 order (serial position): what came back, what is checked, what it saved, then the
 // raw projects underneath.
-const navItems: NavItem[] = [
+const ownerNavItems: NavItem[] = [
   { href: '/home', label: 'Overview', icon: Home },
   { href: '/rules', label: 'Brand rules', icon: BookOpen },
   { href: '/insights', label: 'Time saved', icon: Timer },
@@ -52,6 +54,13 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout, isSuperAdmin } = useAuthStore()
+  const { data: projects } = useSWR<Project[]>('/projects', () => api.get<Project[]>('/projects'))
+  const manager = canManageWorkspace(user, projects)
+  const navItems: NavItem[] = manager ? [...ownerNavItems, ...(partsEnabled ? [{ href: '/parts', label: 'Reusable parts', icon: Layers }] : [])] : [
+    { href: '/handin', label: 'Hand in', icon: Upload },
+    { href: '/home', label: 'Submissions', icon: Home },
+    { href: '/projects', label: 'Projects', icon: Layers },
+  ]
   const { files: uploadFiles, togglePanel, panelOpen } = useUploadStore()
   const { unreadCount, fetchNotifications } = useNotificationStore()
   const { orgName, orgLogoDark, orgLogoLight } = useBrandingStore()
@@ -185,7 +194,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Bottom section */}
       <div className="border-t border-border p-2 space-y-1 shrink-0">
         {/* Instance storage indicator — ring when collapsed, used/limit bar when expanded */}
-        {instance && (
+        {instance && manager && (
           <div className={cn(collapsed ? 'flex justify-center py-1' : 'px-2.5 py-1.5')}>
             {collapsed ? (
               <StorageRing
@@ -286,7 +295,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
     </aside>
 
-    <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-bg-secondary pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-40 grid auto-cols-fr grid-flow-col border-t border-border bg-bg-secondary pb-[env(safe-area-inset-bottom)] md:hidden">
       {navItems.map(item => <Link key={item.href} href={item.href} aria-current={pathname.startsWith(item.href) ? 'page' : undefined} className={cn('flex min-h-[72px] flex-col items-center justify-center gap-1 text-[11px]', pathname.startsWith(item.href) ? 'font-semibold text-accent' : 'text-text-secondary')}><item.icon size={20} /><span>{item.label}</span></Link>)}
     </nav>
     {/* Notification Drawer */}

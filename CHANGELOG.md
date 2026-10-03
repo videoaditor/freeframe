@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Optional parts-based hand-in: upload hooks and bodies once, review each exact version, and assemble, check and deliver final ads in the background. Existing complete-ad uploads remain available.
+- Private reusable originals in the workspace owner's account, separate from editor attribution.
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 
 ### Fixed
+- Editor navigation and direct management routes now show submission work instead of owner tools; brand-rule APIs require workspace ownership.
 - Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Customer Projects uses file requests and lists all accessible brand projects; customer folders no longer require or announce an internal Trello card. Staff hand-in behavior is unchanged.
 - Production containers provide the non-root user home required by Gunicorn's control socket.

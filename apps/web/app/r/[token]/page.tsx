@@ -2,6 +2,8 @@
 
 import * as React from 'react'
 import useSWR from 'swr'
+import { PartsWorkspace } from '@/components/v2/parts-workspace'
+import { requestIterations, setSubmissionMode } from '@/lib/iterations'
 import { ArrowLeft } from 'lucide-react'
 import { finishRequest, objectToNote, requestReview, uploadToRequest, viewRequest, type RequestAsset } from '@/lib/platform'
 import { DropZone } from '@/components/v2/drop-zone'
@@ -13,7 +15,7 @@ interface Job { id: string; file: File; progress: number; phase: UploadPhase; er
 const WHO_KEY = 'aditor-request-who'
 const validWho = (who: Who) => !!who.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(who.email)
 
-export default function RequestPage({ params: { token } }: { params: { token: string } }) {
+function CompleteRequestPage({ params: { token }, onActivity }: { params: { token: string }; onActivity?: () => void }) {
   const { data: view, error: viewError, mutate: refreshView } = useSWR(`/r/${token}`, () => viewRequest(token), { shouldRetryOnError: false, refreshInterval: d => d?.completed_at ? 0 : 60000 })
   const { data: review, error: reviewError, mutate: refreshReview } = useSWR(view?.assets.length ? `/r/${token}/review` : null, () => requestReview(token), { refreshInterval: d => d?.completed_at || view?.completed_at ? 0 : 10000 })
   const [jobs, setJobs] = React.useState<Job[]>([])
@@ -70,6 +72,7 @@ export default function RequestPage({ params: { token } }: { params: { token: st
   const onFiles = async (files: File[]) => {
     if (complete) return
     if (files.some(file => !file.type.startsWith('video/') && !/\.(mp4|mov|webm|m4v)$/i.test(file.name))) { setError('Choose a video file for this review.'); return }
+    onActivity?.()
     const chosen = revision ? files.slice(0, 1) : files
     const fresh = chosen.map(file => ({ id: crypto.randomUUID(), file, assetId: revision?.asset_id, progress: 0, phase: 'uploading' as UploadPhase }))
     setJobs(js => [...js, ...fresh])
@@ -81,7 +84,7 @@ export default function RequestPage({ params: { token } }: { params: { token: st
 
   </form>
   const jobCard = (job: Job) => <div key={job.id} className="mt-3"><UploadCard file={job.file} name={job.file.name} size={job.file.size} phase={job.phase} progress={job.progress} error={job.error} onRetry={() => upload(job)} onRemove={job.phase === 'error' ? () => setJobs(js => js.filter(j => j.id !== job.id)) : undefined} />{job.progress === 1 && job.phase === 'uploading' && <p className="mt-2 text-xs text-text-secondary">{waitingIdentity ? 'Uploaded · waiting for your details' : 'Submitting your file…'}</p>}</div>
-  return <div className="owner-workspace min-h-screen bg-bg-primary text-text-primary">
+  return <div className="owner-workspace handin-workspace min-h-screen bg-bg-primary text-text-primary">
     <header className={`relative mx-auto flex h-20 max-w-[1120px] items-center border-b border-border px-5 sm:px-8 ${complete ? 'justify-center' : 'justify-between'}`}>{view?.logo_url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={view.logo_url} alt={view.brand} className="h-8 max-w-40 object-contain" /> : <span className="text-lg font-semibold tracking-tight">{view?.brand || 'File request'}</span>}<span className={`text-xs text-text-tertiary ${complete ? 'absolute right-5 sm:right-8' : ''}`}>{complete ? 'Completed' : showUpload ? 'Editor upload' : 'Editor review'}</span></header>
     <main className={`mx-auto px-5 pb-16 pt-8 sm:px-8 sm:pt-10 ${showUpload ? 'max-w-3xl' : 'max-w-[1120px]'}`}>
       {viewError && (!view || [401, 403, 404, 410].includes(viewError.status)) ? <div className="py-20 text-center"><h1 className="text-2xl font-semibold">{viewError.status === 410 ? 'This link is closed' : 'This link could not be opened'}</h1><p className="mt-3 text-text-secondary">{viewError.message}</p></div> : !view ? <p role="status">Opening your project…</p> : <>
@@ -98,6 +101,30 @@ export default function RequestPage({ params: { token } }: { params: { token: st
       </>}
       </>}
       </>}
+    </main>
+  </div>
+}
+
+export default function RequestPage({ params }: { params: { token: string } }) {
+  const { data: view } = useSWR(`/r/${params.token}`, () => viewRequest(params.token), { shouldRetryOnError: false })
+  const { data: progress, mutate } = useSWR(view?.receive_iterations ? ['parts', params.token] : null, () => requestIterations(params.token), { refreshInterval: 4000 })
+  const [started, setStarted] = React.useState(false)
+  const [switching, setSwitching] = React.useState(false)
+  const [error, setError] = React.useState('')
+  if (!view?.receive_iterations) return <CompleteRequestPage params={params} />
+  const change = async (mode: 'complete' | 'components') => {
+    setSwitching(true); setError('')
+    try { await mutate(await setSubmissionMode(params.token, mode), { revalidate: false }) }
+    catch (e) { setError(e instanceof Error ? e.message : 'Please retry.') }
+    finally { setSwitching(false) }
+  }
+  const switcher = progress && !started && !progress.submitted && !progress.manifest.slots.length && !view.assets.length ? <div className="mb-6 flex gap-2" aria-label="Submission format">{(['components', 'complete'] as const).map(mode => <button key={mode} disabled={switching} aria-pressed={progress.mode === mode} onClick={() => change(mode)} className={`press min-h-11 rounded-full px-4 text-sm ${progress.mode === mode ? 'bg-bg-hover font-medium' : 'text-text-secondary'}`}>{mode === 'components' ? 'Separate parts' : 'Complete ads'}</button>)}</div> : null
+  if (progress?.mode === 'complete') return <><div className="owner-workspace handin-workspace mx-auto max-w-3xl px-5 pt-4">{switcher}{error && <p role="alert">{error}</p>}</div><CompleteRequestPage params={params} onActivity={() => setStarted(true)} /></>
+  return <div className="owner-workspace handin-workspace min-h-screen bg-bg-primary text-text-primary">
+    <header className="mx-auto flex min-h-20 max-w-[1040px] items-center justify-between gap-4 border-b border-border px-5 sm:px-8"><span className="text-lg font-semibold">{view.brand}</span><span className="text-sm text-text-secondary">Editor workspace</span></header>
+    <main className="mx-auto max-w-[1040px] px-5 pb-16 pt-8 sm:px-8 sm:pt-10"><h1 className="mb-3 text-[1.75rem] font-semibold tracking-tight">{view.title}</h1>
+      {view.brief_excerpt && <details className="mb-6 text-sm text-text-secondary"><summary className="min-h-11 cursor-pointer py-3">View brief</summary><p className="whitespace-pre-wrap leading-relaxed">{view.brief_excerpt}</p></details>}
+      {switcher}{error && <p role="alert" className="mb-4 text-sm text-status-error">{error}</p>}<PartsWorkspace token={params.token} brand={view.brand} onActivity={() => setStarted(true)} />
     </main>
   </div>
 }

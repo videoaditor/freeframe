@@ -6,7 +6,7 @@ import bcrypt
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 import sqlalchemy
-from sqlalchemy import func as sa_func, case
+from sqlalchemy import func as sa_func, case, or_, and_, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -120,12 +120,25 @@ def _log_share_activity(
         db.rollback()
 
 
+def _exact_media_file(db,asset_id,version_id,link):
+    version=db.query(AssetVersion).filter(AssetVersion.id==version_id,AssetVersion.asset_id==asset_id,
+        AssetVersion.deleted_at.is_(None),or_(AssetVersion.processing_status==ProcessingStatus.ready,
+        and_(AssetVersion.processing_status==ProcessingStatus.processing,AssetVersion.iteration_review_ready.is_(True)))).first()
+    if not version:raise HTTPException(404,'This exact video version is not ready.')
+    if link.show_versions is not True:
+        latest=db.query(AssetVersion).filter(AssetVersion.asset_id==asset_id,AssetVersion.deleted_at.is_(None)).order_by(AssetVersion.version_number.desc()).first()
+        if not latest or latest.id!=version_id:raise HTTPException(404,'This version is no longer current.')
+    media=db.query(MediaFile).filter(MediaFile.version_id==version_id).first()
+    if not media:raise HTTPException(404,'This exact video version is unavailable.')
+    return media
+
+
 def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFile]:
     """Get the first media file from the latest ready version of an asset."""
     version = db.query(AssetVersion).filter(
         AssetVersion.asset_id == asset_id,
         AssetVersion.deleted_at.is_(None),
-        AssetVersion.processing_status == ProcessingStatus.ready,
+        or_(AssetVersion.processing_status == ProcessingStatus.ready, and_(AssetVersion.processing_status == ProcessingStatus.processing, AssetVersion.iteration_review_ready.is_(True))),
     ).order_by(AssetVersion.version_number.desc()).first()
     if not version:
         return None
@@ -138,7 +151,7 @@ def _latest_version_comment_count(db: Session, asset_id: uuid.UUID) -> int:
     version = db.query(AssetVersion).filter(
         AssetVersion.asset_id == asset_id,
         AssetVersion.deleted_at.is_(None),
-        AssetVersion.processing_status == ProcessingStatus.ready,
+        or_(AssetVersion.processing_status == ProcessingStatus.ready, and_(AssetVersion.processing_status == ProcessingStatus.processing, AssetVersion.iteration_review_ready.is_(True))),
     ).order_by(AssetVersion.version_number.desc()).first()
     if not version:
         return 0
@@ -154,7 +167,7 @@ def _ready_version_count(db: Session, asset_id: uuid.UUID) -> int:
     return db.query(sa_func.count(AssetVersion.id)).filter(
         AssetVersion.asset_id == asset_id,
         AssetVersion.deleted_at.is_(None),
-        AssetVersion.processing_status == ProcessingStatus.ready,
+        or_(AssetVersion.processing_status == ProcessingStatus.ready, and_(AssetVersion.processing_status == ProcessingStatus.processing, AssetVersion.iteration_review_ready.is_(True))),
     ).scalar() or 0
 
 
@@ -279,6 +292,8 @@ def validate_share_link_endpoint(
     branding_data = None
     if link.asset_id:
         asset = _get_asset(db, link.asset_id)
+        if getattr(asset,"iteration_source",False) is True:
+            validate_asset_in_share(db,link,asset)
         # Get thumbnail URL
         media_file = _get_latest_media_file(db, asset.id)
         thumbnail_url = None
@@ -1159,6 +1174,11 @@ def get_folder_share_assets(
     """
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
+    from ..models.upload_request import UploadRequest
+    source_folders=select(UploadRequest.folder_id).where(UploadRequest.review_share_token==token,UploadRequest.revoked_at.is_(None))
+    visible_iteration=and_(Asset.iteration_pending.is_(False),
+        or_(Asset.iteration_source.is_(False),Asset.folder_id.in_(source_folders)),
+        or_(Asset.iteration_derived.is_(False),Asset.folder_id==link.folder_id) if link.folder_id else Asset.iteration_derived.is_(False))
     is_project_share = link.project_id is not None
     if not link.folder_id and not is_project_share:
         raise HTTPException(status_code=400, detail="This share link is not a folder or project share")
@@ -1181,14 +1201,14 @@ def get_folder_share_assets(
             ).order_by(Folder.name).all()
             for sf in shared_folders:
                 asset_count = db.query(sa_func.count(Asset.id)).filter(
-                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None),
+                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None), visible_iteration,
                 ).scalar() or 0
                 child_folder_count = db.query(sa_func.count(Folder.id)).filter(
                     Folder.parent_id == sf.id, Folder.deleted_at.is_(None),
                 ).scalar() or 0
                 thumb_urls: list[str] = []
                 preview_assets = db.query(Asset).filter(
-                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None),
+                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None), visible_iteration,
                 ).order_by(Asset.created_at.desc()).limit(4).all()
                 for pa in preview_assets:
                     mf = _get_latest_media_file(db, pa.id)
@@ -1204,7 +1224,7 @@ def get_folder_share_assets(
             total = len(multi_asset_ids)
             offset = (page - 1) * per_page
             shared_assets = db.query(Asset).filter(
-                Asset.id.in_(multi_asset_ids), Asset.deleted_at.is_(None),
+                Asset.id.in_(multi_asset_ids), Asset.deleted_at.is_(None), visible_iteration,
             ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
             for a in shared_assets:
                 mf = _get_latest_media_file(db, a.id)
@@ -1257,7 +1277,7 @@ def get_folder_share_assets(
         # Count assets + direct child folders in this subfolder
         asset_count = db.query(sa_func.count(Asset.id)).filter(
             Asset.folder_id == sf.id,
-            Asset.deleted_at.is_(None),
+            Asset.deleted_at.is_(None), visible_iteration,
         ).scalar() or 0
         child_folder_count = db.query(sa_func.count(Folder.id)).filter(
             Folder.parent_id == sf.id,
@@ -1268,7 +1288,7 @@ def get_folder_share_assets(
         thumb_urls: list[str] = []
         preview_assets = db.query(Asset).filter(
             Asset.folder_id == sf.id,
-            Asset.deleted_at.is_(None),
+            Asset.deleted_at.is_(None), visible_iteration,
         ).order_by(Asset.created_at.desc()).limit(4).all()
         for pa in preview_assets:
             mf = _get_latest_media_file(db, pa.id)
@@ -1295,13 +1315,13 @@ def get_folder_share_assets(
         )
     total = db.query(sa_func.count(Asset.id)).filter(
         asset_filter,
-        Asset.deleted_at.is_(None),
+        Asset.deleted_at.is_(None), visible_iteration,
     ).scalar() or 0
 
     offset = (page - 1) * per_page
     assets = db.query(Asset).filter(
         asset_filter,
-        Asset.deleted_at.is_(None),
+        Asset.deleted_at.is_(None), visible_iteration,
     ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
 
     asset_items = []
@@ -1355,8 +1375,8 @@ def get_share_stream_url(
 ):
     """Public endpoint — optional auth. Returns presigned stream URL for an asset in a share link.
 
-    When the share link enables "Show all versions", `version_id` selects a specific ready
-    version; otherwise (or when omitted/invalid) the latest ready version is served.
+    Explicit version IDs never fall back to other bytes. Historical versions require
+    "Show all versions"; the current validated original is readable during playback preparation.
     """
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
@@ -1369,19 +1389,7 @@ def get_share_stream_url(
     # Validate asset belongs to this share
     validate_asset_in_share(db, link, asset)
 
-    media_file = None
-    if version_id and link.show_versions:
-        version = db.query(AssetVersion).filter(
-            AssetVersion.id == version_id,
-            AssetVersion.asset_id == asset.id,
-            AssetVersion.deleted_at.is_(None),
-            AssetVersion.processing_status == ProcessingStatus.ready,
-        ).first()
-        if version:
-            media_file = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
-    if not media_file:
-        # No (or non-visible) version requested — fall back to the latest ready version.
-        media_file = _get_latest_media_file(db, asset.id)
+    media_file = _exact_media_file(db,asset.id,version_id,link) if isinstance(version_id,uuid.UUID) else _get_latest_media_file(db,asset.id)
     if not media_file:
         raise HTTPException(status_code=404, detail="No ready media file found")
 
@@ -1431,6 +1439,7 @@ def get_share_stream_url(
 def get_share_ai_proxy_url(
     token: str,
     asset_id: uuid.UUID,
+    version_id: Optional[uuid.UUID] = Query(default=None),
     share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
@@ -1451,7 +1460,7 @@ def get_share_ai_proxy_url(
     if asset.asset_type != AssetType.video:
         raise HTTPException(status_code=404, detail="No AI proxy for a non-video asset")
 
-    media_file = _get_latest_media_file(db, asset.id)
+    media_file = _exact_media_file(db,asset.id,version_id,link) if isinstance(version_id,uuid.UUID) else _get_latest_media_file(db,asset.id)
     if not media_file or not media_file.s3_key_processed:
         raise HTTPException(status_code=404, detail="No ready media file found")
 
@@ -1459,7 +1468,7 @@ def get_share_ai_proxy_url(
     if not object_exists(proxy_key):
         raise HTTPException(status_code=404, detail="No AI proxy for this asset yet")
 
-    return {"url": generate_presigned_get_url(proxy_key)}
+    return {"url": generate_presigned_get_url(proxy_key), **({"version_id":str(media_file.version_id)} if isinstance(version_id,uuid.UUID) else {})}
 
 
 @router.get("/share/{token}/thumbnail/{asset_id}")
@@ -1510,7 +1519,7 @@ def get_share_asset_versions(
     versions = db.query(AssetVersion).filter(
         AssetVersion.asset_id == asset.id,
         AssetVersion.deleted_at.is_(None),
-        AssetVersion.processing_status == ProcessingStatus.ready,
+        or_(AssetVersion.processing_status == ProcessingStatus.ready, and_(AssetVersion.processing_status == ProcessingStatus.processing, AssetVersion.iteration_review_ready.is_(True))),
     ).order_by(AssetVersion.version_number.desc()).all()
 
     if not link.show_versions:

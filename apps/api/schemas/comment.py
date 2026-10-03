@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -19,6 +19,7 @@ class CommentCreate(BaseModel):
     mention_user_ids: list[uuid.UUID] = []  # Explicit mention IDs from frontend
 
 class GuestCommentCreate(BaseModel):
+    idempotency_key: Optional[str] = Field(default=None, min_length=1, max_length=128)
     asset_id: Optional[uuid.UUID] = None  # Required for folder/project shares
     version_id: Optional[uuid.UUID] = None  # Auto-resolved if not provided
     parent_id: Optional[uuid.UUID] = None

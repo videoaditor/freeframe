@@ -121,6 +121,7 @@ def list_assets(
     query = db.query(Asset).filter(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
+        Asset.iteration_pending.is_(False), Asset.iteration_source.is_(False),
     )
 
     if folder_id == "root":
@@ -299,6 +300,8 @@ def initiate_new_version(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
+    from ..services.iteration_requests import require_unmanaged
+    require_unmanaged(asset)
 
     if body.mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type")

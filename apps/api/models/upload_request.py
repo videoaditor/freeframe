@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,15 @@ class UploadRequest(Base):
     brand_slug: Mapped[str] = mapped_column(String(120), nullable=False, server_default="")
     review_share_token: Mapped[str] = mapped_column(String(64), nullable=False)
     brief_excerpt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    receive_iterations: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    iteration_manifest: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    iteration_state: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    iteration_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="components", server_default="components")
+    iteration_ratio: Mapped[str] = mapped_column(String(5), nullable=False, default="9:16", server_default="9:16")
+    iteration_brief: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    iteration_lease_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    iteration_lease_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    iteration_owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     last_uploader_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_uploader_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

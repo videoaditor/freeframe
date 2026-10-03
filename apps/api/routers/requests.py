@@ -18,7 +18,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from botocore.exceptions import ClientError
@@ -41,6 +41,7 @@ from ..models.upload_request import RequestUpload, UploadRequest
 from ..models.user import GuestUser, User
 from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..services import review_bridge
+from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
 from ..services.permissions import effective_project_role, require_project_role
 from ..services.s3_service import (
     abort_multipart_upload, complete_multipart_upload, create_multipart_upload, presign_upload_part,
@@ -108,11 +109,14 @@ def project_brand(db: Session, project: Project) -> str:
 # ── Owner ──────────────────────────────────────────────────────────────────────
 
 class RequestCreate(BaseModel):
+    receive_iterations: bool = False
+    iteration_plan_token: Optional[str] = None
+    aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
     project_id: uuid.UUID
     title: str = Field(min_length=1, max_length=255)
     brief_text: str = ""
     brief_url: str = ""
-    brief_pdf_base64: str = ""
+    brief_pdf_base64: str = Field(default="",max_length=15_000_000)
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
 
 
@@ -134,6 +138,7 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
         "state": request_state(req, datetime.now(timezone.utc)),
         "created_at": req.created_at.isoformat() if req.created_at else None,
         **(st or {"status": "reviewing", "open_must_fixes": 0}),
+        **request_fields(req),
     }
 
 
@@ -144,6 +149,17 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
 
+    manifest = None
+    if body.receive_iterations:
+        from .iterations import require_connected
+        from ..services.iteration_manifest import read_plan
+        require_connected()
+        manifest = {'schema_version':1,'summary':'All selected combinations','slots':[],'recipes':[]}
+        if body.iteration_plan_token:
+            try:
+                manifest=read_plan(body.iteration_plan_token,str(current_user.id),str(project.id),
+                    {'brief_text':body.brief_text,'brief_url':body.brief_url,'brief_pdf_base64':body.brief_pdf_base64})
+            except ValueError as error: raise HTTPException(422,str(error)) from error
     folder = Folder(project_id=project.id, name=body.title.strip(),
                     description=(body.brief_url or "File request")[:2000], created_by=current_user.id)
     db.add(folder)
@@ -161,13 +177,18 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,
         created_by=current_user.id, title=body.title.strip(), brand_slug=brand,
         review_share_token=link.token, brief_excerpt=excerpt,
+        receive_iterations=body.receive_iterations, iteration_manifest=manifest,
+        iteration_state={'submitted':False,'structured':bool(body.iteration_plan_token),
+            'brief_input':{'url':body.brief_url,'pdf':body.brief_pdf_base64}} if body.receive_iterations else None,
+        iteration_mode='components',iteration_ratio=body.aspect_ratio,iteration_brief=body.brief_text,
+        iteration_owner_id=project.created_by if body.receive_iterations else None,
         expires_at=(datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)) if body.expires_in_days else None,
     )
     db.add(req)
     db.commit()
     db.refresh(req)
     # After the commit, and fail-open: a request the review never heard of is still a working link.
-    review_bridge.register_request(link.token, brand, req.title, body.brief_text, body.brief_url, body.brief_pdf_base64)
+    review_bridge.register_request(link.token, brand, req.title, body.brief_text, body.brief_url, body.brief_pdf_base64, receive_iterations=body.receive_iterations)
     return _request_out(req, project)
 
 
@@ -238,7 +259,7 @@ def _project_brand(db: Session, project_id: uuid.UUID, user: User, role: Project
 
 @router.get("/insights/rules")
 def list_rules(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    brand = _project_brand(db, project_id, current_user, ProjectRole.viewer)
+    brand = _project_brand(db, project_id, current_user, ProjectRole.owner)
     r = review_bridge.rules(brand)
     if r is None:
         raise HTTPException(status_code=503, detail="Auto Review is not reachable right now.")
@@ -254,7 +275,7 @@ class RulesImport(BaseModel):
 
 @router.post("/insights/rules/import")
 def import_rules(body: RulesImport, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    brand = _project_brand(db, body.project_id, current_user, ProjectRole.editor)
+    brand = _project_brand(db, body.project_id, current_user, ProjectRole.owner)
     if not (body.text.strip() or body.url.strip() or body.pdf_base64):
         raise HTTPException(status_code=400, detail="Drop a PDF, paste text or a link.")
     r = review_bridge.import_rules(brand, body.text, body.url, body.pdf_base64)
@@ -296,6 +317,7 @@ def view_request(token: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == req.project_id).first()
     assets = _submitted_assets(db, req)
     return {
+        **request_fields(req),
         "title": req.title,
         "brand": project.name if project else "",
         "logo_url": _brand_logo(db, req.project_id),
@@ -309,7 +331,7 @@ def view_request(token: str, db: Session = Depends(get_db)):
 
 def _writable_request(db, token):
     req = locked_request(db, _live_request(db, token).id)
-    if req.completed_at:
+    if req.completed_at or (components(req) and (req.iteration_state or {}).get('delivery',{}).get('started')):
         raise HTTPException(409, 'This request is complete.')
     return req
 
@@ -341,6 +363,7 @@ class GuestIdentity(BaseModel):
 
 
 class GuestInitiate(GuestIdentity):
+    slot_id: Optional[str] = Field(default=None,max_length=80)
     asset_id: Optional[uuid.UUID] = None
     original_filename: str = Field(min_length=1, max_length=500)
     mime_type: str
@@ -358,8 +381,16 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
     if guard:
         raise HTTPException(status_code=400, detail=guard)
 
-    name = asset_name_for(body.original_filename)
-    if body.asset_id:
+    slot=upload_slot(req,body.slot_id,body.mime_type)
+    if slot and body.file_size_bytes>200*1024*1024:
+        raise HTTPException(422,'Each source part must be 200 MiB or smaller.')
+    name = slot['label'] if slot else asset_name_for(body.original_filename)
+    if slot:
+        bound=revision_target(req,slot['id'],body.asset_id)
+        asset=db.query(Asset).filter(Asset.id==uuid.UUID(bound),Asset.folder_id==req.folder_id,
+            Asset.project_id==req.project_id,Asset.deleted_at.is_(None)).first() if bound else None
+        if bound and not asset: raise HTTPException(404,'File not found in this request.')
+    elif body.asset_id:
         asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.folder_id == req.folder_id,
                                        Asset.project_id == req.project_id, Asset.deleted_at.is_(None)).first()
         if not asset:
@@ -371,7 +402,7 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
                                        Asset.deleted_at.is_(None)).first()
     if not asset:
         asset = Asset(project_id=req.project_id, name=name, asset_type=mime_to_asset_type(body.mime_type),
-                      created_by=req.created_by, folder_id=req.folder_id)
+                      created_by=req.created_by, folder_id=req.folder_id, iteration_source=bool(slot))
         db.add(asset)
         db.flush()
     # A retried upload must not leave dead "uploading" versions on top: they would become "the latest
@@ -394,6 +425,7 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
     file_type = {AssetType.image: FileType.image, AssetType.audio: FileType.audio}.get(asset.asset_type, FileType.video)
     db.add(MediaFile(version_id=version.id, file_type=file_type, original_filename=body.original_filename,
                      mime_type=body.mime_type, file_size_bytes=body.file_size_bytes, s3_key_raw=s3_key))
+    if slot: bind_upload(req,slot,asset,version,db)
     if body.name is not None:
         _record_uploader(db, req, version, body)
     db.commit()
@@ -466,6 +498,7 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
         RequestUpload.asset_id == version.asset_id, RequestUpload.version_number == version.version_number).one()
     record.submitted_at = datetime.now(timezone.utc)
+    if components(req): stored_upload(req,version)
     version.processing_status = ProcessingStatus.processing
     db.commit()
     background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
@@ -486,8 +519,15 @@ def guest_abort(token: str, body: GuestPart, db: Session = Depends(get_db)):
     version.processing_status = ProcessingStatus.failed
     version.deleted_at = datetime.now(timezone.utc)
     db.flush()
-    if not db.query(AssetVersion).filter(AssetVersion.asset_id == version.asset_id, AssetVersion.deleted_at.is_(None)).first():
+    previous=db.query(AssetVersion).filter(AssetVersion.asset_id==version.asset_id,
+        AssetVersion.deleted_at.is_(None)).order_by(AssetVersion.version_number.desc()).first()
+    if not previous:
         db.get(Asset, version.asset_id).deleted_at = version.deleted_at
+    if components(req):
+        from ..services.iteration_requests import aborted_upload
+        record=db.query(RequestUpload).filter(RequestUpload.request_id==req.id,
+            RequestUpload.asset_id==version.asset_id,RequestUpload.version_number==previous.version_number).first() if previous else None
+        aborted_upload(req,version,previous,bool(record and record.submitted_at))
     db.commit()
 
 
@@ -516,6 +556,12 @@ def _version_review(db, req, asset, version, reviewer, evidence, include_media=T
         comments = [{'id': str(c.id), 't': c.timecode_start, 'body': c.body.replace('Must fix — ', '', 1),
                      'must_fix': c.body.startswith('Must fix')} for c in rows if c.id not in withdrawn]
     state = editor_review_state(version, evidence)
+    if version and components(req):
+        item=next((v for category in ('slots','outputs') for v in (req.iteration_state or {}).get(category,{}).values()
+            if v.get('asset_id')==str(asset.id) and v.get('version_id')==str(version.id)),None)
+        if item:
+            state={'clear':'clear','delivered':'clear','held':'held','error':'unavailable'}.get(item.get('status'),'reviewing')
+            comments=item.get('findings',[])
     # Visible unresolved blockers must never be contradicted by a green engine projection.
     if state == 'clear' and any(c.get('must_fix') for c in comments):
         state = 'held'
@@ -570,9 +616,10 @@ def guest_review(token: str, db: Session = Depends(get_db)):
 @router.get("/r/{token}/assets/{asset_id}/versions/{version_id}", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def guest_version(token: str, asset_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db)):
     req = _live_request(db, token)
-    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.folder_id == req.folder_id,
+    asset = db.query(Asset).filter(Asset.id == asset_id,
                                   Asset.project_id == req.project_id, Asset.deleted_at.is_(None)).first()
-    if not asset:
+    allowed_output=components(req) and any(v.get('asset_id')==str(asset_id) and v.get('version_id')==str(version_id) for v in (req.iteration_state or {}).get('outputs',{}).values())
+    if not asset or (asset.folder_id!=req.folder_id and not allowed_output):
         raise HTTPException(404, 'File not found in this request.')
     version = db.query(AssetVersion).filter(AssetVersion.id == version_id, AssetVersion.asset_id == asset.id,
                                           AssetVersion.deleted_at.is_(None)).first()
@@ -587,6 +634,7 @@ def guest_version(token: str, asset_id: uuid.UUID, version_id: uuid.UUID, db: Se
 def finish_request(token: str, db: Session = Depends(get_db)):
     req = locked_request(db, _live_request(db, token).id)
     if not req.completed_at:
+        if components(req): raise HTTPException(409,'Component batches finish after every assembled ad passes final review.')
         review = _editor_review(db, req)
         if any(a.get('review_error') for a in review['assets']):
             raise HTTPException(409, 'This request includes an attachment automatic review cannot verify. Ask the owner to move it out of the request.')
@@ -606,7 +654,7 @@ class SuggestionDecision(BaseModel):
 
 @router.post("/insights/rules/suggestion")
 def decide_suggestion(body: SuggestionDecision, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    brand = _project_brand(db, body.project_id, current_user, ProjectRole.editor)
+    brand = _project_brand(db, body.project_id, current_user, ProjectRole.owner)
     r = review_bridge.decide_suggestion(brand, body.suggestion_id, body.action, current_user.email)
     if r is None:
         raise HTTPException(status_code=503, detail="Auto Review could not save that right now.")
@@ -650,6 +698,11 @@ def guest_object(token: str, body: GuestObjection, db: Session = Depends(get_db)
                                      body.text, body.name or req.last_uploader_name or "the editor", version_id=str(current.id))
     if r is None:
         raise HTTPException(status_code=503, detail="Could not reach the reviewer. Try again in a minute.")
+    if components(req) and r.get('withdrawn') is True:
+        from ..services.iteration_requests import withdraw_finding
+        req=locked_request(db,req.id)
+        withdraw_finding(req,str(asset.id),str(current.id),body.comment_id)
+        db.commit()
     return r
 
 
