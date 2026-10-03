@@ -6,7 +6,7 @@ import { Check, CircleCheck, Download, Film, Pause, Play, RotateCcw } from 'luci
 import { VideoPlayer } from '@/components/review/video-player'
 import { CommentItem } from '@/components/review/comment-panel'
 import { Dispute } from './review-list'
-import { requestVersion, type RequestAsset, type ReviewComment } from '@/lib/platform'
+import { requestVersion, type RequestAsset, type ReviewComment, type ReviewProgress } from '@/lib/platform'
 import { downloadFeedback, feedbackSrt } from '@/lib/request-feedback'
 import { useReviewStore } from '@/stores/review-store'
 import type { CommentWithReplies } from '@/hooks/use-comments'
@@ -41,31 +41,66 @@ export function SubmissionSuccess({ token, brand }: { token: string; brand: stri
     <p className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-text-secondary">{brand} might reach out later, but consider your job done!</p>
   </section>
 }
-function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, processingText }: { mediaUrl?: string; thumbnailUrl?: string | null; unavailable?: boolean; onRefresh: () => void | Promise<void>; processingText?: string }) {
+function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, processingText, progress, processing }: { mediaUrl?: string; thumbnailUrl?: string | null; unavailable?: boolean; onRefresh: () => void | Promise<void>; processingText?: string; progress?: ReviewProgress | null; processing?: string }) {
   const [paused, setPaused] = React.useState(false)
+  const [scanning, setScanning] = React.useState(true)
+  const [clock, setClock] = React.useState(() => ({ at: Date.now(), now: Date.now(), base: progress?.startedAgoSeconds || 0 }))
+  React.useEffect(() => {
+    const park = setTimeout(() => setScanning(false), 3600)
+    return () => clearTimeout(park)
+  }, [])
+  React.useEffect(() => {
+    const at = Date.now()
+    const queued = progress?.queued_at ? Date.parse(progress.queued_at) : NaN
+    setClock({ at, now: at, base: progress?.stage === 'waiting' && Number.isFinite(queued) ? Math.max(0, (at - queued) / 1000) : progress?.startedAgoSeconds || 0 })
+    if (unavailable) return
+    const tick = setInterval(() => setClock(c => ({ ...c, now: Date.now() })), 1000)
+    return () => clearInterval(tick)
+  }, [progress?.startedAgoSeconds, progress?.queued_at, progress?.stage, unavailable])
+  const elapsed = Math.max(0, Math.floor(clock.base + (clock.now - clock.at) / 1000))
+  const preparing = processing && processing !== 'ready'
+  const step = preparing ? 'Preparing video' : progress?.stage === 'waiting' ? 'Waiting for review' : ({ preparing: 'Reading the brief', measuring: 'Measuring the video', analysing: 'Checking the video', finishing: 'Preparing feedback' }[progress?.step || 'preparing'])
+  const phases = ['preparing', 'measuring', 'analysing', 'finishing']
+  const phase = preparing || progress?.stage === 'waiting' ? 0 : Math.max(0, phases.indexOf(progress?.step || 'preparing'))
+  const estimate = progress?.estimate
+  const overrun = !preparing && progress?.stage === 'reading' && progress.step !== 'finishing' && !!estimate && elapsed > estimate.upperSeconds
+  const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} elapsed`
+  const minutes = (seconds: number) => seconds / 60
+  const expectation = estimate ? `Analysis usually ${minutes(estimate.lowerSeconds)}${estimate.lowerSeconds === estimate.upperSeconds ? '' : `–${minutes(estimate.upperSeconds)}`} min` : 'Learning typical review time'
   const [ratio, setRatio] = React.useState(9 / 16)
   const [failedThumbnail, setFailedThumbnail] = React.useState(false)
   const [failed, setFailed] = React.useState(false)
   const [attempt, setAttempt] = React.useState(0)
   const thumbnail = thumbnailUrl && !failedThumbnail
-  return <div className="review-analysis relative mx-auto mt-5 max-w-sm rounded-3xl border border-border bg-bg-secondary px-6 pb-5 pt-7 text-center" data-paused={paused}>
+  return <div className="review-analysis relative mx-auto mt-5 max-w-sm rounded-3xl border border-border bg-bg-secondary px-6 pb-5 pt-7 text-center" data-paused={paused} data-scanning={!unavailable && scanning}>
     <div className="review-frame-preview relative mx-auto overflow-hidden rounded-xl bg-bg-tertiary" style={{ width: Math.min(240, 224 * ratio), aspectRatio: ratio }}>
       {thumbnail ? /* eslint-disable-next-line @next/next/no-img-element */ <img key={attempt} src={thumbnailUrl} alt="Still frame of your submitted video" className="h-full w-full object-contain" onLoad={e => setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight || 9 / 16)} onError={() => setFailedThumbnail(true)} /> : mediaUrl && !failed ? <video key={attempt} src={mediaUrl} aria-label="Still frame of your submitted video" role="img" muted playsInline preload="metadata" disablePictureInPicture disableRemotePlayback tabIndex={-1} className="pointer-events-none h-full w-full object-contain" onContextMenu={e => e.preventDefault()} onPlay={e => e.currentTarget.pause()} onLoadedMetadata={e => { const video = e.currentTarget; setRatio(video.videoWidth / video.videoHeight || 9 / 16); video.currentTime = Number.isFinite(video.duration) ? Math.min(1, video.duration / 2) : 0 }} onError={() => setFailed(true)} /> : <div className="grid h-full place-content-center gap-3 p-4 text-xs text-text-tertiary"><Film className="mx-auto" size={24} />{failed ? 'Preview unavailable' : 'Preparing preview'}</div>}
       {!unavailable && <div aria-hidden="true" className="review-frame-overlay pointer-events-none absolute inset-0"><div className="review-frame-grid absolute inset-0" /><div className="review-analysis-scan absolute inset-x-0 top-0 h-full" /><div className="review-frame-target absolute inset-x-[20%] inset-y-[30%] rounded-md border"><i /><i /><i /><i /></div></div>}
     </div>
     <h3 className="mt-5 text-lg font-semibold">{unavailable ? 'Review unavailable' : 'Review in progress'}</h3>
-    <p role="status" className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-text-secondary">{unavailable ? 'Your file is safe. We cannot confirm the review yet.' : processingText || 'Checking the cut against the brief. Feedback will appear here when ready.'}</p>
+    <p role="status" className="mx-auto mt-2 min-h-6 max-w-xs text-base leading-relaxed text-text-secondary">{unavailable ? 'Your file is safe. We cannot confirm the review yet.' : <span key={step} className="review-step-text inline-block">{progress?.retrying ? 'Retrying the review' : preparing && processingText ? processingText : step}</span>}</p>
+    {!unavailable && <>
+      <div role="progressbar" aria-label="Review steps" aria-valuetext={step} className="review-progress-track relative mt-5 h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
+        <div className="review-progress-fill h-full rounded-full bg-accent/60" style={{ width: `${8 + phase * 27}%` }}><span className="review-progress-activity block h-full w-12 bg-accent" /></div>
+      </div>
+      <div className="mt-4 space-y-1 text-sm leading-relaxed">
+        <p className="font-medium text-text-primary">{expectation}</p>
+        <p className="tabular-nums text-text-secondary">{elapsedLabel}</p>
+        <p className="text-text-tertiary">{estimate ? `Based on ${estimate.sampleCount} recent similar videos. Queue time is additional.` : 'The first few reviews help measure this. Feedback appears automatically.'}</p>
+        {overrun && <p className="pt-2 text-text-secondary">Taking longer than usual. Your review is still running.</p>}
+      </div>
+    </>}
     {(failed || unavailable) && <button className="mt-2 min-h-11 text-sm font-medium text-accent" onClick={() => { setFailed(false); setFailedThumbnail(false); setAttempt(n => n + 1); void onRefresh() }}>{unavailable ? 'Check again' : 'Retry preview'}</button>}
     {!unavailable && <button aria-label={paused ? 'Resume animation' : 'Pause animation'} title={paused ? 'Resume animation' : 'Pause animation'} className="request-motion absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-full text-text-tertiary hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => setPaused(v => !v)}>{paused ? <Play size={12} /> : <Pause size={12} />}</button>}
   </div>
 }
 const unavailableAction = async () => { throw new Error('This action is unavailable on a request link.') }
 
-export function RequestWorkspace({ token, brand, assets, activeId, onSelect, onRevise, onObject, onRefresh, processingText }: {
+export function RequestWorkspace({ token, brand, assets, activeId, onSelect, onRevise, onObject, onRefresh, processingText, statusUnavailable }: {
   token: string; brand?: string; assets: RequestAsset[]; activeId?: string; onSelect: (id: string) => void
   onRevise?: (asset: RequestAsset) => void; onRefresh: () => void | Promise<void>
   onObject?: (asset: RequestAsset, comment: ReviewComment, text: string) => Promise<{ withdrawn: boolean; why: string }>
-  processingText?: string
+  processingText?: string; statusUnavailable?: boolean
 }) {
   const latest = assets.find(a => a.asset_id === activeId) || assets.find(a => a.review_state === 'held') || assets[0]
   const [historyId, setHistoryId] = React.useState('')
@@ -88,7 +123,7 @@ export function RequestWorkspace({ token, brand, assets, activeId, onSelect, onR
       {latest?.versions && latest.versions.length > 1 ? <select aria-label="Review version" value={historyId || latest.version_id} onChange={e => { useReviewStore.getState().reset(); setHistoryId(e.target.value) }} className="min-h-11 rounded-lg border border-border bg-bg-primary px-3 text-sm">{latest.versions.map(v => <option key={v.id} value={v.id}>v{v.version_number}{v.id === latest.version_id ? ' · Latest' : ' · History'}</option>)}</select> : latest && <span className="rounded-full bg-bg-hover px-3 py-1 text-xs">v{latest.version}</span>}
     </div>
     {onRevise && !historic && latest?.processing === 'failed' && <button onClick={() => onRevise(latest)} className="mt-4 min-h-11 w-full rounded-full bg-accent px-4 text-sm font-semibold text-text-inverse">Upload a replacement v{latest.version + 1}</button>}
-    {pending ? <ReviewAnalysis key={`${asset?.asset_id}-${asset?.version_id}-${historyId}`} mediaUrl={source.current?.key === sourceKey ? source.current.url : undefined} thumbnailUrl={asset?.thumbnail_url} unavailable={unavailable || !!historyError} onRefresh={refreshMedia} processingText={processingText} /> : <div className="request-review-grid mt-4 grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
+    {pending ? <ReviewAnalysis key={`${asset?.asset_id}-${asset?.version_id}-${historyId}`} mediaUrl={source.current?.key === sourceKey ? source.current.url : undefined} thumbnailUrl={asset?.thumbnail_url} unavailable={unavailable || !!historyError || statusUnavailable} onRefresh={refreshMedia} processingText={processingText} progress={asset?.review_progress} processing={asset?.processing} /> : <div className="request-review-grid mt-4 grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
       <div className="request-media flex min-w-0 items-center justify-center overflow-hidden rounded-2xl bg-black/95">
         {asset?.media_url ? asset.asset_type === 'image' ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={source.current?.url} alt={asset.name} className="max-h-[65vh] max-w-full object-contain" /> : <VideoPlayer key={`${asset.asset_id}-${asset.version_id}-${historyId}`} assetId={latest.asset_id} initialStreamUrl={source.current?.url} onRetry={refreshMedia} comments={native} className="request-player h-full w-full" /> : <div className="p-8 text-center text-sm text-white/70">{historyError ? 'This version could not be loaded.' : historic ? 'Loading this version…' : 'Your video is being prepared.'}<button className="mx-auto mt-3 block min-h-11 underline" onClick={onRefresh}>Refresh video</button></div>}
       </div>

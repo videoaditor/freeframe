@@ -99,12 +99,15 @@ def object_to_note(share_token: str, asset_id: str, comment_id: str, body: str, 
     }, timeout=45)
 
 
-def asset_stats(asset_ids: list[str]) -> dict[str, dict]:
+def asset_stats(asset_ids: list[str], *, request_token: Optional[str] = None) -> dict[str, dict]:
     if not asset_ids:
         return {}
     assets = {}
     for start in range(0, len(asset_ids), 200):
-        r = _call("GET", "/api/v1/assets", params={"ids": ",".join(asset_ids[start:start + 200])})
+        params = {"ids": ",".join(asset_ids[start:start + 200])}
+        if request_token:
+            params["request_token"] = request_token
+        r = _call("GET", "/api/v1/assets", params=params)
         values = r.get("assets") if isinstance(r, dict) else None
         if isinstance(values, dict):
             assets.update({key: value for key, value in values.items() if key in asset_ids and isinstance(value, dict)})

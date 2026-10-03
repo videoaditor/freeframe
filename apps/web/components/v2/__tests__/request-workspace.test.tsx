@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RequestWorkspace, SubmissionSuccess } from '../request-workspace'
 import type { RequestAsset } from '@/lib/platform'
@@ -81,4 +81,45 @@ it('lets the editor replace a failed submitted version on the same asset', () =>
   expect(screen.getByText('Review unavailable')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Upload a replacement v3' }))
   expect(revise).toHaveBeenCalledWith(asset)
+})
+
+it('parks scanning after one cycle while real stage, measured expectation and elapsed remain visible', () => {
+  vi.useFakeTimers()
+  try {
+    const asset: RequestAsset = {asset_id:'a',name:'Cut',version:1,version_id:'v1',processing:'ready',review_state:'reviewing',comments:[],review_progress:{stage:'reading',step:'analysing',startedAgoSeconds:30,estimate:{lowerSeconds:90,upperSeconds:180,sampleCount:12}}}
+    const {rerender}=render(<RequestWorkspace token="t" assets={[asset]} onSelect={vi.fn()} onRefresh={vi.fn()} />)
+    expect(screen.getByText('Checking the video')).toBeVisible()
+    expect(screen.getByText('Analysis usually 1.5–3 min')).toBeVisible()
+    expect(document.querySelector('.review-analysis')).toHaveAttribute('data-scanning','true')
+    act(()=>vi.advanceTimersByTime(4000))
+    expect(document.querySelector('.review-analysis')).toHaveAttribute('data-scanning','false')
+    expect(screen.getByText('0:34 elapsed')).toBeVisible()
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow','100')
+    rerender(<RequestWorkspace token="t" assets={[{...asset,review_progress:{...asset.review_progress!,step:'finishing'}}]} onSelect={vi.fn()} onRefresh={vi.fn()} />)
+    expect(screen.getByText('Preparing feedback')).toBeVisible()
+  } finally {vi.useRealTimers()}
+})
+it('makes queue time and an analysis overrun explicit without inventing a completion', () => {
+  const asset: RequestAsset={asset_id:'a',name:'Cut',version:1,processing:'ready',review_state:'reviewing',comments:[],review_progress:{stage:'waiting',estimate:{lowerSeconds:120,upperSeconds:180,sampleCount:12}}}
+  const props={token:'t',onSelect:vi.fn(),onRefresh:vi.fn()}
+  const {rerender}=render(<RequestWorkspace {...props} assets={[asset]} />)
+  expect(screen.getByText('Waiting for review')).toBeVisible()
+  expect(screen.getByText(/Queue time is additional/)).toBeVisible()
+  rerender(<RequestWorkspace {...props} assets={[{...asset,review_progress:{...asset.review_progress!,stage:'reading',step:'analysing',startedAgoSeconds:200}}]} />)
+  expect(screen.getByText(/Taking longer than usual/)).toBeVisible()
+  expect(screen.queryByTestId('player')).toBeNull()
+})
+
+it('stops cached review motion on a status outage and resumes on recovery', () => {
+  const asset: RequestAsset={asset_id:'a',name:'Cut',version:1,processing:'ready',review_state:'reviewing',thumbnail_url:'/cut.jpg',comments:[],review_progress:{stage:'reading',step:'analysing'}}
+  const props={token:'t',onSelect:vi.fn(),onRefresh:vi.fn(),assets:[asset]}
+  const {rerender}=render(<RequestWorkspace {...props} />)
+  expect(screen.getByRole('progressbar')).toBeVisible()
+  rerender(<RequestWorkspace {...props} statusUnavailable />)
+  expect(screen.getByText('Review unavailable')).toBeVisible()
+  expect(screen.queryByRole('progressbar')).toBeNull()
+  expect(document.querySelector('.review-analysis')).toHaveAttribute('data-scanning','false')
+  expect(screen.getByAltText('Still frame of your submitted video')).toBeVisible()
+  rerender(<RequestWorkspace {...props} statusUnavailable={false} />)
+  expect(screen.getByRole('progressbar')).toBeVisible()
 })

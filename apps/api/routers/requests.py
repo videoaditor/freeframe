@@ -494,8 +494,20 @@ def editor_review_state(version, evidence):
     """Only a verdict for these exact bytes may clear the editor's work."""
     if not version or version.processing_status != ProcessingStatus.ready:
         return 'unavailable' if version and version.processing_status == ProcessingStatus.failed else 'reviewing'
-    if not isinstance(evidence, dict) or not evidence.get('version_id'):
+    if not isinstance(evidence, dict):
         return 'unavailable'
+    progress = evidence.get('progress') if isinstance(evidence.get('progress'), dict) else {}
+    if progress.get('stage') in ('reading', 'failed', 'skipped') and progress.get('version_id') != str(version.id):
+        return 'reviewing' if evidence.get('watching') is True else 'unavailable'
+    if progress.get('version_id') in (None, str(version.id)):
+        if progress.get('stage') in ('failed', 'skipped'):
+            return 'unavailable'
+        if evidence.get('reviewed') is False and progress.get('stage') in ('waiting', 'reading'):
+            return 'reviewing'
+    if evidence.get('watching') is False and evidence.get('version_id') != str(version.id) and progress.get('version_id') != str(version.id):
+        return 'unavailable'
+    if not evidence.get('version_id'):
+        return 'reviewing' if evidence.get('watching') is True and progress.get('stage') in ('waiting', 'reading') else 'unavailable'
     if evidence['version_id'] != str(version.id) or evidence.get('reviewed') is not True:
         return 'reviewing'
     if type(evidence.get('openMustFix')) is not int or evidence['openMustFix'] < 0:
@@ -525,12 +537,18 @@ def _version_review(db, req, asset, version, reviewer, evidence, include_media=T
         media_url = s3_service.generate_presigned_get_url(media.s3_key_raw if asset.asset_type == AssetType.video else media.s3_key_processed or media.s3_key_raw)
         if media.s3_key_thumbnail and asset.asset_type != AssetType.audio:
             thumbnail_url = s3_service.generate_presigned_get_url(media.s3_key_thumbnail)
+    progress = dict(evidence['progress']) if isinstance(evidence, dict) and isinstance(evidence.get('progress'), dict) else {}
+    if progress and ((progress.get('stage') in ('reading', 'failed', 'skipped') and progress.get('version_id') != (str(version.id) if version else None)) or progress.get('version_id') not in (None, str(version.id) if version else None)):
+        progress = {'stage': 'waiting'} if evidence.get('watching') is True else {}
+    if progress and not progress.get('estimate') and media and media.duration_seconds and evidence.get('estimates'):
+        bucket = 'short' if media.duration_seconds <= 60 else 'medium' if media.duration_seconds <= 120 else 'long'
+        progress['estimate'] = evidence['estimates'].get(bucket)
     review_error = None if asset.asset_type == AssetType.video else 'Automatic review supports videos. Ask the owner to move this attachment out of the request.'
     return {'asset_id': str(asset.id), 'name': asset.name, 'asset_type': asset.asset_type.value, 'review_error': review_error,
             'version_id': str(version.id) if version else None, 'version': version.version_number if version else 0,
             'processing': version.processing_status.value if version else 'uploading',
             'media_url': media_url, 'thumbnail_url': thumbnail_url, 'duration_seconds': media.duration_seconds if media else None,
-            'comments': comments, 'review_state': state,
+            'comments': comments, 'review_state': state, 'review_progress': progress or None,
             'open_must_fixes': evidence['openMustFix'] if state in ('held', 'clear') and evidence else sum(bool(c.get('must_fix')) for c in comments)}
 
 
@@ -540,12 +558,15 @@ def _review_assets(db, req, assets, reviewer, stats, include_media=True):
         versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id, AssetVersion.deleted_at.is_(None)) \
             .order_by(AssetVersion.version_number.desc()).all()
         current = versions[0] if versions else None
-        entry = _version_review(db, req, asset, current, reviewer, stats.get(str(asset.id)), include_media)
+        evidence = stats.get(str(asset.id))
+        entry = _version_review(db, req, asset, current, reviewer, evidence, include_media)
         # A ready/failed record without successful transfer evidence cannot be a delivery.
         record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
             RequestUpload.asset_id == asset.id, RequestUpload.version_number == current.version_number).first() if current else None
         if current and current.processing_status != ProcessingStatus.uploading and (not record or not record.submitted_at):
             entry['review_state'] = 'unavailable'
+        if record and record.submitted_at and (entry.get('review_progress') or {}).get('stage') == 'waiting':
+            entry['review_progress']['queued_at'] = record.submitted_at.isoformat()
         entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
         out.append(entry)
     return out
@@ -553,7 +574,7 @@ def _review_assets(db, req, assets, reviewer, stats, include_media=True):
 
 def _editor_review(db, req):
     assets = _submitted_assets(db, req)
-    stats = review_bridge.asset_stats([str(a.id) for a in assets])
+    stats = review_bridge.asset_stats([str(a.id) for a in assets], request_token=req.review_share_token)
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
     out = _review_assets(db, req, assets, reviewer, stats)
     bridge = review_bridge.request_status([req.review_share_token]).get(req.review_share_token)

@@ -556,7 +556,7 @@ button:not(:disabled), summary { cursor: pointer; }
 .review-frame-preview > img, .review-frame-preview > video { filter: brightness(.55); }
 .review-frame-overlay { color: oklch(.83 .13 225); }
 .review-frame-grid { background-image: linear-gradient(to right, oklch(.8 .1 230 / .15) 1px, transparent 1px), linear-gradient(to bottom, oklch(.8 .1 230 / .15) 1px, transparent 1px); background-size: 33.333% 25%; }
-.review-analysis-scan { animation: review-analysis-scan 3.6s cubic-bezier(.65, 0, .35, 1) infinite; }
+.review-analysis-scan { animation: review-analysis-scan 3.6s cubic-bezier(.65, 0, .35, 1) 1; }
 .review-analysis-scan::before { content: ''; display: block; height: 1px; background: currentColor; box-shadow: 0 0 12px 3px oklch(.72 .17 240 / .35); }
 .review-frame-target { border-color: oklch(.85 .12 225 / .35); background: oklch(.75 .13 235 / .04); }
 .review-frame-target i { position: absolute; width: 10px; height: 10px; border-color: currentColor; border-style: solid; }
@@ -564,13 +564,23 @@ button:not(:disabled), summary { cursor: pointer; }
 .review-frame-target i:nth-child(2) { top: -1px; right: -1px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
 .review-frame-target i:nth-child(3) { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 4px; }
 .review-frame-target i:nth-child(4) { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
-.review-analysis[data-paused="true"] .review-analysis-scan { animation-play-state: paused; }
+/* Motion announces the start, then moves to a small status indicator. */
+.review-analysis[data-scanning="false"] .review-analysis-scan { animation: none; transform: translateY(calc(100% - 8px)); opacity: .12; }
+.review-analysis[data-scanning="false"] .review-frame-grid, .review-analysis[data-scanning="false"] .review-frame-target { opacity: .18; }
+.review-frame-grid, .review-frame-target { transition: opacity 150ms; }
+.review-progress-fill { background: color-mix(in oklch, var(--accent) 55%, transparent); overflow: hidden; transition: width 150ms ease-out; }
+.review-progress-activity { animation: review-progress-activity 2s linear infinite; }
+.review-step-text { animation: review-step-enter 150ms ease-out; }
+.review-analysis[data-paused="true"] .review-analysis-scan, .review-analysis[data-paused="true"] .review-progress-activity { animation-play-state: paused; }
+@keyframes review-progress-activity { from { transform: translateX(-48px); opacity: .3; } to { transform: translateX(384px); opacity: .7; } }
+@keyframes review-step-enter { from { transform: translateY(2px); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
 @keyframes review-analysis-scan {
   0%, 100% { transform: translateY(8px); opacity: .2; }
   50% { transform: translateY(calc(100% - 8px)); opacity: .9; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .review-robot-dance, .review-analysis-scan { animation: none; }
+  .review-robot-dance, .review-analysis-scan, .review-progress-activity, .review-step-text { animation: none; }
+  .review-progress-fill, .review-frame-grid, .review-frame-target { transition: none; }
   .request-motion { display: none; }
 }
 .request-player {
