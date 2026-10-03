@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Review step progress, elapsed time and measured analysis-duration ranges for comparable videos. The introductory scan parks after one cycle, with subtle status motion and explicit longer-than-usual handling.
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 
 ### Fixed
+- Keep invited editors in the real review state while their first version is queued or analysed, and retain upload access on review-service outages.
 - File-request uploads complete successfully when the editor supplies their name and email at submission, instead of failing before processing starts.
 - Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Customer Projects uses file requests and lists all accessible brand projects; customer folders no longer require or announce an internal Trello card. Staff hand-in behavior is unchanged.

@@ -247,3 +247,27 @@ def test_unmeasured_object_never_becomes_submitted(monkeypatch):
         rq.guest_complete('t', rq.GuestComplete(s3_key='raw/a',upload_id='u',parts=[]), BackgroundTasks(), db)
     assert err.value.status_code == 503
     assert record.submitted_at is None and v.processing_status == ProcessingStatus.uploading
+
+@pytest.mark.parametrize('stage', ['reading', 'waiting'])
+def test_pending_review_does_not_require_a_finished_version_id(stage):
+    v = AssetVersion(id=uuid.uuid4(), version_number=1, processing_status=ProcessingStatus.ready)
+    evidence = {'reviewed': False, 'version_id': None, 'progress': {'stage': stage, 'version_id': str(v.id)}}
+    assert rq.editor_review_state(v, evidence) == 'reviewing'
+
+@pytest.mark.parametrize('stage', ['failed', 'skipped'])
+def test_failed_review_is_not_presented_as_running(stage):
+    v = AssetVersion(id=uuid.uuid4(), version_number=1, processing_status=ProcessingStatus.ready)
+    evidence = {'reviewed': False, 'version_id': str(v.id), 'progress': {'stage': stage, 'version_id': str(v.id)}}
+    assert rq.editor_review_state(v, evidence) == 'unavailable'
+
+def test_pending_progress_cannot_clear_a_new_version():
+    v = AssetVersion(id=uuid.uuid4(), version_number=2, processing_status=ProcessingStatus.ready)
+    evidence = {'reviewed': True, 'version_id': str(uuid.uuid4()), 'openMustFix': 0,
+                'progress': {'stage': 'reading', 'version_id': str(uuid.uuid4())}}
+    assert rq.editor_review_state(v, evidence) == 'unavailable'
+
+@pytest.mark.parametrize('watching,expected', [(True, 'reviewing'), (False, 'unavailable')])
+def test_stale_progress_only_waits_with_a_registered_watch(watching, expected):
+    v = AssetVersion(id=uuid.uuid4(), version_number=2, processing_status=ProcessingStatus.ready)
+    assert rq.editor_review_state(v, {'reviewed': False, 'version_id': None, 'watching': watching,
+        'progress': {'stage': 'reading', 'version_id': str(uuid.uuid4())}}) == expected

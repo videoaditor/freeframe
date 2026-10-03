@@ -31,7 +31,7 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
     monkeypatch.setattr(rq.s3_service, 'get_s3_client', lambda: MagicMock(head_object=lambda **k: {'ContentLength': 100}))
     monkeypatch.setattr(rq.s3_service, 'generate_presigned_get_url', lambda key: 'https://media.example/' + key)
     stats = {}
-    monkeypatch.setattr(rq.review_bridge, 'asset_stats', lambda *a: stats)
+    monkeypatch.setattr(rq.review_bridge, 'asset_stats', lambda *a, **kw: stats)
     monkeypatch.setattr(rq.review_bridge, 'request_status', lambda *a: {'share': {'status': 'clear', 'openMustFixes': 0}})
     try:
         Base.metadata.create_all(engine)
@@ -125,7 +125,7 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
             rq.guest_abort('token', rq.GuestPart(s3_key=retry_v4['s3_key'], upload_id='multipart', part_number=1), db)
         # A simultaneous initiation waits for the completion lock, then sees completed_at.
         checking, release = Event(), Event()
-        def evidence(*args):
+        def evidence(*args, **kwargs):
             checking.set(); assert release.wait(5); return stats
         monkeypatch.setattr(rq.review_bridge, 'asset_stats', evidence)
         def finish():

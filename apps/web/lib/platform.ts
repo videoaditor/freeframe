@@ -253,10 +253,19 @@ export interface RequestView {
   expires_at: string | null
 }
 
+export interface ReviewProgress {
+  stage: 'waiting' | 'reading' | 'failed' | 'skipped' | 'done'
+  step?: 'preparing' | 'measuring' | 'analysing' | 'finishing'
+  version_id?: string; queued_at?: string
+  startedAgoSeconds?: number; quietSeconds?: number; retrying?: boolean
+  failedKind?: 'too-large' | 'on-our-side' | 'unreadable'
+  estimate?: { lowerSeconds: number; upperSeconds: number; sampleCount: number } | null
+}
 export interface RequestAsset {
   asset_id: string; name: string; version: number; version_id?: string; processing: string; comments: ReviewComment[]
   asset_type?: string; media_url?: string | null; thumbnail_url?: string | null; duration_seconds?: number | null
   review_state?: 'reviewing' | 'held' | 'clear' | 'unavailable'
+  review_progress?: ReviewProgress | null
   versions?: { id: string; version_number: number; processing: string }[]
 }
 export interface RequestReview {
