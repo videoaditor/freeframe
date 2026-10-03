@@ -18,6 +18,7 @@ celery_app = Celery(
         "apps.api.tasks.reminder_tasks",
         "apps.api.tasks.email_tasks",
         "apps.api.tasks.cleanup_tasks",
+        "apps.api.tasks.product_feedback_tasks",
     ],
 )
 
@@ -67,6 +68,11 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
+    "daily-product-feedback": {
+        "task": "send_product_feedback_digest",
+        "schedule": crontab(minute=settings.product_feedback_digest_minute_utc,
+                            hour=settings.product_feedback_digest_hour_utc),
+    },
     "due-date-reminders": {
         "task": "send_due_date_reminders",
         "schedule": crontab(minute="0"),  # every hour

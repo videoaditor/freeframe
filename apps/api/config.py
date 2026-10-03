@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from urllib.parse import urlparse
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default S3 endpoint (local MinIO). Shared between the field default and the
@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 90
     frontend_url: str = "http://localhost:3000"
+    # Existing Slack app only; empty token keeps intake working without sending.
+    product_feedback_slack_token: str = ""
+    product_feedback_slack_channel: str = "C07UL6BAG1Z"
+    product_feedback_digest_hour_utc: int = Field(default=0, ge=0, le=23)
+    product_feedback_digest_minute_utc: int = Field(default=0, ge=0, le=59)
 
     # A standing share link for an automation, created with every new project and POSTed to this
     # URL. Empty (the default) means no link is created and nothing is sent.

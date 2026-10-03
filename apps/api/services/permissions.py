@@ -97,6 +97,10 @@ def require_project_role(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Requires {minimum_role.value} role or higher",
         )
+    from .campaign_access import require_project_access
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_project_access(db, project.created_by)
     return role
 
 
@@ -121,6 +125,10 @@ def is_public_project(db: Session, project_id: uuid.UUID, user: User) -> bool:
 
 def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     """Check if user can access the asset via any path."""
+    from .campaign_access import require_project_access
+    project = db.get(Project, asset.project_id)
+    if project is not None:
+        require_project_access(db, project.created_by)
     # 1. Asset creator
     if asset.created_by == user.id:
         return True
@@ -187,6 +195,14 @@ def validate_share_link(db: Session, token: str) -> ShareLink:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Share link is disabled")
     if link.expires_at and link.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Share link has expired")
+    from .campaign_access import require_project_access
+    project_id = link.project_id
+    if not project_id and (link.folder_id or link.asset_id):
+        target = db.get(Folder, link.folder_id) if link.folder_id else db.get(Asset, link.asset_id)
+        project_id = target.project_id if target is not None else None
+    project = db.get(Project, project_id) if project_id else None
+    if project is not None:
+        require_project_access(db, project.created_by)
     return link
 
 

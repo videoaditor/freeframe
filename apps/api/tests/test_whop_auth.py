@@ -242,3 +242,51 @@ def test_open_event_stream_stops_before_emitting_after_revocation(monkeypatch):
         return [message async for message in events.customer_event_stream('project', customer())]
     assert asyncio.run(collect()) == ['first']
     assert closed == [True]
+
+
+def trial_context(paid=False):
+    from apps.api.services.campaign_access import TELEHEALTH
+    return {**TELEHEALTH, 'state': 'active', 'previewOnly': not paid}
+
+
+def test_cached_trial_cannot_cross_cutoff(monkeypatch, redis):
+    from apps.api.services import campaign_access
+    user = customer(suite_campaign=trial_context())
+    service.store_owner_session(user, service.owner_from_token(token(exp=campaign_access.ENDS_AT_TIMESTAMP + 600)))
+    redis.setex(service.gate_key(user.id), 60, redis.get(service.session_key(user.id)))
+    monkeypatch.setattr(service.time, 'time', lambda: campaign_access.ENDS_AT_TIMESTAMP)
+    monkeypatch.setattr(service, '_post', lambda *a, **k: {'allow': False, 'reason': 'campaign_expired', 'campaign': trial_context()})
+    with pytest.raises(HTTPException) as exc:
+        service.require_customer_entitlement(user)
+    assert exc.value.status_code == 403
+    assert exc.value.detail['code'] == 'campaign_expired'
+
+
+def test_expired_trial_preserves_identity_but_not_tool_access(monkeypatch, redis):
+    from apps.api.services import campaign_access
+    user = customer(suite_campaign=trial_context())
+    owner_token = token(exp=campaign_access.ENDS_AT_TIMESTAMP + 600)
+    service.store_owner_session(user, service.owner_from_token(owner_token))
+    monkeypatch.setattr(service.time, 'time', lambda: campaign_access.ENDS_AT_TIMESTAMP)
+    monkeypatch.setattr(service, '_post', lambda *a, **k: {'allow': False, 'reason': 'campaign_expired', 'campaign': trial_context()})
+    service.require_customer_entitlement(user, allow_expired=True)
+    assert user.suite_campaign['state'] == 'expired'
+    with pytest.raises(HTTPException):
+        service.require_customer_entitlement(user)
+
+
+def test_identity_exception_does_not_allow_revoked_membership(monkeypatch, redis):
+    user = customer(suite_campaign=trial_context())
+    service.store_owner_session(user, service.owner_from_token(token()))
+    monkeypatch.setattr(service, '_post', lambda *a, **k: {'allow': False, 'reason': 'membership_inactive', 'campaign': trial_context()})
+    with pytest.raises(HTTPException) as exc:
+        service.require_customer_entitlement(user, allow_expired=True)
+    assert exc.value.status_code == 403
+
+
+def test_paid_upgrade_updates_trusted_campaign(monkeypatch, redis):
+    user = customer(suite_campaign=trial_context())
+    service.store_owner_session(user, service.owner_from_token(token()))
+    monkeypatch.setattr(service, '_post', lambda *a, **k: {'allow': True, 'campaign': trial_context(paid=True)})
+    service.require_customer_entitlement(user)
+    assert user.suite_campaign['previewOnly'] is False

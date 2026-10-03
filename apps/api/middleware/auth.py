@@ -51,7 +51,7 @@ def _service_key_user(request: Request, db: Session) -> Optional[User]:
     return user
 
 
-def get_current_user(
+def get_identity_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
@@ -68,7 +68,19 @@ def get_current_user(
     user = get_user_by_id(db, uuid.UUID(payload["sub"]))
     if not user or user.status == UserStatus.deactivated:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deactivated")
-    require_customer_entitlement(user)
+    require_customer_entitlement(user, allow_expired=True)
+    return user
+
+
+def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    user = get_identity_user(request, credentials, db)
+    from ..services.campaign_access import preview_expired, expired_error
+    if preview_expired(user):
+        raise expired_error()
     return user
 
 def get_optional_user(

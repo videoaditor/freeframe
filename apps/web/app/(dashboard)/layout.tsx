@@ -10,6 +10,7 @@ import { CommandPalette } from "@/components/layout/command-palette";
 import { UploadsPanel } from "@/components/layout/uploads-panel";
 import { UploadSSEBridge } from "@/components/layout/upload-sse-bridge";
 import { cn } from "@/lib/utils";
+import { CampaignBoundary } from "@/components/campaign-boundary";
 
 export default function DashboardLayout({
   children,
@@ -53,12 +54,12 @@ export default function DashboardLayout({
       <main
         className={cn(
           "dashboard-main flex min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring",
-          sidebarCollapsed ? "ml-[72px]" : "ml-[220px]",
+          sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[220px]",
         )}
       >
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
 
-        <div className="relative flex-1 overflow-y-auto">{children}</div>
+        <div className="relative flex-1 overflow-y-auto"><CampaignBoundary>{children}</CampaignBoundary></div>
       </main>
 
       <UploadsPanel />

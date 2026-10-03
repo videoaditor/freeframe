@@ -115,13 +115,15 @@ def auth_headers(client, mock_db, test_user):
     token = create_access_token(str(test_user.id))
 
     # Make get_current_user resolve to test_user
-    from apps.api.middleware.auth import get_current_user
+    from apps.api.middleware.auth import get_current_user, get_identity_user
     from apps.api.main import app
 
     app.dependency_overrides[get_current_user] = lambda: test_user
+    app.dependency_overrides[get_identity_user] = lambda: test_user
     yield {"Authorization": f"Bearer {token}"}
     # Cleanup: remove get_current_user override but keep get_db override
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_identity_user, None)
 
 
 @pytest.fixture(autouse=True)

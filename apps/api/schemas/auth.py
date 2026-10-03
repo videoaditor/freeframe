@@ -25,6 +25,14 @@ class UserResponse(BaseModel):
     is_superadmin: bool = False
     is_staff: bool = True
     preferences: dict = {}
+    suite_campaign: dict | None = None
+
+    @field_validator('suite_campaign', mode='before')
+    @classmethod
+    def campaign_context(cls, v):
+        # Normalize only server-owned JSON; legacy mock/users may have no context.
+        from ..services.campaign_access import validate_context
+        return validate_context(v) if isinstance(v, dict) else None
 
     model_config = {"from_attributes": True}
 
@@ -86,4 +94,3 @@ class UpdateUserRoleRequest(BaseModel):
 
 class DeactivateUserRequest(BaseModel):
     user_id: uuid.UUID
-

@@ -55,6 +55,7 @@ export interface User {
   email_verified: boolean;
   invite_token?: string | null;
   preferences: Record<string, unknown>;
+  suite_campaign?: { id: string; tool: string; endsAt: string; state: 'active' | 'expired'; previewOnly: boolean } | null;
   created_at: string;
   deleted_at: string | null;
 }
