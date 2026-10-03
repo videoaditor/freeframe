@@ -23,7 +23,8 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
     with admin.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA {schema}'))
     engine = create_engine(os.environ['ITERATIONS_TEST_DATABASE_URL'], connect_args={'options': f'-csearch_path={schema}'})
-    Session = sessionmaker(bind=engine)
+    # Match production: pending additions cannot be found by a query until flushed.
+    Session = sessionmaker(bind=engine, autoflush=False)
     monkeypatch.setattr(rq, 'upload_guard_error', lambda *a: None)
     monkeypatch.setattr(rq, 'create_multipart_upload', lambda *a: 'multipart')
     monkeypatch.setattr(rq, 'complete_multipart_upload', lambda *a: None)
