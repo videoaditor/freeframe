@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { GoogleButton } from '@/components/auth/google-button'
 import type { VerifyCodeResponse, AuthTokens } from '@/types'
 
 type Step = 'email' | 'code' | 'password' | 'classic'
@@ -255,6 +256,8 @@ export function LoginForm() {
           <p className="text-sm text-text-secondary">Enter your email and password to continue.</p>
         </div>
 
+        <GoogleButton />
+
         <form onSubmit={handleClassicLogin} className="flex flex-col gap-4">
           {classicError && (
             <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
@@ -418,6 +421,8 @@ export function LoginForm() {
           Enter your email and we&apos;ll send you a sign-in code.
         </p>
       </div>
+
+      <GoogleButton />
 
       <form onSubmit={handleSendCode} className="flex flex-col gap-4">
         {generalError && (
