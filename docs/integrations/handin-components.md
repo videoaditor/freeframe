@@ -37,7 +37,7 @@ Only authenticated project owners can list/download private originals through Fr
 | Service | Setting | Purpose |
 | --- | --- | --- |
 | FreeFrame API/worker | `ITERATIONS_ENABLED=true` | Enables request orchestration. Leave false until all services are prepared. |
-| FreeFrame API/worker | `MIXER_ITERATIONS_URL` | Base private adapter URL, including `/api/internal/iterations`. |
+| FreeFrame API/worker | `MIXER_ITERATIONS_URL` | HTTPS service origin only, for example `https://mixer.example.test`; FreeFrame appends `/api/internal/iterations`. |
 | FreeFrame API/worker | `MIXER_ITERATIONS_SECRET` | Must match Mixer's private Bearer secret. |
 | FreeFrame API/worker | `REVIEW_BRIDGE_URL`, `REVIEW_BRIDGE_SECRET` | Exact review and delivery adapter, matching AutoReview's service authentication. |
 | FreeFrame web build | `NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED=true` | Exposes internal parts hand-in, owner request option and private parts library. Build-time public flag, no secret. |
