@@ -488,12 +488,14 @@ function ShareTopBar({
         <button
           onClick={onToggleSidebar}
           className={cn(
-            'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+            'flex items-center justify-center h-11 w-11 md:h-8 md:w-8 rounded-md transition-colors',
             sidebarOpen
               ? 'bg-white/10 text-white'
               : 'text-zinc-500 hover:text-white hover:bg-white/10',
           )}
-          title="Toggle panel"
+          title={sidebarOpen ? 'Hide comments' : 'Show comments'}
+          aria-label={sidebarOpen ? 'Hide comments' : 'Show comments'}
+          aria-expanded={sidebarOpen}
         >
           <Columns2 className="h-4 w-4" />
         </button>
@@ -703,7 +705,7 @@ function ShareRightPanel({
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
 
   return (
-    <div className="w-full md:w-[360px] absolute inset-y-0 right-0 z-20 md:static md:inset-auto flex flex-col border-l-0 md:border-l border-white/[0.06] bg-[#141416] shrink-0 animate-in slide-in-from-right-2 duration-150">
+    <div className="w-full md:w-[360px] h-[48%] md:h-auto min-h-0 flex flex-col border-t md:border-t-0 md:border-l border-white/[0.06] bg-[#141416] shrink-0 max-md:[&_textarea]:text-base">
       {/* Tabs */}
       <div className="px-4 pt-3 pb-2 shrink-0">
         <div className="flex items-center bg-white/5 rounded-lg p-0.5">
@@ -905,7 +907,7 @@ function ShareViewer({
       />
 
       {/* Main content: viewer + sidebar */}
-      <div className="relative flex flex-1 overflow-hidden min-h-0">
+      <div className="relative flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         {/* Left: full-screen media viewer */}
         <ShareMediaViewer
           asset={asset}

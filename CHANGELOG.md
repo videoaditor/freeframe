@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Mobile share reviews keep the video preview and transport visible above comments, including collection asset viewers. Comment toggles now expose accessible names and larger touch targets.
+
+
 ### Added
 - Review step progress, elapsed time and measured analysis-duration ranges for comparable videos. The introductory scan parks after one cycle, with subtle status motion and explicit longer-than-usual handling.
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.

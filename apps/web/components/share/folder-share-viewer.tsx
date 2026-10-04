@@ -755,7 +755,7 @@ function ShareReviewInner({
   }
 
   return (
-    <div className="flex flex-col h-screen bg-bg-primary text-text-primary">
+    <div className="flex flex-col h-dvh bg-bg-primary text-text-primary">
       {/* Top bar — same style as project review */}
       <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
         <div className="flex items-center gap-1 min-w-0 flex-1">
@@ -773,16 +773,16 @@ function ShareReviewInner({
               <Download className="h-3 w-3" /> Download
             </button>
           )}
-          <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-8 w-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
+          <button onClick={() => setSidebarOpen(v => !v)} aria-label={sidebarOpen ? 'Hide comments' : 'Show comments'} aria-expanded={sidebarOpen} className="flex items-center justify-center h-11 w-11 md:h-8 md:w-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
             {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
       {/* Main: viewer + sidebar */}
-      <div className="relative flex flex-1 overflow-hidden min-h-0">
+      <div className="relative flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         {/* Media viewer — reuses project components */}
-        <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
+        <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0 min-h-0">
           {asset.asset_type === 'video' && versionReady && VideoPlayer ? (
             <VideoPlayer
               assetId={asset.id}
@@ -820,7 +820,7 @@ function ShareReviewInner({
 
         {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (
-          <div className="w-full md:w-[360px] absolute inset-y-0 right-0 z-20 md:static md:inset-auto flex flex-col border-l-0 md:border-l border-border bg-bg-secondary shrink-0">
+          <div className="w-full md:w-[360px] h-[48%] md:h-auto min-h-0 flex flex-col border-t md:border-t-0 md:border-l border-border bg-bg-secondary shrink-0 max-md:[&_textarea]:text-base">
             <div className="px-4 pt-3 pb-2 shrink-0">
               <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
                 <button onClick={() => setActiveTab('comments')} className={`flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all ${activeTab === 'comments' ? 'bg-bg-hover text-text-primary shadow-sm' : 'text-text-tertiary'}`}>
