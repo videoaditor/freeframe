@@ -280,13 +280,14 @@ export function ProgressBar({
   className,
 }: ProgressBarProps) {
   const trackRef = useRef<HTMLDivElement>(null)
-  const [isDragging, setIsDragging] = useState(false)
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [hoverX, setHoverX] = useState(0)
   const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null)
   const focusedCommentId = useReviewStore((s) => s.focusedCommentId)
 
   const { previewImage, seekPreview, clearPreview } = useFramePreview(streamUrl)
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0
+  const safeTime = Number.isFinite(currentTime) ? Math.max(0, Math.min(safeDuration, currentTime)) : 0
 
   const timeToPercent = useCallback(
     (time: number): number => {
@@ -301,7 +302,7 @@ export function ProgressBar({
       const track = trackRef.current
       if (!track || !duration) return 0
       const rect = track.getBoundingClientRect()
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left - 10) / Math.max(1, rect.width - 20)))
       return ratio * duration
     },
     [duration],
@@ -316,52 +317,31 @@ export function ProgressBar({
         const rect = track.getBoundingClientRect()
         setHoverX(e.clientX - rect.left)
       }
-      if (isDragging) {
-        onSeek(time)
-      }
       seekPreview(time)
     },
-    [isDragging, getTimeFromEvent, onSeek, seekPreview],
+    [getTimeFromEvent, seekPreview],
   )
 
   const handleMouseLeave = useCallback(() => {
-    if (!isDragging) {
-      setHoverTime(null)
-      clearPreview()
+    setHoverTime(null)
+    clearPreview()
+  }, [clearPreview])
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!safeDuration) return
+    let next: number
+    switch (event.key) {
+      case 'ArrowRight': case 'ArrowUp': next = safeTime + 0.1; break
+      case 'ArrowLeft': case 'ArrowDown': next = safeTime - 0.1; break
+      case 'PageUp': next = safeTime + 1; break
+      case 'PageDown': next = safeTime - 1; break
+      case 'Home': next = 0; break
+      case 'End': next = safeDuration; break
+      default: return
     }
-  }, [isDragging, clearPreview])
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      setIsDragging(true)
-      onSeek(getTimeFromEvent(e.clientX))
-    },
-    [getTimeFromEvent, onSeek],
-  )
-
-  // Global mouse up / move to handle drag outside track
-  useEffect(() => {
-    if (!isDragging) return
-
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      onSeek(getTimeFromEvent(e.clientX))
-    }
-
-    const handleGlobalMouseUp = (e: MouseEvent) => {
-      setIsDragging(false)
-      setHoverTime(null)
-      clearPreview()
-      onSeek(getTimeFromEvent(e.clientX))
-    }
-
-    window.addEventListener('mousemove', handleGlobalMouseMove)
-    window.addEventListener('mouseup', handleGlobalMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleGlobalMouseMove)
-      window.removeEventListener('mouseup', handleGlobalMouseUp)
-    }
-  }, [isDragging, getTimeFromEvent, onSeek, clearPreview])
+    event.preventDefault()
+    onSeek(Math.max(0, Math.min(safeDuration, next)))
+  }
 
   // Separate timecoded comments
   const pointMarkers = comments.filter(
@@ -375,15 +355,29 @@ export function ProgressBar({
   const bufferedPercent = timeToPercent(buffered)
 
   return (
-    <div className={cn('relative flex flex-col w-full group/progress py-1', className)}>
+    <div className={cn('relative flex flex-col w-full group/progress px-4 pb-2', className)}>
       {/* Track area */}
       <div
         ref={trackRef}
-        className="relative w-full h-1 group-hover/progress:h-1.5 transition-all duration-150 cursor-pointer bg-border rounded-full"
+        className="relative w-full h-12 focus-within:ring-2 focus-within:ring-accent/60 rounded-md"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        onMouseDown={handleMouseDown}
       >
+        <input
+          type="range"
+          aria-label="Video timeline"
+          aria-valuetext={`${Number(safeTime.toFixed(1))} of ${Number(safeDuration.toFixed(1))} seconds`}
+          min={0}
+          max={safeDuration}
+          step="any"
+          value={safeTime}
+          disabled={!safeDuration}
+          onChange={(event) => onSeek(Number(event.currentTarget.value))}
+          onKeyDown={handleKeyDown}
+          onBlur={handleMouseLeave}
+          className="absolute inset-0 z-20 w-full h-12 m-0 appearance-none bg-transparent cursor-pointer touch-none disabled:cursor-default focus:outline-none [&::-webkit-slider-runnable-track]:h-5 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-track]:h-5 [&::-moz-range-track]:bg-transparent [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent [&::-moz-range-thumb]:shadow-md"
+        />
+        <div className="absolute inset-x-2.5 top-1/2 -translate-y-1/2 h-2 bg-border rounded-full pointer-events-none">
         {/* Buffered range */}
         <div
           className="absolute inset-y-0 left-0 bg-border-secondary rounded-full"
@@ -416,16 +410,19 @@ export function ProgressBar({
           }}
         />
 
-        {/* Playhead thumb */}
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent shadow-lg opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none z-10"
-          style={{ left: `${playPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}
-        />
+        </div>
       </div>
+      {safeDuration > 0 && (
+        <div className="flex justify-between gap-2 text-xs leading-4 tabular-nums text-text-secondary" aria-hidden="true">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span key={index}>{Number((safeDuration * index / 5).toFixed(1))}s</span>
+          ))}
+        </div>
+      )}
 
       {/* Comment markers row — below the progress bar */}
       {pointMarkers.length > 0 && (
-        <div className="relative w-full h-6 mt-0.5">
+        <div className="relative h-6 mx-2.5 mt-1">
           {pointMarkers.map((c, idx) => {
             if (c.timecode_start === null) return null
             const left = timeToPercent(c.timecode_start)
