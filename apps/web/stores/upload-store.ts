@@ -160,6 +160,47 @@ function mergeHistoryAssets(existing: UploadFile[], assets: AssetResponse[]): Up
   return [...existing, ...newFiles]
 }
 
+// Parts go up several at a time: one TCP stream rarely fills an uplink on a far or
+// lossy connection. The cap is shared by ALL files, so a four-file hand-in opens
+// four streams, not sixteen, and the first file finishes (and gets reviewed) first.
+// ponytail: fixed global cap of 4 (the AWS SDK default); make it adaptive if uplinks vary wildly.
+const PART_CONCURRENCY = 4
+let activeParts = 0
+const partQueue: Array<() => void> = []
+
+async function withPartSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (activeParts >= PART_CONCURRENCY) await new Promise<void>((r) => partQueue.push(r))
+  activeParts++
+  try {
+    return await fn()
+  } finally {
+    activeParts--
+    partQueue.shift()?.()
+  }
+}
+
+export async function uploadAllParts(
+  file: Blob,
+  s3_key: string,
+  upload_id: string,
+  signal: AbortSignal,
+  onProgress: (percent: number) => void,
+): Promise<Array<{ PartNumber: number; ETag: string }>> {
+  const total = Math.ceil(file.size / CHUNK_SIZE)
+  let done = 0
+  return Promise.all(
+    Array.from({ length: total }, (_, i) =>
+      withPartSlot(async () => {
+        if (signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
+        const chunk = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size))
+        const ETag = await uploadPart(chunk, s3_key, upload_id, i + 1, signal)
+        onProgress(Math.round((++done / total) * 95))
+        return { PartNumber: i + 1, ETag }
+      }),
+    ),
+  )
+}
+
 const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = (set, get) => ({
   files: [],
   panelOpen: false,
@@ -227,23 +268,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
 
         updateFile(id, { uploadId: upload_id, assetId: asset_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) {
-            throw new DOMException('Upload cancelled', 'AbortError')
-          }
-
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-
-          const etag = await uploadPart(chunk, s3_key!, upload_id!, partNumber, controller.signal)
-          parts.push({ PartNumber: partNumber, ETag: etag })
-
-          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
-        }
+        const parts = await uploadAllParts(file, s3_key!, upload_id!, controller.signal, (p) => updateFile(id, { progress: p }))
 
         await api.post('/upload/complete', {
           s3_key,
@@ -262,6 +287,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           updateFile(id, { progress: 100, status: 'complete' })
         }
       } catch (err) {
+        controller.abort() // stop this file's other in-flight parts
         if (err instanceof DOMException && err.name === 'AbortError') {
           updateFile(id, { status: 'cancelled', progress: 0 })
         } else {
@@ -325,20 +351,13 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
         version_id = initRes.version_id
         updateFile(id, { uploadId: upload_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
-          parts.push({ PartNumber: partNumber, ETag: await uploadPart(chunk, s3_key!, upload_id!, partNumber, controller.signal) })
-          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
-        }
+        const parts = await uploadAllParts(file, s3_key!, upload_id!, controller.signal, (p) => updateFile(id, { progress: p }))
 
         await api.post('/upload/complete', { s3_key, upload_id, asset_id: assetId, version_id, parts })
         const isMedia = file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/')
         updateFile(id, { progress: 100, status: isMedia ? 'processing' : 'complete', processingProgress: 0 })
       } catch (err) {
+        controller.abort() // stop this file's other in-flight parts
         if (err instanceof DOMException && err.name === 'AbortError') {
           updateFile(id, { status: 'cancelled', progress: 0 })
         } else {
