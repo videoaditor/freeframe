@@ -23,7 +23,7 @@ describe('uploadParts', () => {
   })
   it('gives up after five tries and reports the real error', async () => {
     const put = vi.fn(async () => { throw new TypeError('Failed to fetch') })
-    await expect(uploadParts({ file: file(1), baseMs: 1, presign: async () => 'u', putPart: put })).rejects.toThrow('Failed to fetch')
+    await expect(uploadParts({ file: file(1), baseMs: 1, presign: async () => 'u', putPart: put })).rejects.toThrow(/Failed to fetch \(stopped at 0 of 10 MB after \d+s, [\d.]+ Mbit\/s average\)/)
     expect(put).toHaveBeenCalledTimes(5)
   })
   it('does not retry a refusal', async () => {

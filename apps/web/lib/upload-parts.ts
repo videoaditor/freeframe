@@ -42,6 +42,19 @@ export async function withRetry<T>(fn: () => Promise<T>, signal?: AbortSignal, a
   }
 }
 
+/**
+ * A bare "Failed to fetch" says nothing. Say how far the upload got and how fast it was going, so a screenshot
+ * of the failure tells us whether it was a slow or dropping connection (Sandra, 2026-10-04) or the server.
+ */
+function explainFailure(e: unknown, sent: number, total: number, ms: number): unknown {
+  if (isAbort(e) || !(e instanceof Error)) return e
+  const mb = (n: number) => (n / 1048576).toFixed(0)
+  const mbit = ms > 0 ? ((sent * 8) / 1e6 / (ms / 1000)).toFixed(1) : '0'
+  const out = new Error(`${e.message} (stopped at ${mb(sent)} of ${mb(total)} MB after ${Math.round(ms / 1000)}s, ${mbit} Mbit/s average)`)
+  out.name = e.name
+  return out
+}
+
 export interface UploadedPart { PartNumber: number; ETag: string }
 
 /**
@@ -80,9 +93,10 @@ export async function uploadParts(opts: {
     }
   }
   // Wait for every worker before reporting: no part may still be writing after the caller cleans up.
+  const started = Date.now()
   const results = await Promise.allSettled(Array.from({ length: Math.min(PARTS_IN_FLIGHT, total) }, worker))
   const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
-  if (failure) throw failure.reason
+  if (failure) throw explainFailure(failure.reason, sent, file.size, Date.now() - started)
   return parts.sort((a, b) => a.PartNumber - b.PartNumber)
 }
 
