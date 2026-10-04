@@ -43,6 +43,54 @@ interface VersionInitiateResponse {
 // AbortControllers for cancellation
 const abortControllers: Record<string, AbortController> = {}
 
+// One dropped 10 MB part used to fail the whole file with a bare "Failed to fetch" -
+// on a slow or flaky uplink, with several files uploading at once, that meant every
+// file failed (Veda hand-in, 2026-10-04). A part is safe to re-send: S3 keeps the
+// last PUT for a part number. Re-presign each try so a stale URL can't be the cause.
+const PART_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000]
+
+function abortableSleep(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) return reject(new DOMException('Upload cancelled', 'AbortError'))
+    const t = setTimeout(resolve, ms)
+    signal.addEventListener('abort', () => {
+      clearTimeout(t)
+      reject(new DOMException('Upload cancelled', 'AbortError'))
+    }, { once: true })
+  })
+}
+
+export async function uploadPart(
+  chunk: Blob,
+  s3_key: string,
+  upload_id: string,
+  partNumber: number,
+  signal: AbortSignal,
+  delays: number[] = PART_RETRY_DELAYS_MS,
+): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
+        s3_key, upload_id, part_number: partNumber,
+      })
+      const res = await fetch(presigned_url, { method: 'PUT', body: chunk, signal })
+      if (res.ok) return res.headers.get('ETag') ?? ''
+      // 4xx is a signature/permission problem - re-sending the same thing won't fix it.
+      if (res.status < 500 && res.status !== 429) {
+        throw Object.assign(new Error(`Part ${partNumber} failed: ${res.status} ${res.statusText}`), { fatal: true })
+      }
+      throw new Error(`Part ${partNumber} failed: ${res.status} ${res.statusText}`)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err
+      if ((err as { fatal?: boolean }).fatal) throw err
+      if (attempt >= delays.length) {
+        throw new Error('Connection dropped during upload. Check your internet and try again.')
+      }
+      await abortableSleep(delays[attempt], signal)
+    }
+  }
+}
+
 interface UploadStore {
   files: UploadFile[]
   panelOpen: boolean
@@ -191,23 +239,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           const end = Math.min(start + CHUNK_SIZE, file.size)
           const chunk = file.slice(start, end)
 
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key,
-            upload_id,
-            part_number: partNumber,
-          })
-
-          const putResponse = await fetch(presigned_url, {
-            method: 'PUT',
-            body: chunk,
-            signal: controller.signal,
-          })
-
-          if (!putResponse.ok) {
-            throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
-          }
-
-          const etag = putResponse.headers.get('ETag') ?? ''
+          const etag = await uploadPart(chunk, s3_key!, upload_id!, partNumber, controller.signal)
           parts.push({ PartNumber: partNumber, ETag: etag })
 
           updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
@@ -299,12 +331,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           if (controller.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
           const start = (partNumber - 1) * CHUNK_SIZE
           const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key, upload_id, part_number: partNumber,
-          })
-          const putResponse = await fetch(presigned_url, { method: 'PUT', body: chunk, signal: controller.signal })
-          if (!putResponse.ok) throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
-          parts.push({ PartNumber: partNumber, ETag: putResponse.headers.get('ETag') ?? '' })
+          parts.push({ PartNumber: partNumber, ETag: await uploadPart(chunk, s3_key!, upload_id!, partNumber, controller.signal) })
           updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
         }
 
