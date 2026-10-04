@@ -61,8 +61,8 @@ describe('the video page stage strip', () => {
   it('an unreachable review shows as unavailable, not as a review running', async () => {
     h.fetchReviewStage.mockResolvedValue('unreachable')
     render(<VersionStage assetId="a1" versions={[version(1, 'ready', 20)]} />)
+    await waitFor(() => expect(screen.getByTestId('stage-step-review')).toHaveTextContent('Status unavailable'))
     await waitFor(() => expect(screen.getByTestId('stage-step-review')).toHaveAttribute('data-state', 'unknown'))
-    expect(screen.getByTestId('stage-step-review')).toHaveTextContent('Status unavailable')
   })
 
   it('a customer never sees the review, and the review tool is never even asked', async () => {

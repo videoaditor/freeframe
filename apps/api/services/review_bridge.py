@@ -50,10 +50,21 @@ def brand_slug(name: str) -> str:
 
 
 def register_request(share_token: str, brand: str, title: str, brief_text: str = "",
-                     brief_url: str = "", brief_pdf_base64: str = "") -> Optional[dict]:
+                     brief_url: str = "", brief_pdf_base64: str = "", *,
+                     tenant_id: Optional[str] = None, request_id: Optional[str] = None,
+                     engine: str = "legacy") -> Optional[dict]:
+    if engine not in ("legacy", "continuity-v1"):
+        logger.warning("review bridge registration unavailable: invalid REVIEW_ENGINE")
+        return None
+    if engine == "continuity-v1" and (not tenant_id or not request_id):
+        logger.warning("review bridge registration unavailable: missing trusted identity")
+        return None
     return _call("POST", "/api/v1/requests", json={
         "share_token": share_token, "brand": brand, "title": title,
         "brief_text": brief_text, "brief_url": brief_url, "brief_pdf_base64": brief_pdf_base64,
+        "engine": engine,
+        **({"tenant_id": tenant_id} if tenant_id is not None else {}),
+        **({"request_id": request_id} if request_id is not None else {}),
     }, timeout=60)
 
 
