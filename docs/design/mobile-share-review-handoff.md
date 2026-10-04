@@ -13,10 +13,15 @@ Mobile: toolbar48px; media preview top; comments panel bottom (48% of available 
 Empty comments retain existing text, loading retain spinner, errors retain existing UI, denied permissions retain view-only. Toggle never covers video. No changes to sends, identity prompt, annotations or credentials. Fields uses same lower panel; list scrolls as needed.
 
 ## Accessibility
-44px touch toggle with label and aria-expanded. Preserve keyboard focus and established controls. Small preview retains native aspect via object-fit contain and transport. Horizontal scrolling forbidden. Dynamic viewport/200% zoom checked by actual browser screenshots; real Safari keyboard remains a manual check if not simulated.
+44px touch toggle with label and aria-expanded. Preserve keyboard focus and established controls. Small preview retains native aspect via object-fit contain and transport. Horizontal scrolling forbidden. Dynamic viewport checked using actual browser screenshots; real Safari keyboard and200% zoom remain manual checks, not performed here.
 
 ## Review
 Before390×700: video rect390×592 at(0,48), video center hit DIV from comments overlay; composer visible but preview obscured. Screenshots: autoreview-mobile-overlay-before.jpg. After screenshots and DOM hit tests must show visible video + composer with non-overlapping rectangles. Direct shares and collection asset viewers both use in-flow lower comment pane; desktop geometry unchanged.
 
 ## Scope/status
-Minimal front-end layout patch built from exact deployedb503417 source in an isolated existing-repo remote worktree. No DB/API/worker changes. Preview/test first; rollout only after checks and visual verification. Parent user explicitly identified broken mobile feedback and desired simultaneous preview/comments during commissioned review.
+Minimal front-end layout patch based on current canonical source f94ee55, preserving intervening frontend improvements, committed as b7e6ea6 in an isolated existing-repo remote worktree. No DB/API/worker changes. Preview/test first; rollout only after checks and visual verification. Parent user explicitly identified broken mobile feedback and desired simultaneous preview/comments during commissioned review.
+
+## Verified checks
+Candidate image 7feff202fec877756527777fc8a477c081dd28106dbdfe58a80d802eae653c18 built successfully. Full frontend tests:72 files/496 tests passed. TypeScript passed. Lint passed with existing warnings. Regression failed before the patch and passes afterward. Isolated mobile390×700 and390×500 playback/preview/transport/composer proof passed; desktop1024×767 retains360px sidebar. Real Safari keyboard is not simulated. Web-only roll-out completed; public share playback and seconds-bound composer verified. Original image retained as freeframe-web:before-mobile-review-20261004. API/workers unchanged.
+
+Source is preserved in [draft PR56](https://github.com/videoaditor/freeframe/pull/56); production web only deployed, no main merge.
