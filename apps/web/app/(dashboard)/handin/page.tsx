@@ -366,18 +366,14 @@ export default function HandinPage() {
           description: cardUrl.trim(),
         }));
 
-      // 3. Every video goes INTO that one folder. They upload together; the
-      //    reviewer picks up each asset on its own as it finishes transcoding,
-      //    so all of them get reviewed, not just the first.
-      setStep(files.length > 1 ? `Uploading ${files.length} videos` : "Uploading");
-      const uploaded = await Promise.all(
-        files.map(async (f) => {
-          const uploadId = startUpload(f, projectId, f.name, projectName, folder.id);
-          return { id: await waitForUpload(uploadId), name: f.name };
-        }),
-      );
-
-      // 4. The link to post. Creating the folder minted the standing "Auto Review" folder link;
+      // 3. The link, and the INTENT TO DELIVER, BEFORE any upload. Saskia, 2026-10-04: Sandra's upload
+      //    through this page failed ("Failed to fetch"); the old order only recorded the intent AFTER every
+      //    upload succeeded, so she deleted the files, uploaded again straight into the folder, and nothing
+      //    was ever marked as a deliberate hand-in - Auto Review never delivered it. The intent belongs to
+      //    the FOLDER's share link, so recording it first covers every file that lands there afterwards,
+      //    however it gets there. Safe with an empty folder: with nothing to read the verdict is
+      //    "reviewing", which never posts.
+      // The link to post. Creating the folder minted the standing "Auto Review" folder link;
       //    reuse it - it is folder-scoped (this hand-in only) and already carries the two settings
       //    the review needs. Only if it is somehow absent do we mint one, with those same settings.
       setStep("Getting the share link");
@@ -399,7 +395,24 @@ export default function HandinPage() {
       }
       const url = `${window.location.origin}/share/${token}`;
 
-      // 5. Deliver to the Trello card - GATED ON THE REVIEW (Shawn+Saskia, 2026-09-14). This records
+      void fetch(`${GATE_BASE}/api/gate/deliver`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ share_token: token, editor_name: user?.name || "" }),
+      }).catch(() => { /* the call after the uploads records it again */ })
+
+      // 4. Every video goes INTO that one folder. They upload together; the
+      //    reviewer picks up each asset on its own as it finishes transcoding,
+      //    so all of them get reviewed, not just the first.
+      setStep(files.length > 1 ? `Uploading ${files.length} videos` : "Uploading");
+      const uploaded = await Promise.all(
+        files.map(async (f) => {
+          const uploadId = startUpload(f, projectId, f.name, projectName, folder.id);
+          return { id: await waitForUpload(uploadId), name: f.name };
+        }),
+      );
+
+      // 5. Deliver to the Trello card (again, now that the files are in, for the status shown below) - GATED ON THE REVIEW (Shawn+Saskia, 2026-09-14). This records
       //    the intent to deliver (with the editor's name) and posts the @aditorteam1 comment now IF
       //    the review is already clear. If a mandatory finding is still open it is HELD - the editor
       //    fixes a V2 or objects to a wrong note - and if the review is still running it delivers
