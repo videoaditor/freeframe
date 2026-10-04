@@ -2,8 +2,8 @@ import { create, type StateCreator } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { api } from '@/lib/api'
 import type { AssetResponse } from '@/types'
+import { acquireUploadSlot, uploadParts } from '@/lib/upload-parts'
 
-const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
 const HISTORY_PAGE_SIZE = 20
 
 export type UploadStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'failed' | 'cancelled'
@@ -158,7 +158,10 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       let s3_key: string | undefined
       let version_id: string | undefined
 
+      let releaseSlot: (() => void) | undefined
       try {
+        // Wait for a free slot (two files at a time); the row shows 'pending' until then.
+        releaseSlot = await acquireUploadSlot(controller.signal)
         updateFile(id, { status: 'uploading' })
 
         const initRes = await api.post<InitiateResponse>(
@@ -179,39 +182,13 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
 
         updateFile(id, { uploadId: upload_id, assetId: asset_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) {
-            throw new DOMException('Upload cancelled', 'AbortError')
-          }
-
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key,
-            upload_id,
-            part_number: partNumber,
-          })
-
-          const putResponse = await fetch(presigned_url, {
-            method: 'PUT',
-            body: chunk,
-            signal: controller.signal,
-          })
-
-          if (!putResponse.ok) {
-            throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
-          }
-
-          const etag = putResponse.headers.get('ETag') ?? ''
-          parts.push({ PartNumber: partNumber, ETag: etag })
-
-          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
-        }
+        const parts = await uploadParts({
+          file,
+          signal: controller.signal,
+          presign: async (partNumber) =>
+            (await api.post<{ presigned_url: string }>('/upload/presign-part', { s3_key, upload_id, part_number: partNumber })).presigned_url,
+          onProgress: (fraction) => updateFile(id, { progress: Math.round(fraction * 95) }),
+        })
 
         await api.post('/upload/complete', {
           s3_key,
@@ -242,6 +219,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           api.post('/upload/abort', { s3_key, upload_id, version_id }).catch(() => {})
         }
       } finally {
+        releaseSlot?.()
         delete abortControllers[id]
       }
     })()
@@ -276,7 +254,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       let upload_id: string | undefined
       let s3_key: string | undefined
       let version_id: string | undefined
+      let releaseSlot: (() => void) | undefined
       try {
+        releaseSlot = await acquireUploadSlot(controller.signal)
         updateFile(id, { status: 'uploading' })
         const initRes = await api.post<VersionInitiateResponse>(
           `/assets/${assetId}/versions`,
@@ -293,20 +273,13 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
         version_id = initRes.version_id
         updateFile(id, { uploadId: upload_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key, upload_id, part_number: partNumber,
-          })
-          const putResponse = await fetch(presigned_url, { method: 'PUT', body: chunk, signal: controller.signal })
-          if (!putResponse.ok) throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
-          parts.push({ PartNumber: partNumber, ETag: putResponse.headers.get('ETag') ?? '' })
-          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
-        }
+        const parts = await uploadParts({
+          file,
+          signal: controller.signal,
+          presign: async (partNumber) =>
+            (await api.post<{ presigned_url: string }>('/upload/presign-part', { s3_key, upload_id, part_number: partNumber })).presigned_url,
+          onProgress: (fraction) => updateFile(id, { progress: Math.round(fraction * 95) }),
+        })
 
         await api.post('/upload/complete', { s3_key, upload_id, asset_id: assetId, version_id, parts })
         const isMedia = file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/')
@@ -321,6 +294,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           api.post('/upload/abort', { s3_key, upload_id, version_id }).catch(() => {})
         }
       } finally {
+        releaseSlot?.()
         delete abortControllers[id]
       }
     })()
