@@ -189,3 +189,36 @@ def test_no_poster_when_the_job_says_so():
 def test_pool_checks_a_connection_before_handing_it_out():
     from apps.api.database import engine
     assert engine.pool._pre_ping is True
+
+
+# ─── transcoder: ai_proxy reads the playlist the muxer actually wrote ───────
+
+def _remux_input(qualities, height=1080):
+    def run(cmd, **_kw):
+        m = MagicMock(returncode=0, stderr="")
+        if "-select_streams" in cmd:
+            v = cmd[cmd.index("-select_streams") + 1] == "v:0"
+            m.stdout = json.dumps({"streams": [{"r_frame_rate": "30/1", "duration": 6.0,
+                                                "width": height * 16 // 9, "height": height}] if v else []})
+        return m
+    with patch("subprocess.run", side_effect=run) as mock_run:
+        s3 = MagicMock()
+        s3.generate_presigned_url.return_value = "https://s3.example.com/raw.mp4"
+        with patch("pathlib.Path.rglob", return_value=[]), patch("pathlib.Path.mkdir"), \
+             patch("pathlib.Path.exists", return_value=True), patch("shutil.rmtree"):
+            asyncio.run(FFmpegTranscoder(s3, "bucket").transcode(TranscodeJob(
+                media_id="m", version_id="v", input_s3_key="raw.mp4", output_s3_prefix="p",
+                qualities=qualities, make_thumbnail=False)))
+    calls = [c[0][0] for c in mock_run.call_args_list]
+    encode = next(c for c in calls if "-var_stream_map" in c)
+    remux = next(c for c in calls if "+faststart" in c)
+    return encode, remux[remux.index("-i") + 1]
+
+
+def test_ai_proxy_remuxes_the_360p_variant_from_its_index_directory():
+    # -var_stream_map makes the muxer write %v = 0, 1, 2 - the proxy must read that directory.
+    encode, src = _remux_input(["1080p", "720p", "360p"])
+    assert any("%v" in a for a in encode)
+    assert src.endswith("/2/playlist.m3u8")
+    _, src = _remux_input(["360p"])
+    assert src.endswith("/0/playlist.m3u8")

@@ -285,7 +285,11 @@ class FFmpegTranscoder(BaseTranscoder):
             # means a caller falls back to the original, same as before this existed.
             try:
                 smallest_q = min(qualities, key=lambda q: int(QUALITY_MAP[q][0].split(":")[1]))
-                playlist = hls_dir / smallest_q / "playlist.m3u8"
+                # The HLS muxer names each variant's directory by its INDEX in -var_stream_map
+                # (%v -> 0, 1, 2), not by quality. Looking in "360p/" found nothing, so the proxy
+                # was silently never made and every review uploaded the full original instead
+                # (2026-10-03: a 175 MB hook, proxy endpoint 404, master lists 0/ 1/ 2/).
+                playlist = hls_dir / str(qualities.index(smallest_q)) / "playlist.m3u8"
                 if playlist.exists():
                     proxy_path = work_dir / "ai_proxy.mp4"
                     remux_cmd = [
