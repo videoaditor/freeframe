@@ -3,7 +3,9 @@ import { ApiError } from './api'
 export const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
 export const PARTS_IN_FLIGHT = 3           // hides per-part latency without flooding an editor's uplink
 export const FILES_IN_FLIGHT = 2           // more at once just shares one uplink, and one hiccup then fails them all
-export const PART_ATTEMPTS = 5
+export const PART_ATTEMPTS = 12            // with the backoff below, about six minutes of trying before giving up
+export const MAX_BACKOFF_MS = 30_000
+export const OFFLINE_WAIT_MS = 30 * 60_000   // a laptop that lost wifi gets half an hour to get it back
 
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === 'AbortError'
 
@@ -30,17 +32,38 @@ const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, r
   signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Upload cancelled', 'AbortError')) }, { once: true })
 })
 
-/** Run `fn` up to `attempts` times, backing off between tries. Re-running re-signs the part, so an expired URL heals too. */
+/** Resolve when the browser says it is back online (immediately if it never went offline). Does not count as a try. */
+async function untilOnline(signal?: AbortSignal): Promise<void> {
+  if (typeof navigator === 'undefined' || navigator.onLine !== false || typeof window === 'undefined') return
+  await new Promise<void>((resolve, reject) => {
+    const done = () => { cleanup(); resolve() }
+    const onAbort = () => { cleanup(); reject(new DOMException('Upload cancelled', 'AbortError')) }
+    const t = setTimeout(done, OFFLINE_WAIT_MS)
+    const cleanup = () => { clearTimeout(t); window.removeEventListener('online', done); signal?.removeEventListener('abort', onAbort) }
+    window.addEventListener('online', done, { once: true })
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) onAbort()
+  })
+}
+
+/**
+ * Run `fn` up to `attempts` times, backing off between tries (1 s, 2 s, 4 s ... capped at 30 s). While the
+ * browser reports it is offline, wait for it to come back instead of burning tries, so a wifi drop or a
+ * closed laptop lid does not kill a file. Re-running re-signs the part, so an expired URL heals too.
+ */
 export async function withRetry<T>(fn: () => Promise<T>, signal?: AbortSignal, attempts = PART_ATTEMPTS, baseMs = 1000): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await fn()
     } catch (e) {
       if (attempt >= attempts || !isRetryable(e)) throw e
-      await wait(baseMs * 2 ** (attempt - 1), signal)
+      await untilOnline(signal)
+      await wait(Math.min(MAX_BACKOFF_MS, baseMs * 2 ** (attempt - 1)), signal)
     }
   }
 }
+
+export interface UploadedPart { PartNumber: number; ETag: string }
 
 /**
  * A bare "Failed to fetch" says nothing. Say how far the upload got and how fast it was going, so a screenshot
@@ -55,7 +78,6 @@ function explainFailure(e: unknown, sent: number, total: number, ms: number): un
   return out
 }
 
-export interface UploadedPart { PartNumber: number; ETag: string }
 
 /**
  * Upload every part of `file`, three at a time, each part retried on its own. Progress is bytes sent.

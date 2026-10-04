@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { acquireUploadSlot, CHUNK_SIZE, uploadParts } from '../upload-parts'
 
 const file = (parts: number) => new Blob([new Uint8Array(parts * CHUNK_SIZE - 5)])
@@ -21,10 +21,10 @@ describe('uploadParts', () => {
       putPart: async (url) => url === 'u1' ? new Response('', { status: 403 }) : ok() })
     expect(signs).toBe(2)
   })
-  it('gives up after five tries and reports the real error', async () => {
+  it('gives up after twelve tries and reports the real error', async () => {
     const put = vi.fn(async () => { throw new TypeError('Failed to fetch') })
     await expect(uploadParts({ file: file(1), baseMs: 1, presign: async () => 'u', putPart: put })).rejects.toThrow(/Failed to fetch \(stopped at 0 of 10 MB after \d+s, [\d.]+ Mbit\/s average\)/)
-    expect(put).toHaveBeenCalledTimes(5)
+    expect(put).toHaveBeenCalledTimes(12)
   })
   it('does not retry a refusal', async () => {
     const put = vi.fn(async () => new Response('', { status: 400, statusText: 'Bad Request' }))
@@ -66,5 +66,29 @@ describe('acquireUploadSlot', () => {
     a()
     const next = await acquireUploadSlot()       // not blocked by the cancelled one
     b(); next()
+  })
+})
+
+describe('a lost connection', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  it('waits for the browser to come back online without burning tries, then finishes', async () => {
+    const listeners: Record<string, () => void> = {}
+    vi.stubGlobal('navigator', { onLine: false })
+    vi.stubGlobal('window', { addEventListener: (n: string, f: () => void) => { listeners[n] = f }, removeEventListener: () => {} })
+    let calls = 0
+    const job = uploadParts({ file: file(1), baseMs: 1, presign: async () => 'u',
+      putPart: async () => { calls++; if (calls === 1) throw new TypeError('Failed to fetch'); return ok() } })
+    await new Promise(r => setTimeout(r, 20))
+    expect(calls).toBe(1)                                  // still offline: not retrying, not failed
+    vi.stubGlobal('navigator', { onLine: true }); listeners.online()
+    expect((await job).map(p => p.PartNumber)).toEqual([1])
+    expect(calls).toBe(2)
+  })
+  it('survives more failures than the old five-try limit', async () => {
+    let calls = 0
+    const parts = await uploadParts({ file: file(1), baseMs: 1, presign: async () => 'u',
+      putPart: async () => { if (++calls < 9) throw new TypeError('Failed to fetch'); return ok() } })
+    expect(parts).toHaveLength(1)
+    expect(calls).toBe(9)
   })
 })
