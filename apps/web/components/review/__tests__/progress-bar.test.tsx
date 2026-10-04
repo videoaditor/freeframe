@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProgressBar } from '../progress-bar'
+import { formatTimecode } from '@/lib/utils'
 
 afterEach(cleanup)
 
@@ -45,4 +46,24 @@ describe('timeline seeking', () => {
     render(<ProgressBar currentTime={52} duration={10} onSeek={vi.fn()} />)
     expect(screen.getByRole('slider')).toHaveAttribute('value', '10')
   })
+  it('does not cover the video with a mouse-compatible hover preview after touch movement', () => {
+    render(<ProgressBar currentTime={12} duration={52.5} onSeek={vi.fn()} />)
+    const slider = screen.getByRole('slider')
+    const touchMove = new MouseEvent('pointermove', { bubbles: true, clientX: 100 })
+    Object.defineProperty(touchMove, 'pointerType', { value: 'touch' })
+    fireEvent(slider, touchMove)
+    fireEvent.mouseMove(slider, { clientX: 100 })
+    expect(screen.queryByText(formatTimecode(52.5))).not.toBeInTheDocument()
+  })
+
+  it('retains the desktop mouse hover time preview', () => {
+    render(<ProgressBar currentTime={12} duration={52.5} onSeek={vi.fn()} />)
+    const slider = screen.getByRole('slider')
+    const mouseMove = new MouseEvent('pointermove', { bubbles: true, clientX: 100 })
+    Object.defineProperty(mouseMove, 'pointerType', { value: 'mouse' })
+    fireEvent(slider, mouseMove)
+    fireEvent.mouseMove(slider, { clientX: 100 })
+    expect(screen.getByText(formatTimecode(52.5))).toBeInTheDocument()
+  })
+
 })

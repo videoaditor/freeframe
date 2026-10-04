@@ -29,3 +29,5 @@ Red regression before code, full frontend tests/typecheck/lint/build, actual bro
 
 ## Verified before rollout
 Regression4/4 failed before and4/4 passed after. Full frontend500tests/73files passed;TypeScript passed after correcting a test-only nullable mock-call expression;lint passes with baseline warnings;production build passes. Browser: native drag23.883333→43.667886→8.338327, outside release→0; End→47.766667 and ArrowLeft→47.666667; video currentTime and composer follow.48px slider atCSS390×700 and390×500;desktop1024×769. Actual device touch/VoiceOver remain manual checks. Screenshots in the run, no comment sent. Runtime progress-bar source was frozen for build and browser proof; only test typing was repaired afterward.
+
+Touch hover refinement: listen to pointer movement and show hover previews only for pointerType mouse. Ignore compatibility mouse moves after touch. A sixth-test regression caught the touch tooltip before this change; desktop hover is explicitly preserved. This refinement is part of the final timeline candidate, replacing the initial fe2c25b53dde deployment.

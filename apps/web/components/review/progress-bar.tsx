@@ -308,8 +308,13 @@ export function ProgressBar({
     [duration],
   )
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== 'mouse') {
+        setHoverTime(null)
+        clearPreview()
+        return
+      }
       const time = getTimeFromEvent(e.clientX)
       setHoverTime(time)
       const track = trackRef.current
@@ -319,7 +324,7 @@ export function ProgressBar({
       }
       seekPreview(time)
     },
-    [getTimeFromEvent, seekPreview],
+    [getTimeFromEvent, seekPreview, clearPreview],
   )
 
   const handleMouseLeave = useCallback(() => {
@@ -360,8 +365,8 @@ export function ProgressBar({
       <div
         ref={trackRef}
         className="relative w-full h-12 focus-within:ring-2 focus-within:ring-accent/60 rounded-md"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handleMouseLeave}
       >
         <input
           type="range"
