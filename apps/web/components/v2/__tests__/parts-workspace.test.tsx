@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SWRConfig } from 'swr'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PartsWorkspace } from '../parts-workspace'
@@ -7,6 +7,11 @@ import { uploadToRequest } from '@/lib/platform'
 vi.mock('@/lib/iterations', async original => ({ ...await original<typeof import('@/lib/iterations')>(), declareParts: vi.fn(), requestIterations: vi.fn(), submitParts: vi.fn() }))
 vi.mock('@/lib/platform', async original => ({ ...await original<typeof import('@/lib/platform')>(), uploadToRequest: vi.fn() }))
 vi.mock('../request-workspace', () => ({ RequestWorkspace: () => <div>Part feedback</div> }))
+vi.mock('lucide-react', async original => ({
+  ...await original<typeof import('lucide-react')>(),
+  AlertCircle: () => <svg aria-hidden="true" data-testid="attention-icon" />,
+  CheckCircle2: () => <svg aria-hidden="true" data-testid="completion-icon" />,
+}))
 const base: IterationProgress = { enabled: true, mode: 'components', simple: true, manifest: { schema_version: 1, summary: '', slots: [], recipes: [] }, slots: [], outputs: [], state: 'waiting', delivered: 0, total: 0, submitted: false, can_leave: false, editor_done: false }
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(requestIterations).mockResolvedValue(base); vi.mocked(declareParts).mockResolvedValue(base) })
 afterEach(cleanup)
@@ -73,4 +78,94 @@ it('replaces the selected part using its exact asset binding instead of declarin
   await waitFor(() => expect(uploadToRequest).toHaveBeenCalledWith('test', expect.any(Object), expect.any(File), expect.any(Function), expect.objectContaining({ slotId: 'h', assetId: 'ha' })))
   expect(declareParts).not.toHaveBeenCalled()
   expect(screen.queryByText('Your part is done')).not.toBeInTheDocument()
+})
+
+const stages = async () => within(await screen.findByRole('list', { name: 'Submission progress' })).getAllByRole('listitem')
+const checkedParts = saved.slots.map(part => ({ ...part, status: 'clear' }))
+
+it('shows the upload task and final destination before any part is declared', async () => {
+  mount()
+  const steps = await stages()
+  expect(steps).toHaveLength(3)
+  expect(steps[0]).toHaveAttribute('aria-current', 'step')
+  expect(steps.every(step => !step.textContent?.includes('Complete'))).toBe(true)
+  expect(screen.getByRole('region', { name: 'Final ads' })).toHaveTextContent('Finished ads will appear here.')
+})
+
+it('keeps uploading current until explicit submission even when every source check is clear', async () => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, slots: checkedParts })
+  mount()
+  const steps = await stages()
+  expect(steps[0]).toHaveAttribute('aria-current', 'step')
+  expect(steps[0]).not.toHaveTextContent('Complete')
+  expect(steps[1]).toHaveTextContent('2 of 2 parts passed')
+  expect(steps[2]).not.toHaveTextContent('Complete')
+  expect(screen.getByRole('button', { name: 'Submit for review' })).toBeEnabled()
+})
+
+it('counts only declared parts with an explicit clear state', async () => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, submitted: true, can_leave: true, slots: [
+    saved.slots[0],
+    { ...saved.slots[1], status: 'ready' },
+    { slot_id: 'unrelated', status: 'clear', findings: [], bytes_stored: true },
+  ] })
+  mount()
+  const steps = await stages()
+  expect(steps[0]).toHaveTextContent('Complete')
+  expect(steps[1]).toHaveAttribute('aria-current', 'step')
+  expect(steps[1]).toHaveTextContent('1 of 2 parts passed')
+  expect(steps[1]).not.toHaveTextContent('Complete')
+})
+
+it.each([
+  { state: 'rendering', delivered: 1 },
+  { state: 'delivered', delivered: 1 },
+  { state: 'reviewing', delivered: 2 },
+])('does not complete final ads for state $state and $delivered of 2 delivered', async snapshot => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, ...snapshot, slots: checkedParts, submitted: true, can_leave: true, editor_done: true, total: 2 })
+  mount()
+  const steps = await stages()
+  expect(steps[2]).toHaveAttribute('aria-current', 'step')
+  expect(steps[2]).not.toHaveTextContent('Complete')
+  expect(screen.queryByText('2 ads delivered')).not.toBeInTheDocument()
+})
+
+it('completes all stages only after the exact final batch is delivered', async () => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, slots: checkedParts, submitted: true, can_leave: true, editor_done: true, state: 'delivered', total: 2, delivered: 2 })
+  mount()
+  const steps = await stages()
+  expect(steps.every(step => step.textContent?.includes('Complete'))).toBe(true)
+  expect(steps.every(step => !step.hasAttribute('aria-current'))).toBe(true)
+  expect(screen.getByText('2 ads delivered')).toBeInTheDocument()
+})
+
+it('does not complete stages when a delivered snapshot arrives during replacement upload', async () => {
+  vi.mocked(requestIterations)
+    .mockResolvedValueOnce({ ...saved, slots: checkedParts, submitted: true, can_leave: true, editor_done: true, state: 'held', total: 2 })
+    .mockResolvedValue({ ...saved, slots: checkedParts, submitted: true, can_leave: true, editor_done: true, state: 'delivered', total: 2, delivered: 2 })
+  vi.mocked(uploadToRequest).mockReturnValue(new Promise(() => {}))
+  mount()
+  fireEvent.change(await screen.findByLabelText('Replace Hook.mp4'), { target: { files: [new File(['v2'], 'Hook-v2.mp4', { type: 'video/mp4' })] } })
+  expect(await screen.findByText('Keep this tab open until all files are saved.')).toBeInTheDocument()
+  const steps = await stages()
+  await waitFor(() => expect(steps[2]).toHaveTextContent('2 of 2 ads delivered'), { timeout: 6000 })
+  expect(steps[0]).toHaveAttribute('aria-current', 'step')
+  expect(steps.every(step => !step.textContent?.includes('Complete'))).toBe(true)
+  expect(screen.queryByText('2 ads delivered')).not.toBeInTheDocument()
+}, 10000)
+
+it.each([
+  { state: 'held', title: 'A part needs your attention' },
+  { state: 'error', title: 'We need to retry a step' },
+])('shows attention rather than completion for $state even when the editor handoff is done', async snapshot => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, state: snapshot.state, slots: checkedParts, submitted: true, can_leave: true, editor_done: true })
+  mount()
+  expect(await screen.findByText(snapshot.title)).toBeInTheDocument()
+  const status = within(screen.getByRole('status'))
+  expect(status.getByTestId('attention-icon')).toBeInTheDocument()
+  expect(status.queryByTestId('completion-icon')).not.toBeInTheDocument()
+  expect(screen.queryByText('Your part is done')).not.toBeInTheDocument()
+  const steps = await stages()
+  expect(steps[2]).not.toHaveTextContent('Complete')
+  if (snapshot.state === 'error') expect(screen.getByRole('button', { name: 'Retry processing' })).toBeInTheDocument()
 })

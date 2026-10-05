@@ -2,8 +2,8 @@
 
 import * as React from 'react'
 import useSWR from 'swr'
-import { ArrowLeft, CheckCircle2, Download, FileVideo, Loader2, Plus, Upload, X } from 'lucide-react'
-import { declareParts, handoffMessage, objectToOutputNote, removePart, requestIterations, retryParts, submitParts, type IterationSlot, type PartRole } from '@/lib/iterations'
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileVideo, Loader2, Plus, Upload, X } from 'lucide-react'
+import { declareParts, handoffMessage, objectToOutputNote, removePart, requestIterations, retryParts, submitParts, type IterationProgress, type IterationSlot, type PartRole } from '@/lib/iterations'
 import { objectToNote, uploadToRequest, type RequestAsset } from '@/lib/platform'
 import { createUploadQueue } from '@/lib/part-upload-queue'
 import { RequestWorkspace } from './request-workspace'
@@ -11,6 +11,13 @@ import { RequestWorkspace } from './request-workspace'
 interface Who { name: string; email: string }
 interface Job { id: string; slot: IterationSlot; file: File; assetId?: string; phase: 'queued' | 'uploading' | 'done' | 'error'; progress: number; error?: string; declared: boolean }
 const roleLabels: Record<PartRole, string> = { hook: 'Hooks', opening: 'Openings', lead: 'Bridges', body: 'Bodies', cta: 'CTAs' }
+const roleHelp: Record<PartRole, string> = {
+  hook: 'Alternative openings. Add every hook you want to use.',
+  opening: 'Opening clips from this brief. Keep each one separate.',
+  lead: 'Clips that connect the opening to the main section.',
+  body: 'Main section and ending. Upload a shared body once; it is reused for each selected hook.',
+  cta: 'Separate endings. Add these only if they are not already in your body.',
+}
 const validWho = (w: Who) => !!w.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(w.email)
 const button = 'press min-h-11 rounded-full px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40'
 const statusLabel: Record<string, string> = { missing: 'Waiting for file', uploaded: 'Preparing review', ready: 'Waiting for review', reviewing: 'Checking', clear: 'Checked', held: 'Needs a change', error: 'Retry needed', processing: 'Preparing review', uploading: 'Uploading', rendering: 'Creating ad', delivered: 'Delivered', queued: 'Queued' }
@@ -116,8 +123,9 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
   const roles = (['opening', 'hook', 'lead', 'body', 'cta'] as PartRole[]).filter(role => slots.some(s => s.role === role) || (!fixedPlan && (role === 'hook' || role === 'body' || optional.includes(role))))
   const allSaved = slots.some(s => s.role === 'body') && slots.some(s => s.role === 'hook' || s.role === 'opening') && slots.every(s => progress.slots.some(p => p.slot_id === s.id && p.asset_id && p.version_id && p.bytes_stored === true))
   return <div className="parts-workspace space-y-6">
+    <SubmissionSteps progress={progress} transferring={transferring} />
     {(progress.submitted || slots.length > 0) && <div role="status" aria-live="polite" className="flex gap-3 rounded-2xl bg-bg-secondary p-5">
-      {progress.editor_done && !transferring ? <CheckCircle2 className="mt-0.5 shrink-0 text-accent" size={22} /> : <Upload className="mt-0.5 shrink-0 text-text-secondary" size={22} />}
+      {['held', 'error'].includes(progress.state) && !transferring ? <AlertCircle aria-hidden="true" className="mt-0.5 shrink-0 text-status-error" size={22} /> : progress.editor_done && !transferring ? <CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0 text-accent" size={22} /> : <Upload aria-hidden="true" className="mt-0.5 shrink-0 text-text-secondary" size={22} />}
       <div><h2 className="text-base font-semibold">{state.title}</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-text-secondary">{state.detail}</p></div>
     </div>}
     {loadError && <p role="alert" className="text-sm text-status-error">Live status is unavailable. Last confirmed state is shown. <button className={button} onClick={refresh}>Refresh</button></p>}
@@ -127,9 +135,10 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
         onRevise={asset => { const slot = slots.find(s => progress.slots.some(p => p.slot_id === s.id && p.asset_id === asset.asset_id)); if (slot) { setRevision(slot); replaceInput.current?.click() } else { setActiveId(undefined); setError('Replace the affected source part below. We’ll recreate the final ad and check it again.') } }}
         onObject={async (asset, comment, text) => { const output = progress.outputs.find(o => o.asset_id === asset.asset_id); const result = output ? await objectToOutputNote(token, output.id, { comment_id: comment.id, body: comment.body, text, who: who.name }) : await objectToNote(token, { asset_id: asset.asset_id, version_id: asset.version_id, comment_id: comment.id, body: comment.body, text, name: who.name }); await refresh(); return result }} />
     </> : <>
-      {!progress.submitted && <div><h2 className="text-xl font-semibold tracking-tight">Upload each part once</h2><p className="mt-2 text-base leading-relaxed text-text-secondary">We’ll combine your hooks and bodies after their checks pass.</p></div>}
+      <div><h2 className="text-xl font-semibold tracking-tight">{progress.submitted ? 'Submitted parts' : 'Upload each part once'}</h2><p className="mt-2 text-base leading-relaxed text-text-secondary">{progress.submitted ? 'Open feedback for any part. Replace only the part that needs a change.' : 'Choose the matching field below. Checks can start as soon as a file is saved.'}</p></div>
       <div className="grid items-start gap-6 sm:grid-cols-2">{roles.map(role => <section key={role} className="min-w-0" aria-label={roleLabels[role]}>
-        <div className="mb-3 flex items-center justify-between"><h3 className="text-base font-semibold">{roleLabels[role]}</h3><span className="text-sm tabular-nums text-text-secondary">{slots.filter(s => s.role === role).length || ''}</span></div>
+        <div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-lg font-semibold">{roleLabels[role]}</h3><span className="text-sm tabular-nums text-text-secondary">{slots.filter(s => s.role === role).length} {slots.filter(s => s.role === role).length === 1 ? 'part' : 'parts'}</span></div>
+        <p className="mb-4 text-sm leading-relaxed text-text-secondary sm:min-h-12">{roleHelp[role]}</p>
         {!progress.submitted && !fixedPlan && <PartDrop label={`Upload ${roleLabels[role].toLowerCase()}`} title={`Drop ${roleLabels[role].toLowerCase()} here`} multiple onFiles={files => take(files, role)} />}
         <ul className="mt-3 divide-y divide-border">{slots.filter(s => s.role === role).map(slot => {
           const job = activeJob(slot.id), server = progress.slots.find(s => s.slot_id === slot.id)
@@ -153,11 +162,31 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
       {progress.total > 0 && <p className="text-sm text-text-secondary">{slots.filter(s => s.role === 'hook' || s.role === 'opening').length} {slots.filter(s => s.role === 'hook' || s.role === 'opening').length === 1 ? 'hook' : 'hooks'} · {slots.filter(s => s.role === 'body').length} {slots.filter(s => s.role === 'body').length === 1 ? 'body' : 'bodies'} · {progress.total} final {progress.total === 1 ? 'ad' : 'ads'}</p>}
       {!progress.submitted && <button className={`${button} inline-flex items-center gap-2 bg-accent px-6 text-text-inverse`} disabled={!allSaved || transferring || submitting || jobs.some(j => j.phase === 'error')} onClick={seal}>{submitting && <Loader2 className="animate-spin" size={16} />}{submitting ? 'Submitting…' : 'Submit for review'}</button>}
       {progress.state === 'error' && <button className={`${button} border border-border`} onClick={async () => { try { await mutate(await retryParts(token), { revalidate: false }) } catch (e) { setError(e instanceof Error ? e.message : 'Please try again.') } }}>Retry processing</button>}
-      {!!progress.outputs.length && <section className="border-t border-border pt-6"><div className="flex flex-wrap justify-between gap-2"><h2 className="text-xl font-semibold">Final ads</h2><span className="text-sm text-text-secondary">{progress.delivered} of {progress.total} delivered</span></div><ul className="mt-3 divide-y divide-border">{progress.outputs.map(output => <li key={output.id} className="flex flex-wrap items-center gap-3 py-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{output.label}</p><p className="mt-1 text-sm text-text-secondary">{statusLabel[output.status] || 'Checking'}</p>{output.error && <p className="mt-1 text-sm text-status-error">{output.error}</p>}</div>{output.asset_id && <button className={`${button} text-text-secondary`} onClick={() => setActiveId(output.asset_id)}>Review</button>}{output.status === 'delivered' && output.download_url && <a className={`${button} inline-flex items-center gap-2 text-accent`} href={output.download_url}><Download size={16} /> Download</a>}</li>)}</ul></section>}
+      <section aria-label="Final ads" className="border-t border-border pt-6"><div className="flex flex-wrap justify-between gap-2"><h2 className="text-xl font-semibold">Final ads</h2>{progress.total > 0 && <span className="text-sm text-text-secondary">{progress.delivered} of {progress.total} delivered</span>}</div><p className="mt-2 text-sm leading-relaxed text-text-secondary">{progress.outputs.length ? 'Created from your checked parts. Each complete ad gets a final review before delivery.' : 'Finished ads will appear here. Submit your parts to have them combined and checked automatically.'}</p><ul className="mt-3 divide-y divide-border">{progress.outputs.map(output => <li key={output.id} className="flex flex-wrap items-center gap-3 py-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{output.label}</p><p className="mt-1 text-sm text-text-secondary">{statusLabel[output.status] || 'Waiting for parts'}</p>{output.status === 'error' && output.error && <p className="mt-1 text-sm text-status-error">{output.error}</p>}</div>{output.asset_id && <button className={`${button} text-text-secondary`} onClick={() => setActiveId(output.asset_id)}>View final review</button>}{output.status === 'delivered' && output.download_url && <a className={`${button} inline-flex items-center gap-2 text-accent`} href={output.download_url}><Download size={16} /> Download</a>}</li>)}</ul></section>
     </>}
     <input ref={replaceInput} type="file" accept="video/*" className="hidden" aria-label="Replacement file" onChange={e => { if (revision) take(Array.from(e.target.files || []), revision.role, revision); e.target.value = '' }} />
     {error && <p role="alert" className="text-sm leading-relaxed text-status-error">{error}</p>}
   </div>
+}
+
+function SubmissionSteps({ progress: p, transferring }: { progress: IterationProgress; transferring: boolean }) {
+  const declared = p.manifest.slots
+  const checked = declared.filter(slot => p.slots.some(part => part.slot_id === slot.id && part.status === 'clear')).length
+  const uploaded = p.submitted && p.can_leave && !transferring
+  const partsClear = declared.length > 0 && checked === declared.length && !transferring
+  const delivered = !transferring && p.state === 'delivered' && p.total > 0 && p.delivered === p.total
+  const current = !uploaded ? 0 : !partsClear ? 1 : 2
+  const steps = [
+    { title: 'Upload parts', owner: 'Your task', done: uploaded, detail: uploaded ? 'Files saved and submitted' : 'Hooks and bodies, uploaded once' },
+    { title: 'Check parts', owner: 'Automatic', done: partsClear, detail: declared.length ? `${checked} of ${declared.length} parts passed` : 'Feedback for each part' },
+    { title: 'Final ads', owner: 'Automatic', done: delivered, detail: p.total ? `${p.delivered} of ${p.total} ads delivered` : 'Combine, review and deliver' },
+  ]
+  return <ol aria-label="Submission progress" className="grid gap-4 sm:grid-cols-3">
+    {steps.map((step, index) => <li key={step.title} aria-current={!delivered && index === current ? 'step' : undefined} className={`min-w-0 border-b-2 pb-4 ${index === current && !delivered ? 'border-accent' : 'border-border'}`}>
+      <div className="flex items-center gap-3"><span aria-hidden="true" className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-medium ${step.done ? 'bg-accent-muted text-accent' : 'bg-bg-secondary text-text-secondary'}`}>{step.done ? <CheckCircle2 size={18} /> : index + 1}</span><div><span className="text-xs text-text-secondary">{step.owner}</span><p className="text-base font-semibold">{step.title}</p></div></div>
+      <p className="mt-3 text-sm leading-relaxed text-text-secondary">{step.detail}{step.done && <span className="sr-only"> · Complete</span>}</p>
+    </li>)}
+  </ol>
 }
 
 function PartDrop({ label, title, onFiles, multiple }: { label: string; title: string; onFiles: (files: File[]) => void; multiple?: boolean }) {

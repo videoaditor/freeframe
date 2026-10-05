@@ -115,3 +115,33 @@ The browser exercised a synthetic hook/body upload while identity was incomplete
 | Theme reset on fresh navigation | Read hydrated store at initialization | Reliable light/dark behavior |
 
 A full screen-reader pass and manual 200% browser-zoom pass were not performed. Semantic labels, progress, minimum 44px controls, reduced-motion styles and wrapping file names are implemented; production acceptance should retain these checks. Screenshots and local mock state are UI evidence only, not evidence of live model speed or Trello delivery.
+
+## 11. Clear signposting iteration — 2026-10-05
+
+Alan requested restarting the preview with a clearly signposted layout. Reuse the existing project, request machinery and approved visual tokens. No new wizard, sequential upload constraint, briefing parser or backend state.
+
+Job/platform/navigation remain sections1–2: editors complete their assigned upload on a mobile/desktop task page; internal editors retain team navigation and owners retain their own account controls. Destination brand is read-only on customer links. AdMixer remains invisible background machinery.
+
+Content hierarchy: task identity/title/brief, persistent three-stage orientation (`Upload parts`, `Check parts`, `Final ads`), actionable handoff status, Hooks/Bodies with one plain explanation each, editor details and explicit submit action, final-ad section with a useful empty state. Guidance states that one shared body is reused for every selected hook. Optional bridge/CTA descriptions explain which exports belong there. Final ad rows use `View final review` to distinguish them from source feedback.
+
+| Component | Before | After | Why |
+|---|---|---|---|
+| Orientation | Status card only after files exist | Three labeled stages, explicit editor/automatic responsibility | Make the complete workflow visible at entry |
+| Stage headings | Hooks/Bodies without explanation | Alternative openings / main section plus ending; shared body uploaded once | Make export placement obvious |
+| Empty final area | Hidden | `Final ads` with pending guidance | Make the output destination visible before uploading |
+| Error status icon | Editor-done tick even during infrastructure error | Error/attention icon when held or failed | Text and icon agree |
+| Final review action | `Review` | `View final review` | Separate source checks from finished-ad feedback |
+
+States: empty stage1current with upload guidance; live transfers keep tab-open copy; the parts-passed count reflects only declared exact backend slots; sealed uploads complete stage1; stage2 completes only when every declared source is clear; finalstage completion requires delivered==total, state delivered and no local transfer. Held/error states show action/retry, not a success icon. Previously saved batches and mode switching remain available. Denied/offline behavior is unchanged.
+
+Tokens/accessibility: existing light/dark OKLCH and system fonts; body16/24, secondary14/20, sections20/26, 4/8spacinggrid; stage row stacks below640px, controls≥44px, no animated step transitions or percentage estimate. Ordered list has `aria-label=Submission progress`, current step uses `aria-current=step`, decorative symbols aria-hidden; state text supplies meaning without color. File inputs keep their existing accessible names and real transfer progress. Keyboard/phone/200% width checks are acceptance evidence, not asserted in advance.
+
+Apple HIG writing/progress-indicator references informed labels and truthful state. A custom three-stage orientation strip and file zones are web patterns, not claimed native HIG components. UI/UX Pro Max design-system search suggested a lead-magnet landing/Trust-and-Authority treatment; rejected as irrelevant to the existing task UI. Emil principles retained: clear hierarchy, immediate keyboard behavior, restrained existing press states.
+
+Acceptance: actual public HTTPS staging inspected at 1280px in dark mode, both a fresh empty request and the preserved 2/2 delivered batch. Upload areas align at the same top edge; no horizontal overflow. Self-critique corrected the initial unequal upload-area alignment caused by the longer body explanation. Keyboard Tab moves from Separate parts to Complete ads. Full frontend suite: 513 passed; build, explicit TypeScript and lint passed (existing warnings). Independent review added 10 meaningful regressions, including a stale delivered snapshot during replacement transfer. The default pnpm invocation selected Node25 and collided with native WebStorage; the final complete suite passed with the configured Node22 PATH, without application changes.
+
+| Before | Empty after | Delivered after |
+|---|---|---|
+| [Previous handoff](handin-evidence/after-handoff.jpg) | [Clearly labeled entry](handin-evidence/oct5-signposted-empty.jpg) | [Completed stages](handin-evidence/oct5-signposted-delivered.jpg) |
+
+Light mode, narrow viewport, full keyboard traversal, VoiceOver and manual 200% zoom were not revalidated for this iteration. Earlier screenshots do not establish acceptance of the new orientation strip. Automatic video review cannot validate this software layout; browser/manual inspection is required, and prior media-review evidence must not be relabeled as layout acceptance. Project tracking reuses one Aditor card and one briefed Alan/Aditor session; no media or model-review verdict was created for this layout.
