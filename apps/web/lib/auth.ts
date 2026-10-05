@@ -77,7 +77,9 @@ export function clearTokens(): void {
   // Clear auth cookies
   document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
   document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
-  window.location.href = localStorage.getItem('ff_auth_provider') === 'whop' ? '/whop' : '/login'
+  const login = localStorage.getItem('ff_auth_provider') === 'whop' ? '/whop' : '/login'
+  const from = window.location.pathname === '/handin' ? window.location.pathname + window.location.search : ''
+  window.location.href = from ? login + '?from=' + encodeURIComponent(from) : login
 }
 
 /** Start a Whop identity exchange without inheriting a previous owner's session. */

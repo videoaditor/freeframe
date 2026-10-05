@@ -35,6 +35,7 @@ import {
   fetchDeliveryStatus,
   isHandinConfigured,
   lookUpCard,
+  handinCardFromSearch,
   type GateCard,
   type GateReview,
   type DeliveryStatus,
@@ -191,19 +192,32 @@ export default function HandinPage() {
 
   // Look the card up on blur or paste. The editor types neither name nor brand;
   // both come back from the card so the project cannot be misfiled by a typo.
+  const lookupSequence = React.useRef(0);
   const runLookup = React.useCallback(async (url: string) => {
+    const sequence = ++lookupSequence.current;
     const trimmed = url.trim();
     if (!trimmed) {
       setCard(null);
+      setLookingUp(false);
       return;
     }
     setLookingUp(true);
     try {
-      setCard(await lookUpCard(trimmed));
+      const result = await lookUpCard(trimmed);
+      if (sequence === lookupSequence.current) setCard(result);
     } finally {
-      setLookingUp(false);
+      if (sequence === lookupSequence.current) setLookingUp(false);
     }
   }, []);
+
+  React.useEffect(() => {
+    if (!isHandinConfigured()) return;
+    const initialCard = handinCardFromSearch(window.location.search);
+    if (!initialCard) return;
+    setCardUrl(initialCard);
+    void runLookup(initialCard);
+    return () => { lookupSequence.current++; };
+  }, [runLookup]);
 
   /**
    * Poll the gate for the review of every handed-in video, until each is ready.
@@ -556,11 +570,21 @@ export default function HandinPage() {
               id="card-url"
               value={cardUrl}
               placeholder="https://trello.com/c/..."
-              onChange={(e) => setCardUrl(e.target.value)}
+              onChange={(e) => {
+                lookupSequence.current++;
+                setCard(null);
+                setLookingUp(false);
+                setCardUrl(e.target.value);
+              }}
               onBlur={(e) => void runLookup(e.target.value)}
-              onPaste={(e) =>
-                void runLookup(e.clipboardData.getData("text") || cardUrl)
-              }
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (!pasted) return;
+                e.preventDefault();
+                setCardUrl(pasted);
+                setCard(null);
+                void runLookup(pasted);
+              }}
               className="mt-1.5"
             />
 
