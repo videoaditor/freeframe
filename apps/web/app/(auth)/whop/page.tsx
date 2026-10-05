@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { handinReturnPath } from '@/lib/handin'
 import { Button } from '@/components/ui/button'
 import { resetWhopEntry, setTokens } from '@/lib/auth'
 
@@ -38,7 +39,7 @@ export default function WhopPage() {
         throw new Error('Allow browser storage for this app, then try again.')
       }
       // A full navigation also discards any previous customer's in-memory stores.
-      window.location.replace('/home')
+      window.location.replace(handinReturnPath(window.location.search))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Whop sign-in is temporarily unavailable. Please try again.')
       setBusy(false)
