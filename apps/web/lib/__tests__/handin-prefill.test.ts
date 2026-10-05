@@ -13,3 +13,11 @@ describe('Hub card handoff', () => {
     }
   })
 })
+
+import { handinReturnPath } from '../handin'
+it('returns Whop sign-in only to a valid Hub hand-in', () => {
+  expect(handinReturnPath('?from='+encodeURIComponent('/handin?card=https://trello.com/c/VUFKsrxi'))).toBe('/handin?card=https%3A%2F%2Ftrello.com%2Fc%2FVUFKsrxi')
+  for (const from of ['https://evil.test/handin?card=x', '//evil.test', '/handin?card=https://evil.test/c/VUFKsrxi', '/admin']) {
+    expect(handinReturnPath('?from='+encodeURIComponent(from))).toBe('/home')
+  }
+})
