@@ -11,13 +11,6 @@ import { RequestWorkspace } from './request-workspace'
 interface Who { name: string; email: string }
 interface Job { id: string; slot: IterationSlot; file: File; assetId?: string; phase: 'queued' | 'uploading' | 'done' | 'error'; progress: number; error?: string; declared: boolean }
 const roleLabels: Record<PartRole, string> = { hook: 'Hooks', opening: 'Openings', lead: 'Bridges', body: 'Bodies', cta: 'CTAs' }
-const roleHelp: Record<PartRole, string> = {
-  hook: 'Alternative openings. Add every hook you want to use.',
-  opening: 'Opening clips from this brief. Keep each one separate.',
-  lead: 'Clips that connect the opening to the main section.',
-  body: 'Main section and ending. Upload a shared body once; it is reused for each selected hook.',
-  cta: 'Separate endings. Add these only if they are not already in your body.',
-}
 const validWho = (w: Who) => !!w.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(w.email)
 const button = 'press min-h-11 rounded-full px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40'
 const statusLabel: Record<string, string> = { missing: 'Waiting for file', uploaded: 'Preparing review', ready: 'Waiting for review', reviewing: 'Checking', clear: 'Checked', held: 'Needs a change', error: 'Retry needed', processing: 'Preparing review', uploading: 'Uploading', rendering: 'Creating ad', delivered: 'Delivered', queued: 'Queued' }
@@ -31,6 +24,7 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
   const [activeId, setActiveId] = React.useState<string>()
   const [revision, setRevision] = React.useState<IterationSlot>()
   const [who, setWho] = React.useState<Who>(signedIn || { name: '', email: '' })
+  const contactFormId = React.useId()
   const identity = React.useRef<Who | null>(signedIn || null)
   const identityWaiters = React.useRef<((who: Who) => void)[]>([])
   const queue = React.useRef(createUploadQueue(2))
@@ -97,17 +91,16 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
     setJobs(items => [...items.filter(j => !fresh.some(f => f.slot.id === j.slot.id)), ...fresh])
     fresh.forEach(job => { void upload(job) })
   }
-  const saveIdentity = (e: React.FormEvent) => {
-    e.preventDefault()
+  const saveIdentity = () => {
     if (!validWho(who)) return
     const value = { name: who.name.trim(), email: who.email.trim() }
     identity.current = value
     try { localStorage.setItem('aditor-request-who', JSON.stringify(value)) } catch { /* optional convenience */ }
     identityWaiters.current.splice(0).forEach(resolve => resolve(value)); setWaitingIdentity(false)
-    setWho(value)
   }
   const seal = async () => {
-    if (submitting || transferring) return
+    if (submitting || transferring || !allSaved || !validWho(who) || jobs.some(j => j.phase === 'error')) return
+    saveIdentity()
     setSubmitting(true); setError('')
     try { await mutate(await submitParts(token), { revalidate: false }) }
     catch (e) { setError(e instanceof Error ? e.message : 'Submission could not be confirmed. Try again.') }
@@ -121,6 +114,8 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
   const outputAssets: RequestAsset[] = progress.outputs.filter(o => o.asset_id).map(o => ({ ...o, asset_id: o.asset_id!, name: o.label, version: o.version_number || 1, asset_type: 'video', processing: o.media_url ? 'ready' : 'processing', comments: o.findings || [], review_state: o.status === 'delivered' ? 'clear' : o.status === 'held' ? 'held' : o.status === 'error' ? 'unavailable' : 'reviewing' }))
   const fixedPlan = progress.simple === false
   const roles = (['opening', 'hook', 'lead', 'body', 'cta'] as PartRole[]).filter(role => slots.some(s => s.role === role) || (!fixedPlan && (role === 'hook' || role === 'body' || optional.includes(role))))
+  const adding = !progress.submitted && !fixedPlan
+  const displayRoles = adding ? (['hook', 'body', ...roles.filter(role => role !== 'hook' && role !== 'body')] as PartRole[]).filter(role => roles.includes(role)) : roles
   const allSaved = slots.some(s => s.role === 'body') && slots.some(s => s.role === 'hook' || s.role === 'opening') && slots.every(s => progress.slots.some(p => p.slot_id === s.id && p.asset_id && p.version_id && p.bytes_stored === true))
   return <div className="parts-workspace space-y-6">
     <SubmissionSteps progress={progress} transferring={transferring} />
@@ -135,10 +130,8 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
         onRevise={asset => { const slot = slots.find(s => progress.slots.some(p => p.slot_id === s.id && p.asset_id === asset.asset_id)); if (slot) { setRevision(slot); replaceInput.current?.click() } else { setActiveId(undefined); setError('Replace the affected source part below. We’ll recreate the final ad and check it again.') } }}
         onObject={async (asset, comment, text) => { const output = progress.outputs.find(o => o.asset_id === asset.asset_id); const result = output ? await objectToOutputNote(token, output.id, { comment_id: comment.id, body: comment.body, text, who: who.name }) : await objectToNote(token, { asset_id: asset.asset_id, version_id: asset.version_id, comment_id: comment.id, body: comment.body, text, name: who.name }); await refresh(); return result }} />
     </> : <>
-      <div><h2 className="text-xl font-semibold tracking-tight">{progress.submitted ? 'Submitted parts' : 'Upload each part once'}</h2><p className="mt-2 text-base leading-relaxed text-text-secondary">{progress.submitted ? 'Open feedback for any part. Replace only the part that needs a change.' : 'Choose the matching field below. Checks can start as soon as a file is saved.'}</p></div>
-      <div className="grid items-start gap-6 sm:grid-cols-2">{roles.map(role => <section key={role} className="min-w-0" aria-label={roleLabels[role]}>
+      <div className={`grid items-start gap-y-6 ${adding ? 'gap-x-3 sm:grid-cols-[minmax(0,1fr)_88px_minmax(0,1fr)]' : 'gap-x-6 sm:grid-cols-2'}`}>{displayRoles.map((role, index) => <React.Fragment key={role}><section className={`min-w-0 ${adding && index >= 2 ? index % 2 === 0 ? 'sm:col-start-1' : 'sm:col-start-3' : ''}`} aria-label={roleLabels[role]}>
         <div className="mb-2 flex min-h-8 items-center gap-2"><h3 className="text-[15px] font-semibold">{roleLabels[role]}</h3><span className="rounded-full bg-bg-hover px-2 py-0.5 text-xs tabular-nums text-text-secondary">{slots.filter(s => s.role === role).length} {slots.filter(s => s.role === role).length === 1 ? 'part' : 'parts'}</span></div>
-        <p className="mb-4 text-sm leading-relaxed text-text-secondary sm:min-h-12">{roleHelp[role]}</p>
         {!progress.submitted && !fixedPlan && <PartDrop label={`Upload ${roleLabels[role].toLowerCase()}`} title={`Drop ${roleLabels[role].toLowerCase()} here or click`} multiple onFiles={files => take(files, role)} />}
         <ul className="mt-3 divide-y divide-border">{slots.filter(s => s.role === role).map(slot => {
           const job = activeJob(slot.id), server = progress.slots.find(s => s.slot_id === slot.id)
@@ -156,11 +149,10 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
             </div>
           </li>
         })}</ul>
-      </section>)}</div>
-      {!progress.submitted && !fixedPlan && <div className="flex flex-wrap gap-3">{(['lead', 'cta'] as PartRole[]).filter(r => !roles.includes(r)).map(r => <button key={r} className={`${button} inline-flex items-center gap-2 text-text-secondary hover:bg-bg-hover`} onClick={() => setOptional(o => [...o, r])}><Plus size={16} />{r === 'lead' ? 'Add bridges' : 'Add separate CTAs'}</button>)}</div>}
-      {!signedIn && !identity.current && (!progress.submitted || transferring) && <form onSubmit={saveIdentity} className="rounded-2xl border border-border p-5"><h3 className="font-medium">Your details</h3><p className="mt-1 text-sm text-text-secondary">Files can upload while you fill this in.</p><div className="mt-4 grid gap-4 sm:grid-cols-2">{(['name', 'email'] as const).map(field => <label key={field} className="text-sm">Your {field}<input required type={field === 'email' ? 'email' : 'text'} autoComplete={field} value={who[field]} onChange={e => setWho(w => ({ ...w, [field]: e.target.value }))} className="field mt-2 w-full" /></label>)}</div><button className={`${button} mt-3 border border-border`} disabled={!validWho(who)}>Save details</button></form>}
+      </section>{adding && index === 0 && <div className="flex items-center justify-center gap-2 self-stretch sm:flex-col sm:gap-0 sm:pt-6">{(['lead', 'cta'] as PartRole[]).filter(r => !roles.includes(r)).map(r => <button key={r} aria-label={r === 'lead' ? 'Add bridges' : 'Add separate CTAs'} className="press inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" onClick={() => setOptional(o => [...o, r])}><span className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs hover:bg-bg-hover"><Plus aria-hidden="true" size={12} />{r === 'lead' ? 'Bridge' : 'CTA'}</span></button>)}</div>}</React.Fragment>)}</div>
+      {!signedIn && (!progress.submitted || transferring) && <form id={contactFormId} onKeyDown={e => { if (e.key === 'Enter') saveIdentity() }} onSubmit={e => { e.preventDefault(); if (allSaved && !transferring) void seal(); else saveIdentity() }} className="rounded-2xl border border-border p-5"><h3 className="font-medium">Contact</h3><div className="mt-4 grid gap-4 sm:grid-cols-2">{(['name', 'email'] as const).map(field => <label key={field} className="text-sm">Your {field}<input required type={field === 'email' ? 'email' : 'text'} autoComplete={field} value={who[field]} onChange={e => setWho(w => ({ ...w, [field]: e.target.value }))} onBlur={saveIdentity} className="field mt-2 w-full" /></label>)}</div></form>}
       {progress.total > 0 && <p className="text-sm text-text-secondary">{slots.filter(s => s.role === 'hook' || s.role === 'opening').length} {slots.filter(s => s.role === 'hook' || s.role === 'opening').length === 1 ? 'hook' : 'hooks'} · {slots.filter(s => s.role === 'body').length} {slots.filter(s => s.role === 'body').length === 1 ? 'body' : 'bodies'} · {progress.total} final {progress.total === 1 ? 'ad' : 'ads'}</p>}
-      {!progress.submitted && <button className={`${button} inline-flex items-center gap-2 bg-accent px-6 text-text-inverse`} disabled={!allSaved || transferring || submitting || jobs.some(j => j.phase === 'error')} onClick={seal}>{submitting && <Loader2 className="animate-spin" size={16} />}{submitting ? 'Submitting…' : 'Submit for review'}</button>}
+      {!progress.submitted && <button type={signedIn ? 'button' : 'submit'} form={signedIn ? undefined : contactFormId} className={`${button} inline-flex items-center gap-2 bg-accent px-6 text-text-inverse`} disabled={!validWho(who) || !allSaved || transferring || submitting || jobs.some(j => j.phase === 'error')} onClick={signedIn ? seal : undefined}>{submitting && <Loader2 className="animate-spin" size={16} />}{submitting ? 'Submitting…' : 'Submit for review'}</button>}
       {progress.state === 'error' && <button className={`${button} border border-border`} onClick={async () => { try { await mutate(await retryParts(token), { revalidate: false }) } catch (e) { setError(e instanceof Error ? e.message : 'Please try again.') } }}>Retry processing</button>}
       <section aria-label="Final ads" className="border-t border-border pt-6"><div className="flex flex-wrap justify-between gap-2"><h2 className="text-xl font-semibold">Final ads</h2>{progress.total > 0 && <span className="text-sm text-text-secondary">{progress.delivered} of {progress.total} delivered</span>}</div><p className="mt-2 text-sm leading-relaxed text-text-secondary">{progress.outputs.length ? 'Created from your checked parts. Each complete ad gets a final review before delivery.' : 'Finished ads will appear here. Submit your parts to have them combined and checked automatically.'}</p><ul className="mt-3 divide-y divide-border">{progress.outputs.map(output => <li key={output.id} className="flex flex-wrap items-center gap-3 py-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{output.label}</p><p className="mt-1 text-sm text-text-secondary">{statusLabel[output.status] || 'Waiting for parts'}</p>{output.status === 'error' && output.error && <p className="mt-1 text-sm text-status-error">{output.error}</p>}</div>{output.asset_id && <button className={`${button} text-text-secondary`} onClick={() => setActiveId(output.asset_id)}>View final review</button>}{output.status === 'delivered' && output.download_url && <a className={`${button} inline-flex items-center gap-2 text-accent`} href={output.download_url}><Download size={16} /> Download</a>}</li>)}</ul></section>
     </>}
@@ -177,14 +169,14 @@ function SubmissionSteps({ progress: p, transferring }: { progress: IterationPro
   const delivered = !transferring && p.state === 'delivered' && p.total > 0 && p.delivered === p.total
   const current = !uploaded ? 0 : !partsClear ? 1 : 2
   const steps = [
-    { title: 'Upload parts', owner: 'Your task', done: uploaded, detail: uploaded ? 'Files saved and submitted' : 'Hooks and bodies, uploaded once' },
-    { title: 'Check parts', owner: 'Automatic', done: partsClear, detail: declared.length ? `${checked} of ${declared.length} parts passed` : 'Feedback for each part' },
+    { title: 'Upload', owner: 'Your task', done: uploaded, detail: uploaded ? 'Files saved and submitted' : 'Hooks and bodies, uploaded once' },
+    { title: 'Review', owner: 'Automatic', done: partsClear, detail: declared.length ? `${checked} of ${declared.length} parts passed` : 'Feedback for each part' },
     { title: 'Final ads', owner: 'Automatic', done: delivered, detail: p.total ? `${p.delivered} of ${p.total} ads delivered` : 'Combine, review and deliver' },
   ]
-  return <ol aria-label="Submission progress" className="grid gap-4 sm:grid-cols-3">
-    {steps.map((step, index) => <li key={step.title} aria-current={!delivered && index === current ? 'step' : undefined} className={`flex min-w-0 items-center justify-between gap-3 border-b-2 pb-4 sm:block ${index === current && !delivered ? 'border-accent' : 'border-border'}`}>
-      <div className="flex items-center gap-3"><span aria-hidden="true" className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-medium ${step.done ? 'bg-accent-muted text-accent' : 'bg-bg-secondary text-text-secondary'}`}>{step.done ? <CheckCircle2 size={18} /> : index + 1}</span><div><span className="text-xs text-text-secondary">{step.owner}</span><p className="text-base font-semibold">{step.title}</p></div></div>
-      <p className="max-w-[45%] text-right text-sm leading-relaxed text-text-secondary sm:mt-3 sm:max-w-none sm:text-left">{step.detail}{step.done && <span className="sr-only"> · Complete</span>}</p>
+  return <ol aria-label="Submission progress" className="grid grid-cols-3 gap-2 sm:gap-4">
+    {steps.map((step, index) => <li key={step.title} aria-current={!delivered && index === current ? 'step' : undefined} className={`min-w-0 border-b-2 pb-3 ${index === current && !delivered ? 'border-accent' : 'border-border'}`}>
+      <div className="flex items-center gap-2"><span aria-hidden="true" className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-medium ${step.done ? 'bg-accent-muted text-accent' : 'bg-bg-secondary text-text-secondary'}`}>{step.done ? <CheckCircle2 size={16} /> : index + 1}</span><span className="sr-only">{step.owner}: </span><p className="text-xs font-medium sm:text-sm">{step.title}</p></div>
+      <p className={declared.length || p.submitted ? 'mt-2 text-xs text-text-secondary' : 'sr-only'}>{step.detail}{step.done && <span className="sr-only"> · Complete</span>}</p>
     </li>)}
   </ol>
 }

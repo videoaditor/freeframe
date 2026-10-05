@@ -13,7 +13,7 @@ vi.mock('lucide-react', async original => ({
   CheckCircle2: () => <svg aria-hidden="true" data-testid="completion-icon" />,
 }))
 const base: IterationProgress = { enabled: true, mode: 'components', simple: true, manifest: { schema_version: 1, summary: '', slots: [], recipes: [] }, slots: [], outputs: [], state: 'waiting', delivered: 0, total: 0, submitted: false, can_leave: false, editor_done: false }
-beforeEach(() => { vi.resetAllMocks(); vi.mocked(requestIterations).mockResolvedValue(base); vi.mocked(declareParts).mockResolvedValue(base) })
+beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); vi.mocked(requestIterations).mockResolvedValue(base); vi.mocked(declareParts).mockResolvedValue(base) })
 afterEach(cleanup)
 const mount = () => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><PartsWorkspace token="test" who={{ name: 'Fred', email: 'fred@example.test' }} /></SWRConfig>)
 it('declares roles before starting upload on drop; does not submit the batch automatically', async () => {
@@ -168,4 +168,46 @@ it.each([
   const steps = await stages()
   expect(steps[2]).not.toHaveTextContent('Complete')
   if (snapshot.state === 'error') expect(screen.getByRole('button', { name: 'Retry processing' })).toBeInTheDocument()
+})
+
+const mountGuest = () => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><PartsWorkspace token="test" /></SWRConfig>)
+it('saves current guest contact when submitting without a separate save action', async () => {
+  vi.mocked(requestIterations).mockResolvedValue(saved)
+  vi.mocked(submitParts).mockResolvedValue({ ...saved, submitted: true, can_leave: true })
+  mountGuest()
+  fireEvent.change(await screen.findByLabelText('Your name'), { target: { value: ' Fred ' } })
+  fireEvent.change(screen.getByLabelText('Your email'), { target: { value: 'fred@example.test' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
+  expect(await screen.findByText('Submitted · checking your parts')).toBeInTheDocument()
+  expect(JSON.parse(localStorage.getItem('aditor-request-who')!)).toEqual({ name: 'Fred', email: 'fred@example.test' })
+})
+
+it.each(['blur', 'Enter'])('resumes an upload waiting for valid guest contact on %s and keeps contact editable', async action => {
+  let uploadedWho: unknown
+  vi.mocked(uploadToRequest).mockImplementation(async (_token, _who, _file, _progress, options) => {
+    uploadedWho = await options!.identity!()
+    return { asset_id: 'ha', version_number: 1 }
+  })
+  mountGuest()
+  fireEvent.change(await screen.findByLabelText('Upload hooks'), { target: { files: [new File(['a'], 'hook.mp4', { type: 'video/mp4' })] } })
+  await waitFor(() => expect(uploadToRequest).toHaveBeenCalled())
+  fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Fred' } })
+  fireEvent.change(screen.getByLabelText('Your email'), { target: { value: 'invalid' } })
+  if (action === 'blur') fireEvent.blur(screen.getByLabelText('Your email'))
+  else fireEvent.keyDown(screen.getByLabelText('Your email'), { key: 'Enter' })
+  expect(uploadedWho).toBeUndefined()
+  fireEvent.change(screen.getByLabelText('Your email'), { target: { value: 'fred@example.test' } })
+  if (action === 'blur') fireEvent.blur(screen.getByLabelText('Your email'))
+  else fireEvent.keyDown(screen.getByLabelText('Your email'), { key: 'Enter' })
+  await waitFor(() => expect(uploadedWho).toEqual({ name: 'Fred', email: 'fred@example.test' }))
+  expect(screen.getByLabelText('Your email')).toHaveValue('fred@example.test')
+})
+
+it('requires valid guest contact before sealing a restored saved batch', async () => {
+  vi.mocked(requestIterations).mockResolvedValue(saved)
+  mountGuest()
+  expect(await screen.findByRole('button', { name: 'Submit for review' })).toBeDisabled()
+  fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Fred' } })
+  fireEvent.change(screen.getByLabelText('Your email'), { target: { value: 'invalid' } })
+  expect(screen.getByRole('button', { name: 'Submit for review' })).toBeDisabled()
 })

@@ -194,3 +194,24 @@ Section13 acceptance: actual HTTPS staging inspected at1280px in both dark and l
 Fresh validation:17/17 independent focused regressions passed with no blocking finding; all76frontend test files and513tests passed with `--maxWorkers=2`; production build, explicit TypeScript and lint passed (existing warnings). The first unconstrained full run hit10unrelated5000ms timeouts under local load47; the successful bounded-concurrency rerun used unchanged tests and timeouts. No backend behavior changed. VoiceOver, physical touch and manual200%zoom were not tested; owner design acceptance and real Trello delivery remain pending. The existing Aditor card and Alan/Aditor briefed session were updated in place.
 
 Screenshots: [desktop dark](handin-evidence/oct5-admixer-targets-dark.jpg), [desktop light](handin-evidence/oct5-admixer-targets-light.jpg), [375px phone](handin-evidence/oct5-admixer-targets-mobile.jpg). Section12's large FolderArt targets are the before reference; these compact AdMixer-style targets are the current parts-upload design.
+
+## 14. Apply Alan's ten browser comments — 2026-10-05
+
+Approved scope: remove the guest intro paragraph, upload section introduction, role explanations and contact helper. Keep the actual brief available. Align Hook/Body targets by removing their unequal explanatory content. Replace the tall three-stage strip with a single compact numbered row; keep current/completed states, exact counts and automatic responsibility accessible. Optional Bridge/CTA additions become small centered pills between the targets on desktop, centered between stacked targets on phones; retain at least44px keyboard/touch hit areas.
+
+Rename the contact heading to Contact and remove the separate Save details action. Existing behavior requires that action, so valid contact will instead save on field blur and be saved again on Submit. Contact fields remain editable before submission, including restored local data; invalid contact cannot seal a guest batch. Pending upload identity waiters are released only with valid contact. Transfers still must finish before submission; no invented success or premature handoff.
+
+| Before | After | Why |
+|---|---|---|
+| Repeated paragraphs and mismatched target tops | Role title/count followed directly by matched upload targets | Apply the marked removals and alignment |
+| Three tall stages with repeated ownership copy | Compact numbered progress row with counts only when relevant | Reduce scanning while preserving truthful states |
+| Large optional additions below the grid | Small central pills with44px hit targets | Put optional choices between the upload targets |
+| Separate save action | Contact saved on blur and Submit | Avoid a second completion action and upload deadlock |
+
+Use existing OKLCH colors, system typography and4/8spacing. No new assets, backend, engine or account-right changes. Test contact persistence, upload resumption and invalid-contact prevention first; retain all progress/transfer regressions. Inspect actual666px,1280px and375px staging, native keyboard focus and optional-role expansion, then run full frontend checks. Same tracking card/session and PR; no media/model reruns. VoiceOver, physical touch, manual200%zoom and production delivery acceptance remain outside this iteration's evidence.
+
+Acceptance: actual HTTPS staging inspected at666px (the comment viewport),1280px and375px with no horizontal overflow. Both primary targets have the same top and144.75px height; optional Bridge/CTA expansion preserves aligned pairs. Pills have44px hit areas. Self-critique shortened stage labels to Upload / Review / Final ads so the phone row stays on one line. Contact remains editable after valid blur/Enter saves. Native Enter with the isolated Stage Editor identity followed by reload restored the displayed contact; no upload or submission was performed in this browser check.
+
+Four meaningful contact regressions were observed failing before their fixes: missing submission persistence, missing valid-blur upload resumption, invalid guest sealing, and missing Enter resumption. Final focused independent review21/21 passed with no remaining finding; full76-file/517-test frontend suite, build, explicit tsc and lint passed (existing warnings). Native external Submit is associated with the Contact form; Enter also releases valid identity waiters when incomplete transfers keep Submit disabled. Central seal guards protect every invocation. No backend/model/engine or production actions. Light-mode screenshots from section13 are not a new light-mode check of this layout; full VoiceOver/physical touch/manual200%zoom and real Trello delivery remain unverified.
+
+Screenshots: [666px aligned targets](handin-evidence/oct5-lean-666.jpg), [1280px desktop](handin-evidence/oct5-lean-desktop.jpg), [375px phone](handin-evidence/oct5-lean-mobile.jpg). These supersede section13's explanatory copy and tall progress strip.
