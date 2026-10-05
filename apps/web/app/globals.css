@@ -627,3 +627,34 @@ button:not(:disabled), summary { cursor: pointer; }
   --text-primary: oklch(0.22 0.006 285);
   --text-secondary: oklch(0.44 0.008 285);
 }
+
+/* The compact raised upload controls used by AdMixer, within Hand-in's palette. */
+.parts-drop {
+  background-image: linear-gradient(145deg, color-mix(in oklch, var(--text-primary) 4%, transparent), transparent 45%, oklch(0 0 0 / 0.04));
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--text-primary) 8%, transparent), 0 2px 4px oklch(0 0 0 / 0.06), 0 8px 24px oklch(0 0 0 / 0.08);
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 180ms ease;
+}
+.parts-upload-symbol {
+  position: relative;
+  isolation: isolate;
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--text-primary) 12%, transparent), 0 2px 5px oklch(0 0 0 / 0.04);
+  transition: transform 180ms var(--ease-out);
+}
+.parts-upload-symbol::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid color-mix(in oklch, var(--accent) 16%, transparent);
+  border-radius: inherit;
+  transform: rotate(-8deg);
+}
+.parts-drop[data-dragging="true"] { border-color: var(--accent); background-color: var(--accent-muted); }
+@media (hover: hover) and (pointer: fine) {
+  .parts-drop:hover { border-color: var(--accent); }
+  .parts-drop:hover:not(:focus-within) .parts-upload-symbol { transform: translateY(-2px) rotate(-4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .parts-drop, .parts-upload-symbol { transition: none; }
+  .parts-drop:hover .parts-upload-symbol { transform: none; }
+}

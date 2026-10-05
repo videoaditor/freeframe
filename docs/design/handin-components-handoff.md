@@ -170,3 +170,27 @@ Light mode, narrow viewport, full keyboard traversal, VoiceOver and manual 200% 
 Section12 implementation evidence: the live reference was visually inspected, then the actual public stage was checked at verified375px and1280px, no horizontal overflow. Self-critique caught owner-workspace blue folder variables; the handin scope now explicitly supplies coral OKLCH folder tones. Phone stage rows were compacted without hiding counts/responsibility. Normal login with the existing isolated editor account reached Hand-in, showing exactly Hand in/Submissions/Projects and no management navigation. Final checks:513tests, build, explicittsc, lint allpassed (existingwarnings). Independent source review:17/17focused regressions, no blocking findings. New light-mode/VoiceOver/manual200% acceptance remains outstanding; unchanged underlying light tokens are not a substitute for browser acceptance. The same project card/session was updated, not recreated. No model/media/production actions.
 
 Screenshots: [1280px empty](handin-evidence/oct5-autoreview-look-empty.jpg), [375px empty](handin-evidence/oct5-autoreview-look-mobile.jpg), [existing editor Hand-in](handin-evidence/oct5-autoreview-look-editor.jpg).
+
+## 13. Match AdMixer upload areas — 2026-10-05
+
+**Job / approved direction:** Alan explicitly requested that the upload areas look closer to AdMixer. This is a bounded styling revision to existing part targets. The actual authenticated live upload screen at mix.aditor.ai and source StageColumn.jsx/UploadZone.jsx/index.css were inspected read-only: compact140px targets,12px radius, subtle raised panel lighting,40px orange upload symbol with a rotated rim, short14px drop prompt, and small heading count badges. No production action was taken.
+
+**Navigation / hierarchy:** retain current internal/customer roles, real destination brand, three responsibility stages, part explanations, optional stages and final ads. Only role headings/count presentation and drop-zone material/size change. The native picker and existing drag/drop are the same. AdMixer URL-import fields and library buttons are not displayed because this hand-in has no equivalent supported import/library action; adding those would require a separate functional task.
+
+| Before | After | Why |
+|---|---|---|
+| Large240px targets with FolderArt | Compact140px raised dashed panels | Match AdMixer's actual working interface |
+| Large folder illustration and bold prompt | 40px Upload symbol and short14px prompt | Same recognisable control as the Mixer |
+| Count placed across the entire column | Small count badge beside role title | Match stage-heading grouping |
+
+**States/components:** empty and drag-hot use the new target; file rows, exact transfer percentages, review/error/retry and delivered state are unchanged. Native file input keeps `Upload hooks` / `Upload bodies`, supports multiple video files, and exposes focus around the whole target. Upload-symbol layers are decorative and aria-hidden. No new setting, processing state or permission.
+
+**Tokens/accessibility:** existing Hand-in dark/light OKLCH semantics;12px radius,24px padding,140px min target,40px icon container with20px icon,14px/22px secondary type, 4/8grid. Material lighting and accent follow existing appearance; no new font/assets/dependency. Hover on fine pointers only; keyboard has no motion, Reduce Motion removes decorative hover transforms. Touch target exceeds44px. Text and file limits remain visible, never only color.
+
+**Review:** screenshot actual empty targets at desktop and375px after implementation; inspect focus and confirm no overflow. Run existing frontend tests/build/tsc/lint; independent review checks for truthful state preservation. No media/model reruns are required for visual styling. Existing light-mode/VoiceOver/manual200% acceptance limits remain explicit; final human design acceptance remains with Alan. Same trackingcard/session will be updated, no new project created.
+
+Section13 acceptance: actual HTTPS staging inspected at1280px in both dark and light mode and at verified375px in dark mode, with no horizontal overflow. Compact panels remain aligned on desktop and stack clearly on the phone. Keyboard Tab moves from the native Hooks picker to Bodies, showing the full-target2px accent focus ring. The isolated editor's original dark appearance was restored and the temporary viewport override reset. No files were uploaded and no model reviews were invoked for this styling revision.
+
+Fresh validation:17/17 independent focused regressions passed with no blocking finding; all76frontend test files and513tests passed with `--maxWorkers=2`; production build, explicit TypeScript and lint passed (existing warnings). The first unconstrained full run hit10unrelated5000ms timeouts under local load47; the successful bounded-concurrency rerun used unchanged tests and timeouts. No backend behavior changed. VoiceOver, physical touch and manual200%zoom were not tested; owner design acceptance and real Trello delivery remain pending. The existing Aditor card and Alan/Aditor briefed session were updated in place.
+
+Screenshots: [desktop dark](handin-evidence/oct5-admixer-targets-dark.jpg), [desktop light](handin-evidence/oct5-admixer-targets-light.jpg), [375px phone](handin-evidence/oct5-admixer-targets-mobile.jpg). Section12's large FolderArt targets are the before reference; these compact AdMixer-style targets are the current parts-upload design.
