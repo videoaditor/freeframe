@@ -4,7 +4,10 @@ from datetime import datetime
 from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from ..database import Base
+try:
+    from ..database import Base
+except ImportError:
+    from database import Base
 
 
 class CampaignReview(Base):

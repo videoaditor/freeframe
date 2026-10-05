@@ -5,7 +5,10 @@ from typing import Optional
 from sqlalchemy import Date, DateTime, ForeignKey, String, Text, UniqueConstraint, CheckConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from ..database import Base
+try:
+    from ..database import Base
+except ImportError:
+    from database import Base
 
 
 class FeedbackDigest(Base):
