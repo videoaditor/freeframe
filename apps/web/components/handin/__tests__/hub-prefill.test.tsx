@@ -2,14 +2,14 @@ import { beforeEach, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import HandinPage from "@/app/(dashboard)/handin/page";
 import { lookUpCard } from "@/lib/handin";
-const { startUpload } = vi.hoisted(() => ({ startUpload: vi.fn() }));
+const { startUpload, uploadFiles } = vi.hoisted(() => ({ startUpload: vi.fn(), uploadFiles: [] }));
 vi.mock("swr", () => ({ default: () => ({ data: [] }) }));
 vi.mock("@/lib/handin", async (original) => ({
   ...await original<typeof import("@/lib/handin")>(),
   isHandinConfigured: () => true,
   lookUpCard: vi.fn(),
 }));
-vi.mock("@/stores/upload-store", () => ({ useUploadStore: (select: (s: unknown) => unknown) => select({ startUpload }) }));
+vi.mock("@/stores/upload-store", () => ({ useUploadStore: (select: (s: unknown) => unknown) => select({ startUpload, files: uploadFiles }) }));
 vi.mock("@/stores/auth-store", () => ({ useAuthStore: (select: (s: unknown) => unknown) => select({ user: null, isSuperAdmin: false }) }));
 vi.mock("@/components/upload/upload-zone", () => ({ UploadZone: () => <div>File picker</div> }));
 beforeEach(() => { vi.clearAllMocks(); window.history.replaceState({}, "", "/handin?card=" + encodeURIComponent("https://trello.com/c/VUFKsrxi/a-title")); });
