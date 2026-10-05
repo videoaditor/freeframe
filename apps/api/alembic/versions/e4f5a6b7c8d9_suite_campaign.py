@@ -15,7 +15,7 @@ def upgrade():
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=False),
         sa.Column('campaign_id', sa.String(80), nullable=False),
-        sa.Column('asset_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('assets.id'), nullable=False),
+        sa.Column('asset_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint('user_id', 'campaign_id', 'asset_id', name='uq_campaign_review_asset'))

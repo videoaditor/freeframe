@@ -161,6 +161,7 @@ def test_purge_share_link_removes_items_activity_watermark(real_db):
 
 
 def test_purge_asset_removes_full_subtree(real_db, monkeypatch):
+    from apps.api.models.campaign_review import CampaignReview
     monkeypatch.setattr(ct, "delete_object", lambda k: None)
     monkeypatch.setattr(ct, "delete_prefix", lambda k: None)
 
@@ -178,11 +179,13 @@ def test_purge_asset_removes_full_subtree(real_db, monkeypatch):
     real_db.add(AssetShare(asset_id=asset.id, shared_with_user_id=owner.id, shared_by=owner.id))
     real_db.add(ActivityLog(asset_id=asset.id, action="created"))
     real_db.add(Notification(user_id=owner.id, type=NotificationType.assignment, asset_id=asset.id))
+    real_db.add(CampaignReview(user_id=owner.id, campaign_id='telehealth_october_2026', asset_id=asset.id))
     real_db.flush()
 
     counts = ct.PurgeCounts()
     ct._purge_asset(real_db, asset.id, counts)
 
+    assert real_db.query(CampaignReview).filter_by(asset_id=asset.id).count() == 1
     assert real_db.query(Asset).filter_by(id=asset.id).count() == 0
     assert real_db.query(AssetVersion).filter_by(asset_id=asset.id).count() == 0
     assert real_db.query(AssetMetadata).filter_by(asset_id=asset.id).count() == 0
