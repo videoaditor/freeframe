@@ -253,3 +253,29 @@ Read-only acceptance also reopened the previously generated two-output request: 
 Regression evidence: the two stored-format tests and changed empty-output test first failed against previous behavior (three failures); all25 focused tests then passed, including preserved generated-review/download and render-error recovery. Fresh full frontend suite passes521tests across77files with two workers. Build/type/lint results are recorded after their completion below.
 
 Fresh final checks after the request simplification:521/521tests across77files, production build, explicit TypeScript and lint all pass; existing lint/Browserslist warnings remain. Backend and engine sources were unchanged. Prior485backend passes/5skips and genuine four-final cross-service acceptance remain previous evidence, not a fresh backend/model run.
+
+
+## 17. Centered submission and progressive briefing — 2026-10-05
+
+Job: invited external editors collect/upload the requested parts quickly; this is the same existing request and authorized UI iteration. Web desktop/mobile. Success: narrower centered composition, short readable brief with genuine full-source access, aligned contact/Submit, unchanged upload/review behavior.
+
+| Before | After | Why |
+|---|---|---|
+| Broad1040px main with left title | Centered760px main, more outer whitespace and centered34/44px bold title | Focus the upload task and give the title presence |
+| Visible500-character block | Short preview and link-style full-brief disclosure/source link | Essential context first, full briefing on demand |
+| Contact576px and small centered Submit | Same576px contact/Submit width with aligned leading edge | One coherent submission group |
+
+Hierarchy: brand/request header; actual title; short briefing preview and View full brief; small progress; ordered part fields; Name/Email; Submit; results only when available. Existing empty/loading/held/delivered/error/permission states remain; native disclosure is keyboard accessible and reversible. Full source text/URL must use real stored request input, not pretend the500-character excerpt is a full document. PDF support follows the existing source contract; never expose unrelated session data.
+
+Tokens: existing scoped system light/dark OKLCH colors;4/8spacing;44px minimum controls;34px mobile/44px desktop system-font bold title,16px readable brief preview and relaxed full-text line-height. No added decorative animation; existing reduced-motion support retained. Apple HIG disclosure-controls/typography/layout guidance: descriptive disclosure label, constrained reading width, strong type hierarchy, adaptive margins. Upload layout itself is a web design choice, not a native HIG component.
+
+Review plan: meaningful full-brief/short-preview/link regressions before behavior changes; browser829px and375px, title/brief/link expansion, contact/button edges, no overflow and44px links; full frontend checks and relevant backend checks if the public briefing contract changes. Current OS Light proof only unless Dark can be rendered without changing user preferences; VoiceOver/physical touch/200%zoom remain explicitly unverified. No open user decisions: the user's requested composition supplies the bounded design approval. Same card/session/PR; no media/model/production activation.
+
+
+Acceptance: actual829px centered main is760px; Name and Submit have the same126.5px leading edge and Submit matches the576px contact group. Actual375px also aligns their leading edges with no horizontal overflow. Title is44px desktop/34px phone; preview is at most two visible lines. Native Enter opens and closes View full brief with a visible focus ring, showing the actual469-character stored staging brief. No files were uploaded or submitted. At1280px expanded Hook/Bridge/Body/CTA fields use two342px columns, preserving readable single-line prompts and assembly order in the narrower public layout. Internal wide layout is unchanged. Temporary viewport override was reset and the clean request remains open.
+
+Screenshots: [centered829px](handin-evidence/oct5-centered-829.jpg), [phone375px](handin-evidence/oct5-centered-375.jpg), [full briefing and keyboard focus](handin-evidence/oct5-centered-brief-expanded.jpg), [expanded optional parts1280px](handin-evidence/oct5-centered-parts-expanded.jpg). Current OS Light was visually checked; no new manual Dark, VoiceOver, physical-touch or200%zoom claim.
+
+The additive public request contract now returns genuine stored brief_text and validated actual brief_url while preserving live-token scope. Durable internal-card/folder sources survive resolved review input cleanup; unsupported/unsafe/truncated URLs and PDF-only hints are not called full sources. The editor's full-text disclosure uses original supplied text, not the500-character excerpt. PDF-only sources without preserved text/URL retain an honestly labeled preview; private reviewer KV/PDF bytes are not exposed.
+
+Fresh checks: frontend524/524 across77files, production build, explicit TypeScript and lint pass with existing warnings;28focused tests pass after three expected full-brief failures. Backend455pass/53expected integration skips (mocked environment),3existing warnings;44focused request tests pass after14expected missing-field failures. Independent read-only source audit found no blocker. Previous live Postgres/engine acceptance remains historical; no new render/model/Trello delivery. API restarted alone as31966 with true full-brief guest200, Next restored as33907 with identical Node22/origins/Parts flag. Production rollout remains off.

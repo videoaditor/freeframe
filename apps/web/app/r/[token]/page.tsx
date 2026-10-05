@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { PartsWorkspace } from '@/components/v2/parts-workspace'
 import { requestIterations } from '@/lib/iterations'
 import { ArrowLeft } from 'lucide-react'
-import { finishRequest, objectToNote, requestReview, uploadToRequest, viewRequest, type RequestAsset } from '@/lib/platform'
+import { finishRequest, objectToNote, requestReview, uploadToRequest, viewRequest, type RequestAsset, type RequestView } from '@/lib/platform'
 import { DropZone } from '@/components/v2/drop-zone'
 import { UploadCard, type UploadPhase } from '@/components/v2/upload-card'
 import { RequestWorkspace, SubmissionSuccess } from '@/components/v2/request-workspace'
@@ -105,6 +105,21 @@ function CompleteRequestPage({ params: { token }, onActivity }: { params: { toke
   </div>
 }
 
+function RequestBrief({ view }: { view: RequestView }) {
+  const full = view.brief_text?.trim()
+  const brief = full || view.brief_excerpt?.trim()
+  const preview = brief && brief !== view.brief_url ? (brief.length > 120 ? brief.slice(0, 120).replace(/\s+\S*$/, '') + '…' : brief) : null
+  const linkClass = 'press inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-medium text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+  return <section aria-label="Briefing" className="mb-8 text-center">
+    <h1 className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight sm:text-[2.75rem]">{view.title}</h1>
+    {preview && <p aria-label="Briefing preview" className="mx-auto mt-4 max-w-xl line-clamp-2 text-base leading-relaxed text-text-secondary">{preview}</p>}
+    {full || (brief && !view.brief_url) ? <details className="mt-1">
+      <summary className={`${linkClass} cursor-pointer list-none`}>{full ? 'View full brief' : 'View briefing preview'}</summary>
+      <div className="mt-3 rounded-xl bg-bg-secondary p-5 text-left"><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">{full || brief}</p>{view.brief_url && <a className={`${linkClass} mt-3`} href={view.brief_url} target="_blank" rel="noopener noreferrer">Open briefing source</a>}</div>
+    </details> : view.brief_url ? <a className={`${linkClass} mt-1`} href={view.brief_url} target="_blank" rel="noopener noreferrer">View full brief</a> : null}
+  </section>
+}
+
 export default function RequestPage({ params }: { params: { token: string } }) {
   const { data: view } = useSWR(`/r/${params.token}`, () => viewRequest(params.token), { shouldRetryOnError: false })
   const { data: progress } = useSWR(view?.receive_iterations ? ['parts', params.token] : null, () => requestIterations(params.token), { refreshInterval: 4000 })
@@ -112,8 +127,8 @@ export default function RequestPage({ params }: { params: { token: string } }) {
   return <div data-system-appearance className="owner-workspace handin-workspace relative min-h-screen bg-bg-primary text-text-primary">
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_50%_at_50%_0%,var(--accent-muted),transparent_70%)]" />
     <header className="relative mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-5 py-2 sm:px-8"><div className="flex shrink-0 items-center gap-2.5">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/autoreview-icon.png" alt="" className="h-7 w-7" /><span className="text-[15px] font-semibold tracking-tight">Autoreview</span></div><div className="min-w-0 text-right"><p className="text-xs text-text-secondary">Submitting to</p><span className="block break-words text-sm font-medium">{view.brand}</span></div></header>
-    <main className="relative mx-auto max-w-[1040px] px-5 pb-16 pt-8 sm:px-8"><section aria-label="Briefing" className="mb-6"><h1 className="text-balance text-2xl font-semibold tracking-tight">{view.title}</h1>
-      {view.brief_excerpt && <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">{view.brief_excerpt}</p>}</section>
+    <main className="relative mx-auto max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
+      <RequestBrief view={view} />
       <PartsWorkspace token={params.token} brand={view.brand} />
     </main>
   </div>

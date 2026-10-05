@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The realtime event stream now renews its token instead of retrying a dead one** - `EventSource` cannot send an `Authorization` header, so the token rides in the query string, and `/events/{project_id}` answers an expired one with 403. Nothing in the reconnect loop renewed it, so a lapsed session turned into an open-ended 403 retry: production logs showed hours of reconnects all carrying a token that had expired that morning. Each attempt now renews first, and gives up after a few consecutive failures rather than reconnecting forever with nothing to authenticate.
 
 ### Changed
+- Center external parts submissions with more side space, aligned contact and Submit, and a stronger title; show a short brief preview with access to the actual stored full text or source link.
 - Parts hand-in now shows upload, part checks and final delivery as clearly labeled phases, with guidance for hooks and reusable bodies.
 - Parts hand-in matches the existing AutoReview identity and folder upload design, with a branded customer request and consistent internal setup form.
 - Parts upload targets use AdMixer's compact raised panels, upload symbols and heading count badges.

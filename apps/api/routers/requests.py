@@ -19,6 +19,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Literal
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from botocore.exceptions import ClientError
@@ -311,13 +312,41 @@ def _submitted_assets(db, req):
         Asset.id.in_(alive)).order_by(Asset.created_at).all()
 
 
+def _public_brief(req, folder):
+    text = getattr(req, "iteration_brief", None)
+    state = req.iteration_state if isinstance(req.iteration_state, dict) else {}
+    internal = state.get("internal_handin", {})
+    pending = state.get("brief_input", {})
+    description = getattr(folder, "description", None)
+    candidates = [
+        internal.get("card_url") if isinstance(internal, dict) else None,
+        description if isinstance(description, str) and len(description) < 2000 else None,
+        pending.get("url") if isinstance(pending, dict) else None,
+    ]
+    url = None
+    for candidate in candidates:
+        if not isinstance(candidate, str) or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\" for c in candidate):
+            continue
+        try:
+            parsed = urlsplit(candidate)
+            _ = parsed.port  # Reject malformed ports rather than return an unusable source link.
+            if parsed.scheme in ("http", "https") and parsed.hostname and parsed.username is None and parsed.password is None:
+                url = candidate
+                break
+        except ValueError:
+            continue
+    return {"brief_text": text if isinstance(text, str) and text.strip() else None, "brief_url": url}
+
+
 @router.get("/r/{token}", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def view_request(token: str, db: Session = Depends(get_db)):
     req = _live_request(db, token)
     project = db.query(Project).filter(Project.id == req.project_id).first()
+    folder = db.query(Folder).filter(Folder.id == req.folder_id, Folder.project_id == req.project_id, Folder.deleted_at.is_(None)).first()
     assets = _submitted_assets(db, req)
     return {
         **request_fields(req),
+        **_public_brief(req, folder),
         "title": req.title,
         "brand": project.name if project else "",
         "logo_url": _brand_logo(db, req.project_id),

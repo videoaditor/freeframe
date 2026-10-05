@@ -711,3 +711,10 @@ button:not(:disabled), summary { cursor: pointer; }
     --status-success: oklch(0.75 0.19 145);
   }
 }
+
+/* A centered public request keeps expanded part fields readable in two columns. */
+@media (min-width: 640px) {
+  .handin-workspace[data-system-appearance] .parts-flow-expanded {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
