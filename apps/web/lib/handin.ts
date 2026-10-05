@@ -29,6 +29,20 @@ export function isHandinConfigured(): boolean {
   return GATE_BASE.trim().length > 0
 }
 
+/** Hub deep links may prefill a card, but never trigger an upload. */
+export function handinCardFromSearch(search: string): string {
+  try {
+    const value = new URLSearchParams(search).get('card')
+    if (!value) return ''
+    const url = new URL(value)
+    const match = url.pathname.match(/^\/c\/([a-zA-Z0-9]{8})(?:\/|$)/)
+    if (url.protocol !== 'https:' || url.hostname !== 'trello.com' || url.port || url.username || url.password || !match) return ''
+    return `https://trello.com/c/${match[1]}`
+  } catch {
+    return ''
+  }
+}
+
 export interface GateCard {
   /** The card's title. Becomes the project name - the editor never types it. */
   name?: string

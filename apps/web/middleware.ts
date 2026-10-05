@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
   if (!accessToken && !refreshToken) {
     const whop = request.cookies.get('ff_auth_provider')?.value === 'whop' || request.headers.has('x-whop-user-token')
     const loginUrl = new URL(whop ? '/whop' : '/login', request.url)
-    loginUrl.searchParams.set('from', pathname)
+    loginUrl.searchParams.set('from', pathname + request.nextUrl.search)
     return NextResponse.redirect(loginUrl)
   }
 
