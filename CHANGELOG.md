@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Parts hand-in now shows upload, part checks and final delivery as clearly labeled phases, with guidance for hooks and reusable bodies.
+- Parts hand-in matches the existing AutoReview identity and folder upload design, with a branded customer request and consistent internal setup form.
 - Compact brand rules are grouped into alphabetically sorted Must follow and Guidance columns, with subtle definition access and one quiet quick-input focus indicator.
 - Video cards default to 9:16 fit thumbnails; card grids adapt to the available panel width. Existing appearance preferences remain available.
 - Autoreview app identity with a dedicated icon and subtle Aditor footer; brand quick rules regain the playbook artwork and use a brand-specific logo example. Existing custom branding is preserved.

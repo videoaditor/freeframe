@@ -7,6 +7,7 @@ import { declareParts, handoffMessage, objectToOutputNote, removePart, requestIt
 import { objectToNote, uploadToRequest, type RequestAsset } from '@/lib/platform'
 import { createUploadQueue } from '@/lib/part-upload-queue'
 import { RequestWorkspace } from './request-workspace'
+import { FolderArt } from './folder-art'
 
 interface Who { name: string; email: string }
 interface Job { id: string; slot: IterationSlot; file: File; assetId?: string; phase: 'queued' | 'uploading' | 'done' | 'error'; progress: number; error?: string; declared: boolean }
@@ -139,7 +140,7 @@ export function PartsWorkspace({ token, brand, who: signedIn, onActivity }: { to
       <div className="grid items-start gap-6 sm:grid-cols-2">{roles.map(role => <section key={role} className="min-w-0" aria-label={roleLabels[role]}>
         <div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-lg font-semibold">{roleLabels[role]}</h3><span className="text-sm tabular-nums text-text-secondary">{slots.filter(s => s.role === role).length} {slots.filter(s => s.role === role).length === 1 ? 'part' : 'parts'}</span></div>
         <p className="mb-4 text-sm leading-relaxed text-text-secondary sm:min-h-12">{roleHelp[role]}</p>
-        {!progress.submitted && !fixedPlan && <PartDrop label={`Upload ${roleLabels[role].toLowerCase()}`} title={`Drop ${roleLabels[role].toLowerCase()} here`} multiple onFiles={files => take(files, role)} />}
+        {!progress.submitted && !fixedPlan && <PartDrop label={`Upload ${roleLabels[role].toLowerCase()}`} title={`Drop ${roleLabels[role].toLowerCase()} here`} role={role} multiple onFiles={files => take(files, role)} />}
         <ul className="mt-3 divide-y divide-border">{slots.filter(s => s.role === role).map(slot => {
           const job = activeJob(slot.id), server = progress.slots.find(s => s.slot_id === slot.id)
           const uploading = job && (job.phase === 'queued' || job.phase === 'uploading')
@@ -182,14 +183,14 @@ function SubmissionSteps({ progress: p, transferring }: { progress: IterationPro
     { title: 'Final ads', owner: 'Automatic', done: delivered, detail: p.total ? `${p.delivered} of ${p.total} ads delivered` : 'Combine, review and deliver' },
   ]
   return <ol aria-label="Submission progress" className="grid gap-4 sm:grid-cols-3">
-    {steps.map((step, index) => <li key={step.title} aria-current={!delivered && index === current ? 'step' : undefined} className={`min-w-0 border-b-2 pb-4 ${index === current && !delivered ? 'border-accent' : 'border-border'}`}>
+    {steps.map((step, index) => <li key={step.title} aria-current={!delivered && index === current ? 'step' : undefined} className={`flex min-w-0 items-center justify-between gap-3 border-b-2 pb-4 sm:block ${index === current && !delivered ? 'border-accent' : 'border-border'}`}>
       <div className="flex items-center gap-3"><span aria-hidden="true" className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-medium ${step.done ? 'bg-accent-muted text-accent' : 'bg-bg-secondary text-text-secondary'}`}>{step.done ? <CheckCircle2 size={18} /> : index + 1}</span><div><span className="text-xs text-text-secondary">{step.owner}</span><p className="text-base font-semibold">{step.title}</p></div></div>
-      <p className="mt-3 text-sm leading-relaxed text-text-secondary">{step.detail}{step.done && <span className="sr-only"> · Complete</span>}</p>
+      <p className="max-w-[45%] text-right text-sm leading-relaxed text-text-secondary sm:mt-3 sm:max-w-none sm:text-left">{step.detail}{step.done && <span className="sr-only"> · Complete</span>}</p>
     </li>)}
   </ol>
 }
 
-function PartDrop({ label, title, onFiles, multiple }: { label: string; title: string; onFiles: (files: File[]) => void; multiple?: boolean }) {
+function PartDrop({ label, title, role, onFiles, multiple }: { label: string; title: string; role: PartRole; onFiles: (files: File[]) => void; multiple?: boolean }) {
   const [hot, setHot] = React.useState(false)
-  return <label onDragOver={e => { e.preventDefault(); setHot(true) }} onDragLeave={() => setHot(false)} onDrop={e => { e.preventDefault(); setHot(false); onFiles(Array.from(e.dataTransfer.files)) }} className={`relative flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center transition-colors focus-within:ring-2 focus-within:ring-accent ${hot ? 'border-accent bg-accent-muted' : 'border-border bg-bg-secondary/40 hover:bg-bg-secondary'}`}><Upload size={24} className="mb-3 text-text-secondary" strokeWidth={1.5} /><span className="text-base font-medium">{title}</span><span className="mt-1 text-sm text-text-secondary">or choose files · up to 200 MB each</span><input type="file" aria-label={label} accept="video/*" multiple={multiple} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" onChange={e => { onFiles(Array.from(e.target.files || [])); e.target.value = '' }} /></label>
+  return <label onDragOver={e => { e.preventDefault(); setHot(true) }} onDragLeave={() => setHot(false)} onDrop={e => { e.preventDefault(); setHot(false); onFiles(Array.from(e.dataTransfer.files)) }} className={`relative flex min-h-60 cursor-pointer flex-col items-center justify-center gap-5 rounded-[var(--radius-xl)] border border-dashed px-6 py-8 text-center transition-colors duration-200 focus-within:ring-2 focus-within:ring-accent ${hot ? 'border-accent bg-accent-muted' : 'border-[var(--drop-border)] hover:bg-bg-secondary/60'}`}><FolderArt size={88} label={role === 'body' ? 'BODY' : roleLabels[role].toUpperCase()} /><span><span className="block text-lg font-semibold tracking-tight">{hot ? 'Drop your files' : title}</span><span className="mt-1 block text-sm text-text-secondary">or choose files · up to 200 MB each</span></span><input type="file" aria-label={label} accept="video/*" multiple={multiple} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" onChange={e => { onFiles(Array.from(e.target.files || [])); e.target.value = '' }} /></label>
 }

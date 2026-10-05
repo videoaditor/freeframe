@@ -145,3 +145,28 @@ Acceptance: actual public HTTPS staging inspected at 1280px in dark mode, both a
 | [Previous handoff](handin-evidence/after-handoff.jpg) | [Clearly labeled entry](handin-evidence/oct5-signposted-empty.jpg) | [Completed stages](handin-evidence/oct5-signposted-delivered.jpg) |
 
 Light mode, narrow viewport, full keyboard traversal, VoiceOver and manual 200% zoom were not revalidated for this iteration. Earlier screenshots do not establish acceptance of the new orientation strip. Automatic video review cannot validate this software layout; browser/manual inspection is required, and prior media-review evidence must not be relabeled as layout acceptance. Project tracking reuses one Aditor card and one briefed Alan/Aditor session; no media or model-review verdict was created for this layout.
+
+## 12. Match current AutoReview / Hand-in — 2026-10-05
+
+**Job and approved direction:** Alan clarified that the final parts interface should look like the current Hand-in/AutoReview. This bounded visual iteration implements that already requested direction; the staging environment is a temporary acceptance preview, not a separate product or final design approval. Apple HIG, Emil and UI/UX Pro Max apply. The live reference at review.aditor.ai was inspected in the browser: compact branded header, system type, dark warm neutrals, coral/orange folder upload, quiet halo, rounded dashed targets. Reuse existing FreeFrame FolderArt rather than draw another upload symbol. This supersedes section6's restriction on reusing the upload artwork, following Alan's explicit correction.
+
+**Screens/navigation:** preserve all existing routes and states. Internal Hand-in retains its role-filtered real dashboard sidebar and existing authorized workspace selector; external request retains the focused task view with read-only destination brand and no management links. No fake sidebar or login requirement on a customer task link. Active feedback retains the current player/list layout.
+
+**Hierarchy/components:** guest header shows actual AutoReview identity and actual destination; title and brief are centered in the existing front-door style at a smaller task scale. Keep the three clearly named responsibility stages. Below them, matched Hooks/Bodies upload zones use the exact existing FolderArt with HOOKS/BODY labels, unchanged accessible file inputs, limits, drag/drop and bulk behavior. Optional parts/details/submit/final ads stay in the existing sequence. Internal setup receives the existing bordered surface and task typography; it does not gain customer management controls.
+
+| Before | After | Why |
+|---|---|---|
+| Generic upload arrows | Existing coral FolderArt in each role target | Same recognizable upload language as live AutoReview |
+| Unbranded destination-only header | AutoReview identity plus read-only destination | Preserve product identity and account clarity |
+| Flat left-aligned guest introduction | Centered task introduction, restrained existing halo | Match current entry experience without a marketing pitch |
+| Bare internal setup fields | Existing rounded bordered Hand-in surface | Match the current form and team shell |
+
+**States:** empty has two targets and a single disabled submit action until saved; upload/review/revision/held/error/final completion remain unchanged and truthful. Existing retry and closed-link behavior remain. No media/model rerun or account permission changes are needed to validate styling.
+
+**Tokens:** existing handin OKLCH palette and system typography; title34/38 on narrow and40/44 on wide, body16/24, secondary14/22; 4/8grid, 24/32section gaps, 20px corner upload radius, >=44px controls. Quiet background halo derived from existing accent with no animation. Existing 150–200ms hover/press feedback and reduced-motion rules; no entrance delays. Generic UI/UX search suggested ecommerce rating structure and blue/rose colors; rejected because Alan specified the existing orange product identity. Accessibility guidance retained.
+
+**Accessibility/review:** keep ARIA roles, text descriptions and keyboard-focusable native picker; FolderArt is decorative/aria-hidden. Task page has no color-only meanings. Browser screenshot empty and delivered after implementation; check actual dimensions and overflow, then run frontend test/build/tsc/lint. Full VoiceOver, physical touch and manual200%zoom are not implied by screenshots. No open design decision needed: match the existing product, as requested. Automatic video review does not assess software layout.
+
+Section12 implementation evidence: the live reference was visually inspected, then the actual public stage was checked at verified375px and1280px, no horizontal overflow. Self-critique caught owner-workspace blue folder variables; the handin scope now explicitly supplies coral OKLCH folder tones. Phone stage rows were compacted without hiding counts/responsibility. Normal login with the existing isolated editor account reached Hand-in, showing exactly Hand in/Submissions/Projects and no management navigation. Final checks:513tests, build, explicittsc, lint allpassed (existingwarnings). Independent source review:17/17focused regressions, no blocking findings. New light-mode/VoiceOver/manual200% acceptance remains outstanding; unchanged underlying light tokens are not a substitute for browser acceptance. The same project card/session was updated, not recreated. No model/media/production actions.
+
+Screenshots: [1280px empty](handin-evidence/oct5-autoreview-look-empty.jpg), [375px empty](handin-evidence/oct5-autoreview-look-mobile.jpg), [existing editor Hand-in](handin-evidence/oct5-autoreview-look-editor.jpg).

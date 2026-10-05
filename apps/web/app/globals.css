@@ -604,6 +604,10 @@ button:not(:disabled), summary { cursor: pointer; }
 /* Hand-in uses the public AutoReview orange in both owner and editor contexts. */
 .handin-workspace {
   background: var(--bg-primary);
+  --folder-back-top: oklch(0.75 0.16 34);
+  --folder-back-bottom: oklch(0.62 0.205 33);
+  --folder-front-top: oklch(0.85 0.09 34);
+  --folder-front-bottom: oklch(0.72 0.17 34);
   --accent: oklch(0.69 0.205 33);
   --accent-hover: oklch(0.74 0.18 33);
   --accent-muted: oklch(0.69 0.205 33 / 0.14);
