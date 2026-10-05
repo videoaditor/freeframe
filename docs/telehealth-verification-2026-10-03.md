@@ -34,3 +34,10 @@ The campaign candidate incorporates main through `d2b0228`, preserving deferred 
 Fresh checks on the integrated source: backend **442 passed, 51 optional integration checks skipped**; separate isolated PostgreSQL concurrency/upload journey **3 passed**; frontend **512 tests in 74 files passed**; production build, explicit TypeScript check and lint passed (existing image/hooks warnings). Backend used the existing local Python 3.14 environment; frontend used Node 22.22.3. Both additive campaign/feedback migration functions were also applied to an isolated PostgreSQL schema representing the preceding schema; an existing paid user retained its identity and null campaign context.
 
 This evidence covers local integration, not a deployed signup or media-review acceptance. Before rollout, record the actual running API and web images separately: other concurrent work may be deployed beyond the server checkout. Never replace a newer live web image merely because the server checkout is older. The new schema is additive: `d0e1f2a3b4c5` → `c3d4e5f6a7b8` → `e4f5a6b7c8d9`.
+
+
+### Preserving the deployed mobile fixes and paid revalidation
+
+The release candidate also incorporates the exact clean live web source `0d1bf46808e6843a495af1d9d3c2eb362da3f245`, including mobile preview/comments and touch timeline fixes. The combined frontend passes **519 tests in 76 files**, production build, TypeScript and lint. The final backend passes **446 tests, 51 optional skips**.
+
+A saved paid override is now revalidated against Suite for guest access after the cutoff. Revoked paid access, unavailable entitlement service and missing campaign attestation fail closed; valid paid access remains available. Four new regression cases failed before the fix and pass after it. This read-only check neither mutates user campaign context nor commits the caller's transaction, preserving upload locks. An expired preview still requires the owner to reopen Whop after upgrading before guest links resume.

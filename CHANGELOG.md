@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
+- The review timeline now supports native touch dragging and keyboard seeking, with a larger hit area, visible thumb and spaced second labels.
+- Mobile share reviews keep the video preview and transport visible above comments, including collection asset viewers. Comment toggles now expose accessible names and larger touch targets.
+
+
 ### Added
 - Telehealth October preview with server-attested campaign identity, one brand per preview owner, a fixed November 1 Eastern cutoff and a recoverable plan-selection screen. Existing paid AutoReview access remains separate.
 - Durable product feedback with saved receipts, a staff queue and an optional daily Slack digest; draft edits and retries preserve their own submission identity.

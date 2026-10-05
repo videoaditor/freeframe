@@ -184,3 +184,26 @@ def require_customer_entitlement(user: User, *, allow_expired: bool = False) -> 
         redis.setex(gate_key(user.id), min(60, max(1, owner.expires - int(time.time()))), token)
     except RedisError:
         raise HTTPException(503, 'Whop access could not be checked. Try again shortly.') from None
+
+
+def require_current_campaign_paid_access(user: User) -> None:
+    """Revalidate a saved paid override for guest links after campaign expiry.
+
+    The caller can hold upload row locks: do not mutate user context or commit.
+    Suite owns paid-membership freshness; the local persisted flag is not a grant.
+    """
+    try:
+        token = get_redis().get(session_key(user.id))
+        if not token:
+            raise HTTPException(401, 'Open Aditor Review again from Whop')
+        owner = owner_from_token(token)
+        if not _matches(user, owner):
+            raise HTTPException(401, 'Whop session does not match this account')
+        entitlement = check_entitlement(token)
+        campaign = entitlement.get('campaign')
+        if not campaign:
+            raise HTTPException(503, 'Trial access could not be verified. Try again shortly.')
+        if campaign['previewOnly']:
+            raise campaign_access.expired_error()
+    except RedisError:
+        raise HTTPException(503, 'Whop access could not be checked. Try again shortly.') from None

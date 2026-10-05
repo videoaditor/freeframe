@@ -64,10 +64,14 @@ def test_guest_link_of_expired_preview_fails_closed(monkeypatch, mock_db):
 
 
 def test_guest_after_paid_upgrade_is_allowed(monkeypatch, mock_db):
+    from apps.api.services import whop_auth
+    check = MagicMock()
+    monkeypatch.setattr(whop_auth, 'require_current_campaign_paid_access', check)
     user = customer(paid=True)
     mock_db.get.return_value = user
     monkeypatch.setattr(campaign.time, 'time', lambda: campaign.ENDS_AT_TIMESTAMP)
     campaign.require_project_access(mock_db, user.id)
+    check.assert_called_once_with(user)
 
 
 @pytest.mark.parametrize('operation', ['presign', 'complete'])
@@ -181,3 +185,33 @@ def test_november_revision_does_not_turn_failed_october_asset_into_campaign_usag
     campaign_usage.record_request_successes(mock_db, MagicMock(project_id=project.id), [
         {'asset_id': str(asset_id), 'version_id': str(new_version), 'review_state': 'clear'}])
     record.assert_called_once_with(mock_db, owner, set())
+
+@pytest.mark.parametrize('provider_state', ['revoked', 'paid', 'outage', 'missing_campaign'])
+def test_saved_paid_campaign_requires_current_guest_entitlement_after_cutoff(mock_db, monkeypatch, provider_state):
+    from apps.api.services import whop_auth
+    user = customer(paid=True)
+    mock_db.get.return_value = user
+    redis = MagicMock()
+    redis.get.side_effect = lambda key: 'owner-token' if key == whop_auth.session_key(user.id) else None
+    monkeypatch.setattr(campaign.time, 'time', lambda: campaign.ENDS_AT_TIMESTAMP)
+    monkeypatch.setattr(whop_auth, '_suite_url', lambda: 'https://suite.example.test')
+    monkeypatch.setattr(whop_auth, 'get_redis', lambda: redis)
+    monkeypatch.setattr(whop_auth, 'owner_from_token', lambda _: whop_auth.Owner(
+        'owner-token', 'account', 'brand', user.email, campaign.ENDS_AT_TIMESTAMP + 3600))
+    data = {'allow': True, 'campaign': {**campaign.TELEHEALTH, 'state': 'expired', 'previewOnly': False}}
+    if provider_state == 'revoked':
+        data = {'allow': False, 'reason': 'campaign_expired',
+                'campaign': {**campaign.TELEHEALTH, 'state': 'expired', 'previewOnly': True}}
+    elif provider_state == 'missing_campaign':
+        data = {'allow': True}
+    post = MagicMock(side_effect=HTTPException(503, 'Provider unavailable')) if provider_state == 'outage' else MagicMock(return_value=data)
+    monkeypatch.setattr(whop_auth, '_post', post)
+    if provider_state == 'paid':
+        campaign.require_project_access(mock_db, user.id)
+    else:
+        with pytest.raises(HTTPException) as exc:
+            campaign.require_project_access(mock_db, user.id)
+        assert exc.value.status_code == (403 if provider_state == 'revoked' else 503)
+    post.assert_called_once()
+    mock_db.commit.assert_not_called()
+    assert user.suite_campaign['previewOnly'] is False  # no write/flush under the caller's row lock

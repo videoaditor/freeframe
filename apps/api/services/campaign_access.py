@@ -67,8 +67,15 @@ def require_project_access(db, owner_id):
     if owner_id is None:
         return
     owner = db.get(User, owner_id)
-    if not owner or not preview_expired(owner):
+    if not owner:
         return
-    # Owner sign-in/refresh records a paid upgrade before links resume. Do not
-    # refresh/commit auth inside guest upload transactions that hold row locks.
-    raise expired_error()
+    campaign = context(owner)
+    if not campaign or campaign['state'] != 'expired':
+        return
+    # Owner sign-in/refresh records a paid upgrade before links resume. A saved
+    # upgrade is not permanent: verify its current paid grant without committing
+    # inside guest upload transactions that hold row locks.
+    if campaign['previewOnly']:
+        raise expired_error()
+    from .whop_auth import require_current_campaign_paid_access
+    require_current_campaign_paid_access(owner)
