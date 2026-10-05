@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Telehealth October preview with server-attested campaign identity, one brand per preview owner, a fixed November 1 Eastern cutoff and a recoverable plan-selection screen. Existing paid AutoReview access remains separate.
 - Durable product feedback with saved receipts, a staff queue and an optional daily Slack digest; draft edits and retries preserve their own submission identity.
 - Plan recommendations based on distinct successfully reviewed preview ads, with Team highlighted from 20 ads.
+- Review step progress, elapsed time and measured analysis-duration ranges for comparable videos. The introductory scan parks after one cycle, with subtle status motion and explicit longer-than-usual handling.
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
 
 ### Fixed
+- Keep invited editors in the real review state while their first version is queued or analysed, and retain upload access on review-service outages.
+- File-request uploads complete successfully when the editor supplies their name and email at submission, instead of failing before processing starts.
 - Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Customer Projects uses file requests and lists all accessible brand projects; customer folders no longer require or announce an internal Trello card. Staff hand-in behavior is unchanged.
 - Production containers provide the non-root user home required by Gunicorn's control socket.

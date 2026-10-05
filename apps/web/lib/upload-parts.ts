@@ -1,0 +1,140 @@
+import { ApiError } from './api'
+
+export const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
+export const PARTS_IN_FLIGHT = 3           // hides per-part latency without flooding an editor's uplink
+export const FILES_IN_FLIGHT = 2           // more at once just shares one uplink, and one hiccup then fails them all
+export const PART_ATTEMPTS = 12            // with the backoff below, about six minutes of trying before giving up
+export const MAX_BACKOFF_MS = 30_000
+export const OFFLINE_WAIT_MS = 30 * 60_000   // a laptop that lost wifi gets half an hour to get it back
+
+const isAbort = (e: unknown) => e instanceof DOMException && e.name === 'AbortError'
+
+/** A dropped connection ("Failed to fetch") or a server that blinked is worth another try; a refusal is not. */
+export function isRetryable(e: unknown): boolean {
+  if (isAbort(e)) return false
+  if (e instanceof ApiError) return e.status === 408 || e.status === 429 || e.status >= 500
+  if (e instanceof PartHttpError) return e.status === 403 || e.status === 408 || e.status === 429 || e.status >= 500
+  return e instanceof TypeError
+}
+
+export class PartHttpError extends Error {
+  status: number
+  constructor(status: number, statusText: string, part: number) {
+    super(`Part ${part} failed: ${statusText || status}`)
+    this.name = 'PartHttpError'
+    this.status = status
+  }
+}
+
+const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  if (signal?.aborted) return reject(new DOMException('Upload cancelled', 'AbortError'))
+  const t = setTimeout(resolve, ms)
+  signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Upload cancelled', 'AbortError')) }, { once: true })
+})
+
+/** Resolve when the browser says it is back online (immediately if it never went offline). Does not count as a try. */
+async function untilOnline(signal?: AbortSignal): Promise<void> {
+  if (typeof navigator === 'undefined' || navigator.onLine !== false || typeof window === 'undefined') return
+  await new Promise<void>((resolve, reject) => {
+    const done = () => { cleanup(); resolve() }
+    const onAbort = () => { cleanup(); reject(new DOMException('Upload cancelled', 'AbortError')) }
+    const t = setTimeout(done, OFFLINE_WAIT_MS)
+    const cleanup = () => { clearTimeout(t); window.removeEventListener('online', done); signal?.removeEventListener('abort', onAbort) }
+    window.addEventListener('online', done, { once: true })
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) onAbort()
+  })
+}
+
+/**
+ * Run `fn` up to `attempts` times, backing off between tries (1 s, 2 s, 4 s ... capped at 30 s). While the
+ * browser reports it is offline, wait for it to come back instead of burning tries, so a wifi drop or a
+ * closed laptop lid does not kill a file. Re-running re-signs the part, so an expired URL heals too.
+ */
+export async function withRetry<T>(fn: () => Promise<T>, signal?: AbortSignal, attempts = PART_ATTEMPTS, baseMs = 1000): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (attempt >= attempts || !isRetryable(e)) throw e
+      await untilOnline(signal)
+      await wait(Math.min(MAX_BACKOFF_MS, baseMs * 2 ** (attempt - 1)), signal)
+    }
+  }
+}
+
+export interface UploadedPart { PartNumber: number; ETag: string }
+
+/**
+ * A bare "Failed to fetch" says nothing. Say how far the upload got and how fast it was going, so a screenshot
+ * of the failure tells us whether it was a slow or dropping connection (Sandra, 2026-10-04) or the server.
+ */
+function explainFailure(e: unknown, sent: number, total: number, ms: number): unknown {
+  if (isAbort(e) || !(e instanceof Error)) return e
+  const mb = (n: number) => (n / 1048576).toFixed(0)
+  const mbit = ms > 0 ? ((sent * 8) / 1e6 / (ms / 1000)).toFixed(1) : '0'
+  const out = new Error(`${e.message} (stopped at ${mb(sent)} of ${mb(total)} MB after ${Math.round(ms / 1000)}s, ${mbit} Mbit/s average)`)
+  out.name = e.name
+  return out
+}
+
+
+/**
+ * Upload every part of `file`, three at a time, each part retried on its own. Progress is bytes sent.
+ * Parts are independent, so retrying one never restarts the file.
+ */
+export async function uploadParts(opts: {
+  file: Blob
+  presign: (partNumber: number) => Promise<string>
+  signal?: AbortSignal
+  onProgress?: (fraction: number) => void
+  putPart?: (url: string, body: Blob, signal?: AbortSignal) => Promise<Response>
+  baseMs?: number
+}): Promise<UploadedPart[]> {
+  const { file, presign, signal, onProgress, baseMs } = opts
+  const put = opts.putPart ?? ((url, body, sig) => fetch(url, { method: 'PUT', body, signal: sig }))
+  const total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
+  const parts: UploadedPart[] = []
+  let next = 1, sent = 0, failed = false
+  const worker = async () => {
+    while (next <= total && !failed) {
+      const n = next++
+      try {
+        if (signal?.aborted) throw new DOMException('Upload cancelled', 'AbortError')
+        const chunk = file.slice((n - 1) * CHUNK_SIZE, Math.min(n * CHUNK_SIZE, file.size))
+        const etag = await withRetry(async () => {
+          const url = await presign(n)
+          const res = await put(url, chunk, signal)
+          if (!res.ok) throw new PartHttpError(res.status, res.statusText, n)
+          return res.headers.get('ETag') ?? ''
+        }, signal, PART_ATTEMPTS, baseMs)
+        parts.push({ PartNumber: n, ETag: etag })
+        sent += chunk.size
+        onProgress?.(file.size ? sent / file.size : 1)
+      } catch (e) { failed = true; throw e }
+    }
+  }
+  // Wait for every worker before reporting: no part may still be writing after the caller cleans up.
+  const started = Date.now()
+  const results = await Promise.allSettled(Array.from({ length: Math.min(PARTS_IN_FLIGHT, total) }, worker))
+  const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+  if (failure) throw explainFailure(failure.reason, sent, file.size, Date.now() - started)
+  return parts.sort((a, b) => a.PartNumber - b.PartNumber)
+}
+
+// Files wait their turn instead of all starting at once. Module-level on purpose: one editor, one uplink.
+let active = 0
+const waiting: (() => void)[] = []
+export async function acquireUploadSlot(signal?: AbortSignal, limit = FILES_IN_FLIGHT): Promise<() => void> {
+  if (active >= limit) {
+    await new Promise<void>((resolve, reject) => {
+      const go = () => { signal?.removeEventListener('abort', onAbort); resolve() }
+      const onAbort = () => { const i = waiting.indexOf(go); if (i >= 0) waiting.splice(i, 1); reject(new DOMException('Upload cancelled', 'AbortError')) }
+      waiting.push(go)
+      signal?.addEventListener('abort', onAbort, { once: true })
+    })
+  }
+  active++
+  let released = false
+  return () => { if (released) return; released = true; active--; waiting.shift()?.() }
+}

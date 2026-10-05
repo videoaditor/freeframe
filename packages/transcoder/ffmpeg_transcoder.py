@@ -285,7 +285,11 @@ class FFmpegTranscoder(BaseTranscoder):
             # means a caller falls back to the original, same as before this existed.
             try:
                 smallest_q = min(qualities, key=lambda q: int(QUALITY_MAP[q][0].split(":")[1]))
-                playlist = hls_dir / smallest_q / "playlist.m3u8"
+                # The HLS muxer names each variant's directory by its INDEX in -var_stream_map
+                # (%v -> 0, 1, 2), not by quality. Looking in "360p/" found nothing, so the proxy
+                # was silently never made and every review uploaded the full original instead
+                # (2026-10-03: a 175 MB hook, proxy endpoint 404, master lists 0/ 1/ 2/).
+                playlist = hls_dir / str(qualities.index(smallest_q)) / "playlist.m3u8"
                 if playlist.exists():
                     proxy_path = work_dir / "ai_proxy.mp4"
                     remux_cmd = [
@@ -319,26 +323,29 @@ class FFmpegTranscoder(BaseTranscoder):
             # non-standard" -> ff_frame_thread_encoder_init failed), which is
             # most portrait source footage.
             thumbnail_keys: list[str] = []
-            try:
-                thumb_path = work_dir / "thumb_0001.jpg"
-                thumb_cmd = [
-                    "ffmpeg", "-y", "-i", input_url,
-                    "-vf", "fps=0.1", "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1",
-                    str(work_dir / "thumb_%04d.jpg"),
-                ]
-                self._run(thumb_cmd, label="ffmpeg")
-                thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
-                if thumb_path.exists():
-                    self.s3.upload_file(
-                        str(thumb_path), self.bucket, thumbnail_key,
-                        ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "max-age=86400"},
+            if job.make_thumbnail:
+                try:
+                    thumb_path = work_dir / "thumb_0001.jpg"
+                    # Same stalled-read protection as the encode, and a cap: without either, a hung
+                    # read here held one of the two transcoding slots with no limit at all.
+                    thumb_cmd = [
+                        "ffmpeg", "-y", *INPUT_NET_ARGS, "-i", input_url,
+                        "-vf", "fps=0.1", "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1",
+                        str(work_dir / "thumb_%04d.jpg"),
+                    ]
+                    self._run(thumb_cmd, timeout=600, label="ffmpeg")
+                    thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
+                    if thumb_path.exists():
+                        self.s3.upload_file(
+                            str(thumb_path), self.bucket, thumbnail_key,
+                            ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "max-age=86400"},
+                        )
+                        thumbnail_keys = [thumbnail_key]
+                except Exception as thumb_exc:
+                    logger.warning(
+                        "thumbnail generation failed for %s, continuing without poster: %s",
+                        job.output_s3_prefix, thumb_exc,
                     )
-                    thumbnail_keys = [thumbnail_key]
-            except Exception as thumb_exc:
-                logger.warning(
-                    "thumbnail generation failed for %s, continuing without poster: %s",
-                    job.output_s3_prefix, thumb_exc,
-                )
 
             return TranscodeResult(
                 success=True,

@@ -26,3 +26,11 @@ Feedback sheet opens with focus on its close control; Escape returns focus to Gi
 No new free Whop product exists yet, and production has not received these candidates. Fresh signup, live rule import/review, tenant isolation across two real new accounts and a real daily #automations digest remain release gates. The documented existing Slack token is revoked. Whop legal-terms approval is pending. See [release notes](telehealth-october-preview.md) for configuration and rollback prerequisites.
 
 Related draft PRs: [Suite #26](https://github.com/videoaditor/aditor-suite/pull/26) and [Pages #521](https://github.com/videoaditor/aditor-ops/pull/521). Their isolated checks report 248 Suite tests and 2040 Pages tests, respectively; both remain undeployed drafts.
+
+## October 5 integration verification
+
+The campaign candidate incorporates main through `d2b0228`, preserving deferred editor identity, measured review progress, the early 360p review proxy and resilient multipart uploads. The guest completion merge retains the campaign cutoff check and main's persisted uploader record. Its two main-branch fixtures now patch the recovery-aware request lookup and lock.
+
+Fresh checks on the integrated source: backend **442 passed, 51 optional integration checks skipped**; separate isolated PostgreSQL concurrency/upload journey **3 passed**; frontend **512 tests in 74 files passed**; production build, explicit TypeScript check and lint passed (existing image/hooks warnings). Backend used the existing local Python 3.14 environment; frontend used Node 22.22.3. Both additive campaign/feedback migration functions were also applied to an isolated PostgreSQL schema representing the preceding schema; an existing paid user retained its identity and null campaign context.
+
+This evidence covers local integration, not a deployed signup or media-review acceptance. Before rollout, record the actual running API and web images separately: other concurrent work may be deployed beyond the server checkout. Never replace a newer live web image merely because the server checkout is older. The new schema is additive: `d0e1f2a3b4c5` → `c3d4e5f6a7b8` → `e4f5a6b7c8d9`.
