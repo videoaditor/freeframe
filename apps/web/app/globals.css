@@ -658,3 +658,56 @@ button:not(:disabled), summary { cursor: pointer; }
   .parts-drop, .parts-upload-symbol { transition: none; }
   .parts-drop:hover .parts-upload-symbol { transform: none; }
 }
+
+/* Public file requests follow OS appearance without changing account preferences. */
+.handin-workspace[data-system-appearance] {
+  color-scheme: light;
+  --accent: oklch(0.56 0.195 33);
+  --accent-hover: oklch(0.51 0.185 33);
+  --accent-muted: oklch(0.56 0.195 33 / 0.1);
+  --text-inverse: oklch(1 0 0);
+  --bg-primary: oklch(0.99 0.002 285);
+  --bg-secondary: oklch(0.96 0.003 285);
+  --bg-tertiary: oklch(0.94 0.004 285);
+  --bg-elevated: oklch(1 0 0);
+  --bg-hover: oklch(0.925 0.006 285);
+  --text-primary: oklch(0.22 0.006 285);
+  --text-secondary: oklch(0.44 0.008 285);
+  --text-tertiary: oklch(0.48 0.008 285);
+  --border-primary: oklch(0 0 0 / 0.1);
+  --border-secondary: oklch(0 0 0 / 0.06);
+  --border-focus: var(--accent);
+  --drop-border: oklch(0 0 0 / 0.2);
+  --glass-bg: oklch(1 0 0 / 0.72);
+  --glass-border: oklch(0 0 0 / 0.08);
+  --glass-highlight: oklch(1 0 0 / 0.6);
+  --shadow-lift: 0 24px 60px -28px oklch(0 0 0 / 0.25);
+  --status-error: oklch(0.55 0.22 25);
+  --status-success: oklch(0.55 0.14 145);
+}
+@media (prefers-color-scheme: dark) {
+  .handin-workspace[data-system-appearance] {
+    color-scheme: dark;
+    --accent: oklch(0.69 0.205 33);
+    --accent-hover: oklch(0.74 0.18 33);
+    --accent-muted: oklch(0.69 0.205 33 / 0.14);
+    --text-inverse: oklch(0.15 0.004 285);
+    --bg-primary: oklch(0.146 0.004 285);
+    --bg-secondary: oklch(0.185 0.006 285);
+    --bg-tertiary: oklch(0.23 0.006 285);
+    --bg-elevated: oklch(0.28 0.006 285);
+    --bg-hover: oklch(0.3 0.006 285);
+    --text-primary: oklch(0.97 0.003 285);
+    --text-secondary: oklch(0.74 0.006 285);
+    --text-tertiary: oklch(0.64 0.006 285);
+    --border-primary: oklch(1 0 0 / 0.12);
+    --border-secondary: oklch(1 0 0 / 0.08);
+    --drop-border: oklch(1 0 0 / 0.2);
+    --glass-bg: oklch(0.24 0.006 285 / 0.78);
+    --glass-border: oklch(1 0 0 / 0.14);
+    --glass-highlight: oklch(1 0 0 / 0.06);
+    --shadow-lift: 0 24px 60px -24px oklch(0 0 0 / 0.9);
+    --status-error: oklch(0.7 0.2 25);
+    --status-success: oklch(0.75 0.19 145);
+  }
+}

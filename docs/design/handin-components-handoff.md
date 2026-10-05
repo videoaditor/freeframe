@@ -227,3 +227,29 @@ Actual browser evidence:666px collapsed targets both144.75px high at the same to
 Screenshots: [collapsed666px](handin-evidence/oct5-flow-666.jpg), [expanded1280px](handin-evidence/oct5-flow-expanded.jpg), [expanded375px](handin-evidence/oct5-flow-mobile.jpg).
 
 Fresh checks after this presentation correction: all517tests across76files passed with two workers; build, explicit TypeScript and lint passed with existing warnings. Local suite duration131s reflects current machine load and is not an upload/review latency measurement. Existing contact/progress regressions remain intact; no backend change or new media-review claim.
+
+## 16. Focused external file request — 2026-10-05
+
+Approved browser comments: tiny textless visual progress; no editor format decision; smaller Contact inspired by Dropbox file requests; remove the unexplained empty Final ads block. Follow OS light/dark and put the request title directly above the available briefing. Apple HIG/Emil principles: system appearance, reduced choices,44px inputs,4/8spacing, real request content and truthful feedback.
+
+| Before | After | Why |
+|---|---|---|
+| Tall title/brief disclosure and editor format pills | Compact request title above visible brief excerpt; persisted request format | Brief first, no editor configuration task |
+| Labeled stage row | Three small segments, labels/counts retained for assistive technology | Quiet progress without losing state |
+| Wide padded Contact card | Compact name/email fields beneath files, no enclosing card | Dropbox-like file collection without a second action |
+| Empty output explanation | Output region only for actual reviewable ads or render errors | Show a result or actionable failure when it exists |
+| Saved app appearance drives external page | Scoped native prefers-color-scheme palette | Follow OS without modifying internal account preferences |
+
+Official inspiration: [Dropbox file-request uploader](https://help.dropbox.com/share/received-file-request) collects files, then name/email; this iteration adapts that compact sequence and preserves current asynchronous uploads/contact persistence. No Dropbox integration or account action.
+
+Format constraint: existing receive_iterations/iteration_mode and confirmed component manifests are authoritative. Remove guest setSubmissionMode actions; do not guess from text or missing slots. Automatic complete-vs-components briefing classification does not exist; owner setup still confirms format. Public briefing currently exposes only excerpt/link/PDF hint, not the full document; render available content honestly, never claim full brief loading. Full review still uses existing stored source input.
+
+External request scope only for system palette; internal preferences retain their existing behavior. Keep source/version/transfer/contact and exact completion guards. Hide empty outputs, preserve generated-ad review/download and render-error recovery. Test output visibility/access and both stored formats before changes; inspect actual system appearance and829px/375px layout, then full frontend checks. Same tracking card/session/PR; no model/media/production changes.
+
+Actual browser acceptance:829×771 and375×812 show native system Light despite the account root retaining its saved Dark preference; scoped computed color-scheme is light, with no horizontal overflow. Current screenshots: [829px request](handin-evidence/oct5-request-system-829.jpg) and [375px request](handin-evidence/oct5-request-system-375.jpg). Title appears directly above the visible briefing; only three small segments remain visible for progress. Compact name/email fields retain accessible labels and native48px controls. Hook → Bridge → Body → CTA order is preserved. No editor format selector or empty Final ads block appears.
+
+Read-only acceptance also reopened the previously generated two-output request: both delivered ads retain Download and View final review; the first final review opens the actual player and existing feedback. No new upload, submission or model invocation. The current OS Dark branch was reviewed in source, but this iteration did not change the user's OS preference or manually render that branch. Full VoiceOver, physical touch and manual200%zoom remain unverified. Brief content is the existing500-character excerpt; automatic briefing format classification remains absent and format follows confirmed request settings.
+
+Regression evidence: the two stored-format tests and changed empty-output test first failed against previous behavior (three failures); all25 focused tests then passed, including preserved generated-review/download and render-error recovery. Fresh full frontend suite passes521tests across77files with two workers. Build/type/lint results are recorded after their completion below.
+
+Fresh final checks after the request simplification:521/521tests across77files, production build, explicit TypeScript and lint all pass; existing lint/Browserslist warnings remain. Backend and engine sources were unchanged. Prior485backend passes/5skips and genuine four-final cross-service acceptance remain previous evidence, not a fresh backend/model run.

@@ -83,13 +83,29 @@ it('replaces the selected part using its exact asset binding instead of declarin
 const stages = async () => within(await screen.findByRole('list', { name: 'Submission progress' })).getAllByRole('listitem')
 const checkedParts = saved.slots.map(part => ({ ...part, status: 'clear' }))
 
-it('shows the upload task and final destination before any part is declared', async () => {
+it('keeps upload current without showing an empty output region before any part is declared', async () => {
   mount()
   const steps = await stages()
   expect(steps).toHaveLength(3)
   expect(steps[0]).toHaveAttribute('aria-current', 'step')
   expect(steps.every(step => !step.textContent?.includes('Complete'))).toBe(true)
-  expect(screen.getByRole('region', { name: 'Final ads' })).toHaveTextContent('Finished ads will appear here.')
+  expect(screen.queryByRole('region', { name: 'Final ads' })).not.toBeInTheDocument()
+})
+
+it('shows review and download for a generated ad instead of hiding the completed result', async () => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, submitted: true, outputs: [{ id: 'out', label: 'Hook + Body', status: 'delivered', asset_id: 'oa', version_id: 'ov', download_url: 'https://media.example.test/ad.mp4', findings: [] }] })
+  mount()
+  const results = within(await screen.findByRole('region', { name: 'Final ads' }))
+  expect(results.getByRole('link', { name: 'Download' })).toHaveAttribute('href', 'https://media.example.test/ad.mp4')
+  fireEvent.click(results.getByRole('button', { name: 'View final review' }))
+  expect(await screen.findByText('Part feedback')).toBeInTheDocument()
+})
+
+it('shows an output failure even when rendering could not produce an asset', async () => {
+  vi.mocked(requestIterations).mockResolvedValue({ ...saved, submitted: true, state: 'error', outputs: [{ id: 'failed', label: 'Hook + Body', status: 'error', error: 'Render service unavailable', findings: [] }] })
+  mount()
+  expect(await screen.findByText('Render service unavailable')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Retry processing' })).toBeVisible()
 })
 
 it('keeps uploading current until explicit submission even when every source check is clear', async () => {

@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Parts upload targets use AdMixer's compact raised panels, upload symbols and heading count badges.
 - Parts hand-in uses aligned upload targets, compact progress and centered optional-part controls. Guest contact saves on field blur and submission, without a separate save step.
 - Optional parts follow assembly order in Hand-in: Hook, Bridge, Body, then CTA, for both add controls and expanded fields.
+- External submissions follow system appearance, show the title above briefing, use compact contact and visual progress, and follow the configured request format without an editor switch; generated ads appear when available.
 - Compact brand rules are grouped into alphabetically sorted Must follow and Guidance columns, with subtle definition access and one quiet quick-input focus indicator.
 - Video cards default to 9:16 fit thumbnails; card grids adapt to the available panel width. Existing appearance preferences remain available.
 - Autoreview app identity with a dedicated icon and subtle Aditor footer; brand quick rules regain the playbook artwork and use a brand-specific logo example. Existing custom branding is preserved.
