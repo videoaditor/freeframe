@@ -32,6 +32,8 @@ class User(Base):
     is_staff: Mapped[bool] = mapped_column(default=True, server_default="true", nullable=False)
     suite_account_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
     suite_brand_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    # Trusted Suite attestation; browser-editable preferences must never grant access.
+    suite_campaign: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     email_verified: Mapped[bool] = mapped_column(default=False)
     invite_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     invite_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

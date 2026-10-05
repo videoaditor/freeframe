@@ -40,7 +40,7 @@ def test_exact_review_evidence_never_carries_v1_approval_into_v2():
 def test_complete_requires_identity_before_s3_finalization(monkeypatch):
     req = request()
     version = AssetVersion(id=uuid.uuid4(), asset_id=uuid.uuid4(), version_number=1, processing_status=ProcessingStatus.uploading)
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     monkeypatch.setattr(rq, '_owned_media', lambda *a: (MagicMock(), version))
     complete = MagicMock()
@@ -72,7 +72,8 @@ def test_complete_submits_and_processes_with_deferred_or_existing_identity(monke
     db.query.side_effect = lambda model: uploads if model is RequestUpload else media_query
     added = []
     db.add.side_effect = added.append
-    monkeypatch.setattr(rq, '_writable_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
+    monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     monkeypatch.setattr(rq, '_owned_media', lambda *a: (media, version))
     complete = MagicMock()
     monkeypatch.setattr(rq, 'complete_multipart_upload', complete)
@@ -95,7 +96,7 @@ def test_finished_request_rejects_new_upload_but_remains_live(monkeypatch):
     req = request()
     req.completed_at = datetime.now(timezone.utc)
     assert rq.request_state(req, datetime.now(timezone.utc)) == 'live'
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     with pytest.raises(HTTPException) as err:
         rq.guest_initiate('t', rq.GuestInitiate(original_filename='cut.mp4', mime_type='video/mp4', file_size_bytes=100), MagicMock())
@@ -104,7 +105,7 @@ def test_finished_request_rejects_new_upload_but_remains_live(monkeypatch):
 
 def test_version_lookup_rejects_foreign_asset_before_any_media_lookup(monkeypatch):
     req = request()
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
     with pytest.raises(HTTPException) as err:
@@ -114,7 +115,7 @@ def test_version_lookup_rejects_foreign_asset_before_any_media_lookup(monkeypatc
 
 def test_finish_requires_every_current_asset_and_persists_exact_versions(monkeypatch):
     req = request()
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     data = {'assets': [{'asset_id': 'a', 'version_id': 'v2', 'review_state': 'reviewing'}],
             'gate': {'status': 'clear', 'open_must_fixes': 0}}
@@ -135,7 +136,7 @@ def test_finish_requires_every_current_asset_and_persists_exact_versions(monkeyp
 def test_completed_version_cannot_be_aborted_into_failed(monkeypatch):
     req = request()
     version = AssetVersion(id=uuid.uuid4(), processing_status=ProcessingStatus.ready)
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     monkeypatch.setattr(rq, '_owned_media', lambda *a: (None, version))
     abort = MagicMock()
@@ -149,7 +150,7 @@ def test_old_version_objection_is_rejected_before_engine_call(monkeypatch):
     req = request()
     asset = Asset(id=uuid.uuid4(), folder_id=req.folder_id, project_id=req.project_id, asset_type=AssetType.video)
     current = AssetVersion(id=uuid.uuid4(), asset_id=asset.id, version_number=2, processing_status=ProcessingStatus.ready)
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = asset
@@ -164,7 +165,7 @@ def test_old_version_objection_is_rejected_before_engine_call(monkeypatch):
 
 def test_request_rejects_media_the_automatic_reviewer_cannot_verify(monkeypatch):
     req = request()
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     start = MagicMock()
     monkeypatch.setattr(rq, 'upload_guard_error', lambda *a: None)
@@ -224,7 +225,7 @@ def test_visible_must_fix_overrides_clear():
 
 def test_unavailable_review_does_not_finish(monkeypatch):
     req = request()
-    monkeypatch.setattr(rq, '_live_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
     monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     monkeypatch.setattr(rq, '_editor_review', lambda *a: {'assets': [{'asset_id':'a','version_id':'v2','review_state':'unavailable'}], 'gate': {'status':'unavailable','open_must_fixes':0}})
     with pytest.raises(HTTPException) as err: rq.finish_request('t', MagicMock())
@@ -236,7 +237,8 @@ def test_unmeasured_object_never_becomes_submitted(monkeypatch):
     v = AssetVersion(id=uuid.uuid4(), asset_id=uuid.uuid4(), version_number=1, processing_status=ProcessingStatus.uploading)
     record = RequestUpload(request_id=req.id, asset_id=v.asset_id, version_number=1, uploader_name='Editor', uploader_email='editor@example.com')
     media = MagicMock(file_size_bytes=100)
-    monkeypatch.setattr(rq, '_writable_request', lambda *a: req)
+    monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
+    monkeypatch.setattr(rq, 'locked_request', lambda *a: req)
     monkeypatch.setattr(rq, '_owned_media', lambda *a: (media, v))
     monkeypatch.setattr(rq, '_record_uploader', lambda *a: record)
     monkeypatch.setattr(rq, 'complete_multipart_upload', lambda *a: None)

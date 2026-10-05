@@ -122,6 +122,8 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
         )
     if not is_customer:
         _check_description_requirement(body.description)
+    from ..services.campaign_access import require_brand_slot
+    require_brand_slot(db, current_user)
     project = Project(
         name=body.name,
         description=body.description,

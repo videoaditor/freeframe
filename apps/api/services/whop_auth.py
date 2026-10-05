@@ -5,7 +5,7 @@ browser input). Suite verifies its signature during entitlement checks. Redis
 keeps that credential server-side until its own expiry; FreeFrame tokens cannot
 extend it. Existing accounts are never linked merely by matching an email.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import time
 import uuid
 
@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.user import User, UserStatus
 from .redis_service import get_redis
+from . import campaign_access
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class Owner:
     brand_id: str
     email: str
     expires: int
+    campaign: dict | None = None
 
 
 def _suite_url() -> str:
@@ -83,11 +85,17 @@ def _post(path: str, **kwargs) -> dict:
         raise HTTPException(503, 'Whop access could not be checked. Try again shortly.') from None
 
 
-def check_entitlement(owner_token: str) -> None:
+def check_entitlement(owner_token: str, *, allow_expired: bool = False) -> dict:
     data = _post('/v1/entitlement/check', headers={'Authorization': f'Bearer {owner_token}'},
                  json={'tool': 'autoreview'})
-    if data.get('allow') is not True:
+    campaign = campaign_access.validate_context(data.get('campaign'))
+    ended = bool(campaign and campaign['previewOnly'] and campaign['state'] == 'expired')
+    if ended and (data.get('allow') is True or data.get('reason') == 'campaign_expired'):
+        if not allow_expired:
+            raise campaign_access.expired_error()
+    elif data.get('allow') is not True:
         raise HTTPException(403, 'Your Whop membership does not currently include Aditor Review')
+    return {**data, 'campaign': campaign}
 
 
 def exchange_whop_token(whop_token: str) -> Owner:
@@ -99,8 +107,8 @@ def exchange_whop_token(whop_token: str) -> Owner:
     if not isinstance(data.get('token'), str):
         raise HTTPException(503, 'Whop sign-in returned an incomplete response')
     owner = owner_from_token(data['token'])
-    check_entitlement(owner.token)
-    return owner
+    entitlement = check_entitlement(owner.token, allow_expired=True)
+    return replace(owner, campaign=entitlement.get('campaign'))
 
 
 def _matches(user: User, owner: Owner) -> bool:
@@ -117,13 +125,15 @@ def resolve_customer(db: Session, owner: Owner) -> User:
     if user:
         if not _matches(user, owner):
             raise HTTPException(403, 'This Whop account needs an account review. Contact support.')
+        campaign_access.save_context(user, owner.campaign)
         return user
     if db.query(User).filter(func.lower(User.email) == owner.email).first():
         raise HTTPException(409, 'This email already has an account. Contact support to connect it to Whop.')
     user = User(id=uuid.uuid4(), email=owner.email, name='Owner', password_hash=None,
                 status=UserStatus.active, is_staff=False, is_superadmin=False,
                 email_verified=False, preferences={}, token_version=1,
-                suite_account_id=owner.account_id, suite_brand_id=owner.brand_id)
+                suite_account_id=owner.account_id, suite_brand_id=owner.brand_id,
+                suite_campaign=owner.campaign)
     db.add(user)
     try:
         db.commit()
@@ -150,7 +160,7 @@ def store_owner_session(user: User, owner: Owner) -> None:
         raise HTTPException(503, 'Sign-in is temporarily unavailable. Try again shortly.') from None
 
 
-def require_customer_entitlement(user: User) -> None:
+def require_customer_entitlement(user: User, *, allow_expired: bool = False) -> None:
     # Plain users (including pre-existing staff) keep their existing auth contract.
     if not isinstance(user.suite_account_id, str) or not user.suite_account_id:
         return
@@ -163,11 +173,37 @@ def require_customer_entitlement(user: User) -> None:
         owner = owner_from_token(token)
         if not _matches(user, owner):
             raise HTTPException(401, 'Whop session does not match this account')
-        if redis.get(gate_key(user.id)) == token:
+        if redis.get(gate_key(user.id)) == token and not campaign_access.preview_expired(user):
             return
         # At most 60 seconds of revocation delay. No fresh access is granted on an
         # outage; an already verified cached decision survives only its normal TTL.
-        check_entitlement(token)
+        entitlement = check_entitlement(token, allow_expired=allow_expired)
+        campaign_access.save_context(user, entitlement.get('campaign'))
+        if campaign_access.preview_expired(user):
+            return  # Identity-only allowance is never cached as a tool-access grant.
         redis.setex(gate_key(user.id), min(60, max(1, owner.expires - int(time.time()))), token)
+    except RedisError:
+        raise HTTPException(503, 'Whop access could not be checked. Try again shortly.') from None
+
+
+def require_current_campaign_paid_access(user: User) -> None:
+    """Revalidate a saved paid override for guest links after campaign expiry.
+
+    The caller can hold upload row locks: do not mutate user context or commit.
+    Suite owns paid-membership freshness; the local persisted flag is not a grant.
+    """
+    try:
+        token = get_redis().get(session_key(user.id))
+        if not token:
+            raise HTTPException(401, 'Open Aditor Review again from Whop')
+        owner = owner_from_token(token)
+        if not _matches(user, owner):
+            raise HTTPException(401, 'Whop session does not match this account')
+        entitlement = check_entitlement(token)
+        campaign = entitlement.get('campaign')
+        if not campaign:
+            raise HTTPException(503, 'Trial access could not be verified. Try again shortly.')
+        if campaign['previewOnly']:
+            raise campaign_access.expired_error()
     except RedisError:
         raise HTTPException(503, 'Whop access could not be checked. Try again shortly.') from None
