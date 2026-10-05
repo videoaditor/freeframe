@@ -207,6 +207,10 @@ class Settings(BaseSettings):
     # Whop owner entry is disabled until both are configured. No signing secret is shared.
     suite_url: str = ""
     whop_app_id: str = ""
+    # "Continue with Google" on /login. Off until both are set. New addresses still need
+    # SELF_SIGNUP_ENABLED, exactly like the magic code (docs/design/2026-10-03-google-sign-in-spec.md).
+    google_client_id: str = ""
+    google_client_secret: str = ""
     # REVIEW_BRIDGE_URL / _SECRET: Auto Review's /api/v1/* contract (review.aditor.ai), called from
     # this server only - the secret never reaches a browser. Unset = requests still work, they are
     # preserved with review unavailable; missing evidence never claims Ready or completion.

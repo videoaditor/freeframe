@@ -68,6 +68,10 @@ class VerifyMagicCodeRequest(BaseModel):
     email: EmailStr
     code: str
 
+class GoogleSignInRequest(BaseModel):
+    code: str
+    redirect_uri: str
+
 class SetPasswordRequest(BaseModel):
     password: str
 

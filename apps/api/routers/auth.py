@@ -11,7 +11,7 @@ from ..schemas.auth import (
     LoginRequest, TokenResponse,
     RefreshRequest, UserResponse, InviteRequest,
     SendMagicCodeRequest, SendMagicCodeResponse,
-    VerifyMagicCodeRequest, SetPasswordRequest,
+    VerifyMagicCodeRequest, SetPasswordRequest, GoogleSignInRequest,
     AcceptInviteRequest, InviteInfoResponse,
     ChangePasswordRequest,
 )
@@ -23,6 +23,7 @@ from ..services.auth_service import (
     get_user_by_email, get_user_by_id,
 )
 from ..services import directory_service
+from ..services.google_auth import google_enabled, email_from_code
 from ..services.redis_service import (
     generate_magic_code, store_magic_code, verify_magic_code as redis_verify_magic_code,
     MAGIC_CODE_EXPIRY_SECONDS,
@@ -205,6 +206,41 @@ def verify_magic_code(body: VerifyMagicCodeRequest, db: Session = Depends(get_db
         access_token=create_access_token(str(user.id), token_version=user.token_version),
         refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
         needs_password=needs_password,
+    )
+
+
+@router.get("/google/config")
+def google_config():
+    """Whether /login shows "Continue with Google". The client id is public by design."""
+    enabled = google_enabled()
+    return {"enabled": enabled, "client_id": settings.google_client_id if enabled else ""}
+
+
+@router.post("/google", response_model=TokenResponse, dependencies=[Depends(rate_limit("google_signin", 20, 600))])
+def google_sign_in(body: GoogleSignInRequest, db: Session = Depends(get_db)):
+    """A Google-verified email signs in exactly like a verified magic code: the same account,
+    the same directory rules, and a new customer account only when SELF_SIGNUP_ENABLED."""
+    if not google_enabled():
+        raise HTTPException(status_code=404, detail="Google sign-in is not configured")
+    email = email_from_code(body.code, body.redirect_uri)
+
+    existing = get_user_by_email(db, email)
+    user = existing
+    if directory_service.is_configured():
+        user = _resolve_against_directory(db, email, user)
+    if existing is None and user is None and settings.self_signup_enabled:
+        user = _create_customer(db, email)
+    if not user or user.status == UserStatus.deactivated:
+        raise HTTPException(status_code=401, detail="This Google account has no access yet")
+
+    user.email_verified = True
+    if user.status == UserStatus.pending_verification:
+        user.status = UserStatus.active
+    db.commit()
+    return TokenResponse(
+        access_token=create_access_token(str(user.id), token_version=user.token_version),
+        refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
+        needs_password=False,
     )
 
 
