@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 90
     frontend_url: str = "http://localhost:3000"
+    # Optional server-side dictation; originals remain saved without a provider key.
+    wispr_api_key: str = ""
+    wispr_api_url: str = "https://platform-api.wisprflow.ai/api/v1/dash/api"
+    product_feedback_audio_max_bytes: int = Field(default=8 * 1024 * 1024, ge=1024, le=25 * 1024 * 1024)
+    product_feedback_audio_max_seconds: int = Field(default=120, ge=1, le=360)
+    product_feedback_audio_timeout_seconds: int = Field(default=30, ge=1, le=120)
     # Existing Slack app only; empty token keeps intake working without sending.
     product_feedback_slack_token: str = ""
     product_feedback_slack_channel: str = "C07UL6BAG1Z"

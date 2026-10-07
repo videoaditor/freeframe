@@ -25,6 +25,18 @@ class FeedbackDigest(Base):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
+class FeedbackRecording(Base):
+    __tablename__ = 'feedback_recordings'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    s3_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    transcript: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
 class ProductFeedback(Base):
     __tablename__ = 'product_feedback'
     __table_args__ = (
@@ -39,6 +51,7 @@ class ProductFeedback(Base):
     tool: Mapped[str] = mapped_column(String(32), nullable=False, default='autoreview')
     kind: Mapped[str] = mapped_column(String(8), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    recording_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('feedback_recordings.id'))
     page_path: Mapped[Optional[str]] = mapped_column(String(100))
     triage_status: Mapped[str] = mapped_column(String(16), nullable=False, default='received')
     digest_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('feedback_digests.id'), index=True)

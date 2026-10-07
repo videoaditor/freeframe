@@ -71,6 +71,9 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/requirements.txt
 
+      - name: Install audio processing dependency
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Install dependencies
         run: pip install -r apps/api/requirements.txt
 

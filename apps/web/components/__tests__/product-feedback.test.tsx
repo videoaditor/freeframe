@@ -24,7 +24,7 @@ it('shows success only after persistence and sends no author or campaign claim',
   expect(body).toEqual({ submission_id: expect.any(String), kind: 'bug', message: 'The upload stopped.', page_path: '/requests/123' })
   resolve({ id: 'receipt-123', status: 'received' })
   expect(await screen.findByText('Feedback received')).toBeInTheDocument()
-  expect(screen.getByText('Receipt: receipt-123')).toBeInTheDocument()
+  expect(screen.getByText('It’s saved. Let’s make something better.')).toBeInTheDocument()
 })
 
 it('retains message and submission ID after error for a safe retry', async () => {
@@ -32,7 +32,7 @@ it('retains message and submission ID after error for a safe retry', async () =>
   const user = userEvent.setup()
   render(<ProductFeedback />)
   await user.click(screen.getByRole('button', { name: 'Give feedback' }))
-  await user.click(screen.getByLabelText('Feature request'))
+  await user.click(screen.getByLabelText('Feature'))
   await user.type(screen.getByLabelText('Your feedback'), 'Let me sort reviews.')
   await user.click(screen.getByRole('button', { name: 'Send feedback' }))
   expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't save your feedback")
@@ -75,7 +75,7 @@ it.each(['message', 'kind'] as const)('uses a fresh submission ID when %s change
   if (changedField === 'message') {
     await user.type(screen.getByLabelText('Your feedback'), ' It happens with audio files.')
   } else {
-    await user.click(screen.getByLabelText('Feature request'))
+    await user.click(screen.getByLabelText('Feature'))
   }
   await user.click(screen.getByRole('button', { name: 'Send feedback' }))
   await screen.findByText('Feedback received')

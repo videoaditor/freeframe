@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Made product feedback and feature requests available through a persistent dashboard bubble for all signed-in customers, with a compact desktop panel and mobile sheet.
+- Made product feedback available through a compact dashboard bubble for all signed-in customers, with a Bug / Feature toggle, direct copy, text and optional voice notes.
 
 
 ### Fixed
@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Added
+- Product feedback voice notes are saved privately before optional Wispr dictation; originals remain available when transcription fails, with protected staff playback.
 - Hub current-card links prefill Handin and preserve the selected Trello card through sign-in.
 - Telehealth October preview with server-attested campaign identity, one brand per preview owner, a fixed November 1 Eastern cutoff and a recoverable plan-selection screen. Existing paid AutoReview access remains separate.
 - Durable product feedback with saved receipts, a staff queue and an optional daily Slack digest; draft edits and retries preserve their own submission identity.

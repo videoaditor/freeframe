@@ -33,7 +33,8 @@ def format_digest(rows, frontend_url):
     lines = [f'AutoReview feedback: {len(rows)} new reports ({bugs} bugs, {len(rows) - bugs} ideas)',
              'Customer reports for human triage; no automatic actions.']
     for row in rows[:40]:
-        lines.append(f'• {row.tool} · {row.campaign_id or "no campaign"} · {row.kind}: {safe_excerpt(row.message)}')
+        excerpt = safe_excerpt(row.message) if row.message else 'Voice recording — listen in the staff queue'
+        lines.append(f'• {row.tool} · {row.campaign_id or "no campaign"} · {row.kind}: {excerpt}')
     if len(rows) > 40:
         lines.append(f'{len(rows) - 40} additional reports are in the staff queue.')
     parsed = urlsplit(frontend_url)
