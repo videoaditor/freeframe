@@ -25,4 +25,6 @@ Production investigation after the existing test cleanup was read-only. No new p
 
 The local repeated Delete confirmation encountered an automation dialog/focus failure. Restore and the before/after Overview evidence above were already captured. The local empty fixture was subsequently soft-deleted through the existing backend delete_folder function; no successful second browser Delete is claimed. The production test remains independently restorable as documented in the private H4 handoff.
 
+Reloading the same synthetic customer share in the actual local browser after that soft delete displayed "Link not found". The independent read-only review of base `6453182` through implementation head `ea28b6d` found no actionable defect and approved the scoped change. It inspected the recorded test/browser evidence without rerunning it. Existing post-limit filtering of inaccessible/deleted projects and already-issued storage URLs remain separate boundaries.
+
 Rollback is an API image/code revert only: there is no migration or data mutation in this fix, and no share token is revoked. A revert reintroduces the old visibility behavior. Already-issued presigned/HLS URLs retain their existing lifetime; this guard prevents new disclosure through the share API rather than changing storage-token expiry.
