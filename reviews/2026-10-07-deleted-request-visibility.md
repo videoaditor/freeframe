@@ -12,7 +12,7 @@ A separate real-PostgreSQL synthetic nonempty fixture proved that after deleting
 
 - Baseline existing focused suite59 passed. All8 new real-PG HTTP regressions failed for the intended behavior before the fix: ghost rows, pagination starvation, deleted project share responses200/200/200, and deleted folder metadata200.
 - Final complete API suite:741 passed, zero skips; dedicated local PostgreSQL migrated to d5, with iteration, strict H2 and n8n opt-ins. Two existing dependency deprecations remain.
-- Frontend:604 tests/92files pass, production build succeeds, TypeScript and lint exit0. Existing jsdom scrollTo and image/effect-dependency lint warnings remain.
+- Frontend initially604 tests/92files pass. After merging current main799586b, all608 tests/92files pass, the complete API suite remains741/0skips, production build succeeds, TypeScript and lint exit0. Existing jsdom scrollTo and image/effect-dependency lint warnings remain.
 - Real local Next.js/API/Postgres browser, normal customer password login: baseline Projects2/With editor1 despite deleted folder; corrected Projects1/With editor0 with activeReady1/file1 preserved; normal Recently Deleted→Restore brings Projects2/With editor1 back without new request or token. Review/provider responses are synthetic, with no media upload or provider call; this does not certify paid-customer quality.
 
 ![Before](assets/request-visibility-before.png)
@@ -28,3 +28,5 @@ The local repeated Delete confirmation encountered an automation dialog/focus fa
 Reloading the same synthetic customer share in the actual local browser after that soft delete displayed "Link not found". The independent read-only review of base `6453182` through implementation head `ea28b6d` found no actionable defect and approved the scoped change. It inspected the recorded test/browser evidence without rerunning it. Existing post-limit filtering of inaccessible/deleted projects and already-issued storage URLs remain separate boundaries.
 
 Rollback is an API image/code revert only: there is no migration or data mutation in this fix, and no share token is revoked. A revert reintroduces the old visibility behavior. Already-issued presigned/HLS URLs retain their existing lifetime; this guard prevents new disclosure through the share API rather than changing storage-token expiry.
+
+Current main `799586b` was merged without changing the reviewed backend implementation. The only conflict was the adjacent CHANGELOG entries; both were retained. All complete gates were rerun on the combined tree.
