@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Link-sharing dialogs focus on copying/sending the link; review checklists and logo editing no longer appear there. Logo editing remains in Brand rules.
+- Review waiting time survives reloads from the committed submission clock. Offline and failed reviews stop activity while retaining the source frame; time ranges distinguish analysis from total wait and calibrated remaining time.
 - Whop sign-in returns a valid Hub hand-in link to the selected card instead of Home.
 - Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
 - The review timeline now supports native touch dragging and keyboard seeking, with a larger hit area, visible thumb and spaced second labels.
