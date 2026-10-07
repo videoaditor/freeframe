@@ -575,8 +575,12 @@ def _review_assets(db, req, assets, reviewer, stats, include_media=True):
             RequestUpload.asset_id == asset.id, RequestUpload.version_number == current.version_number).first() if current else None
         if current and current.processing_status != ProcessingStatus.uploading and (not record or not record.submitted_at):
             entry['review_state'] = 'unavailable'
-        if record and record.submitted_at and (entry.get('review_progress') or {}).get('stage') == 'waiting':
+        if record and record.submitted_at and entry.get('review_progress'):
             entry['review_progress']['queued_at'] = record.submitted_at.isoformat()
+            submitted = record.submitted_at
+            if submitted.tzinfo is None:
+                submitted = submitted.replace(tzinfo=timezone.utc)
+            entry['review_progress']['elapsedSeconds'] = max(0, (datetime.now(timezone.utc) - submitted).total_seconds())
         entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
         out.append(entry)
     from ..services.campaign_usage import record_request_successes

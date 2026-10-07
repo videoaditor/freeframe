@@ -104,7 +104,7 @@ it('makes queue time and an analysis overrun explicit without inventing a comple
   const props={token:'t',onSelect:vi.fn(),onRefresh:vi.fn()}
   const {rerender}=render(<RequestWorkspace {...props} assets={[asset]} />)
   expect(screen.getByText('Waiting for review')).toBeVisible()
-  expect(screen.getByText(/Queue time is additional/)).toBeVisible()
+  expect(screen.getByText(/queue time and feedback publication are additional/)).toBeVisible()
   rerender(<RequestWorkspace {...props} assets={[{...asset,review_progress:{...asset.review_progress!,stage:'reading',step:'analysing',startedAgoSeconds:200}}]} />)
   expect(screen.getByText(/Taking longer than usual/)).toBeVisible()
   expect(screen.queryByTestId('player')).toBeNull()
@@ -122,4 +122,31 @@ it('stops cached review motion on a status outage and resumes on recovery', () =
   expect(screen.getByAltText('Still frame of your submitted video')).toBeVisible()
   rerender(<RequestWorkspace {...props} statusUnavailable={false} />)
   expect(screen.getByRole('progressbar')).toBeVisible()
+})
+
+
+it('restores server elapsed across remount and resets only on a new version', () => {
+ const props={token:'clock',onSelect:vi.fn(),onRefresh:vi.fn()}
+ const asset:RequestAsset={asset_id:'a',name:'Four minute ad',version:1,version_id:'v1',processing:'ready',review_state:'reviewing',comments:[],review_progress:{stage:'reading',step:'analysing',elapsedSeconds:241}}
+ const view=render(<RequestWorkspace {...props} assets={[asset]} />)
+ expect(screen.getByText('4:01 elapsed')).toBeVisible(); view.unmount()
+ const next=render(<RequestWorkspace {...props} assets={[asset]} />)
+ expect(screen.getByText('4:01 elapsed')).toBeVisible()
+ next.rerender(<RequestWorkspace {...props} assets={[{...asset,version:2,version_id:'v2',review_progress:{stage:'waiting',elapsedSeconds:4}}]} />)
+ expect(screen.getByText('0:04 elapsed')).toBeVisible()
+ expect(screen.getByText('Waiting for review')).toBeVisible()
+})
+it('stops motion when offline or failed while retaining the source frame',()=>{
+ const asset:RequestAsset={asset_id:'a',name:'Ad',version:1,version_id:'v1',processing:'ready',review_state:'reviewing',thumbnail_url:'/cut.jpg',comments:[],review_progress:{stage:'reading',step:'analysing',elapsedSeconds:60}}
+ const props={token:'offline',onSelect:vi.fn(),onRefresh:vi.fn()}
+ const view=render(<RequestWorkspace {...props} assets={[asset]} />)
+ vi.spyOn(window.navigator,'onLine','get').mockReturnValue(false)
+ act(()=>window.dispatchEvent(new Event('offline')))
+ expect(screen.getByText('Connection paused')).toBeVisible()
+ expect(screen.queryByRole('progressbar')).toBeNull()
+ expect(screen.getByAltText('Still frame of your submitted video')).toBeVisible()
+ vi.restoreAllMocks(); act(()=>window.dispatchEvent(new Event('online')))
+ view.rerender(<RequestWorkspace {...props} assets={[{...asset,review_progress:{stage:'failed'}}]} />)
+ expect(screen.getByText('Review unavailable')).toBeVisible()
+ expect(screen.queryByRole('progressbar')).toBeNull()
 })
