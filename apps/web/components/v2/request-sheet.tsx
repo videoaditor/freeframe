@@ -19,8 +19,6 @@ import type { Project } from '@/types'
 import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
 import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
-import { SavedChecklist } from './checklist'
-import { BrandLogo } from './brand-logo'
 
 export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }: {
   open: boolean
@@ -128,8 +126,6 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
           {created ? (
             <div className="mt-6 space-y-4 fade-in">
               <LinkCard url={created.url} />
-              <SavedChecklist bindingId={created.checklist_binding_id} initial={created.checklist} />
-              <BrandLogo projectId={created.project_id} brandName={created.project_name} />
               <p className="text-[13px] text-text-tertiary">
                 Share this link with your editor. They enter their name and email before uploading and appear in your leaderboard after their first upload.
               </p>

@@ -1,5 +1,4 @@
 'use client'
-import { SavedChecklist } from '@/components/v2/checklist'
 
 import * as React from 'react'
 import Link from 'next/link'
@@ -138,7 +137,6 @@ export default function HomePage() {
       <Dialog.Root open={!!sharing} onOpenChange={open => { if (!open) setSharing(null) }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" /><Dialog.Content className="owner-sheet sheet-in fixed inset-x-4 top-[15vh] z-50 mx-auto max-h-[75vh] max-w-lg overflow-y-auto rounded-3xl border border-border bg-bg-elevated p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-[1.375rem] font-semibold tracking-tight">{sharing?.assets ? 'Share files' : 'Share upload link'}</Dialog.Title><Dialog.Description className="mt-1 text-[0.9375rem] text-text-secondary">{sharing?.title}</Dialog.Description></div><Dialog.Close aria-label="Close share dialog" className="press grid h-11 w-11 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div>
         <div className="mt-6">{sharing && (sharing.assets > 0 ? sharing.review_share_token ? <LinkCard url={`${window.location.origin}/share/${encodeURIComponent(sharing.review_share_token)}`} label="View & download" hint="Anyone with this link can view and download these files." copiedHint="Copied. Ready to share with your team." openLabel="Preview shared files" /> : <p role="alert" className="text-sm text-text-secondary">The file-sharing link is unavailable. Reload this page and try again.</p> : <LinkCard url={sharing.url} label="Upload link" hint="Anyone with this link can upload files. No account needed." />)}</div>
-        {sharing && <div className="mt-4"><SavedChecklist bindingId={sharing.checklist_binding_id} initial={sharing.checklist} /></div>}
       </Dialog.Content></Dialog.Portal></Dialog.Root>
     </div>
   )
