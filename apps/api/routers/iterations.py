@@ -83,9 +83,14 @@ def submission_mode(token: str, body: Mode, db: Session=Depends(get_db)):
     if req.iteration_mode == body.mode: return snapshot(req,db)
     if (req.iteration_state or {}).get('slots') or db.query(RequestUpload).filter(RequestUpload.request_id==req.id).first():
         raise HTTPException(409,'Files have already been uploaded. Keep using the current submission format.')
+    from ..services.checklists import request_binding, registration_options, checklist_reference
+    binding = request_binding(db, req)
+    options = registration_options(binding)
+    if options:
+        options['checklist'] = checklist_reference(binding)
     # Register first; the source folder must never be reviewed through both processes.
     registration=review_bridge.register_request(req.review_share_token,req.brand_slug,req.title,
-        req.iteration_brief or '',receive_iterations=body.mode=='components')
+        req.iteration_brief or '',receive_iterations=body.mode=='components', **options)
     if not registration or not registration.get('ok'): raise HTTPException(503,'The reviewer is unavailable. Please retry the format change.')
     req.iteration_mode=body.mode
     db.commit()

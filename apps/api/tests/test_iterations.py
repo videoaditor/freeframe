@@ -209,7 +209,7 @@ def test_runner_performs_real_adapter_sequence_with_mocked_external_services(mon
         iteration_brief='Brief',review_share_token='source',iteration_manifest=manifest(),iteration_ratio='9:16',
         iteration_state={'submitted':True,'slots':{s['id']:{'asset_id':str(uuid.uuid4()),'version_id':str(uuid.uuid4()),'version_number':1,'status':'ready'} for s in manifest()['slots']}})
     db=MagicMock(); calls=[]
-    db.query.return_value.filter.return_value.first.return_value=SimpleNamespace(id=uuid.uuid4(),project_id=req.project_id,review_share_token='source',context_sha256='a'*64,plan_id=None,content_sha256=None,snapshot={'briefing':{'text':'Frozen brief'}})
+    db.query.return_value.filter.return_value.first.return_value=SimpleNamespace(id=uuid.uuid4(),project_id=req.project_id,intent={},intent_sha256='44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',review_share_token='source',context_sha256='a'*64,plan_id=None,content_sha256=None,snapshot={'briefing':{'text':'Frozen brief'}})
     monkeypatch.setattr(runner.review_bridge,'register_request',lambda *args,**kw:{'ok':True,'brand':'cust-test','brief_status':'ready'})
     def review(payload):
         calls.append(payload)

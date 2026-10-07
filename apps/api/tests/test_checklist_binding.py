@@ -56,6 +56,7 @@ def test_failed_bridge_keeps_snapshot_and_reuses_it_after_restart():
     from apps.api.services.checklists import advance_binding, snapshot_digest
     row = SimpleNamespace(id=uuid.uuid4(), project_id=uuid.uuid4(), snapshot=None, context_sha256=None, plan_id=None, status='queued', attempts=0, error_code=None, next_attempt_at=None,
         intent={'brand':'demo','brief_text':'Show product','brief_url':'','brief_pdf_base64':''}, registered_at=None, request_id=None, folder_id=None, plan=None)
+    row.intent_sha256 = snapshot_digest(row.intent)
     s = {'schema_version': 'autoreview.plan-request.v1', 'tenant_id': str(row.project_id), 'request_id':str(row.id), 'idempotency_key':f'checklist:{row.project_id}:{row.id}', 'briefing':{'text':'Show product'}}
     db=MagicMock()
     with patch('apps.api.services.checklists.review_bridge.checklist_snapshot', return_value={'snapshot':s,'context_sha256':snapshot_digest(s)}) as read, patch('apps.api.services.checklists.review_bridge.checklist_plan', return_value=None) as plan:
@@ -93,7 +94,7 @@ def test_adopting_existing_folder_requires_same_project_and_card():
     from apps.api.routers.folders import create_folder
     from apps.api.schemas.folder import FolderCreate
     project_id=uuid.uuid4(); folder_id=uuid.uuid4()
-    binding=SimpleNamespace(id=uuid.uuid4(), project_id=project_id, folder_id=None, review_share_token=None)
+    binding=SimpleNamespace(id=uuid.uuid4(), project_id=project_id, folder_id=None, review_share_token=None, intent={}, intent_sha256='44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a')
     folder=SimpleNamespace(id=folder_id,project_id=uuid.uuid4(),description='https://trello.com/c/abc')
     with patch('apps.api.routers.folders.require_project_role'), patch('apps.api.services.checklists.binding_for_folder',return_value=binding), patch('apps.api.routers.folders._get_folder',return_value=folder):
         with pytest.raises(HTTPException) as e:
@@ -103,12 +104,15 @@ def test_adopting_existing_folder_requires_same_project_and_card():
 
 def _task_row():
     from datetime import datetime, timezone
-    return SimpleNamespace(id=uuid.uuid4(),project_id=uuid.uuid4(),request_id=None,folder_id=None,
+    row = SimpleNamespace(id=uuid.uuid4(),project_id=uuid.uuid4(),request_id=None,folder_id=None,
         review_share_token='synthetic',registered_at=datetime.now(timezone.utc),registration_attempts=0,
         registration_error=None,next_registration_at=None,status='running',attempts=0,plan_id='p1',
         content_sha256=None,plan=None,snapshot={'briefing':{'text':'Frozen'}},context_sha256='a'*64,
         intent={'brand':'demo','title':'Synthetic','brief_text':'Frozen','brief_url':'','brief_pdf_base64':''},
         deleted_at=None,error_code=None,next_attempt_at=None)
+    from apps.api.services.checklists import snapshot_digest
+    row.intent_sha256 = snapshot_digest(row.intent)
+    return row
 
 
 def test_ready_registration_failure_remains_durable_across_restart():
@@ -144,6 +148,8 @@ def test_registration_has_separate_bounded_retry_and_strips_customer_trello_url(
     from apps.api.tasks.checklist_tasks import _register
     row=_task_row(); row.registered_at=None; row.snapshot=None;row.trello_card_id=None
     row.intent['brief_url']='https://trello.com/c/PRIVATE1'
+    from apps.api.services.checklists import snapshot_digest
+    row.intent_sha256=snapshot_digest(row.intent)
     db=MagicMock()
     with patch('apps.api.tasks.checklist_tasks.review_bridge.register_request',return_value=None) as register:
         for _ in range(5):
@@ -176,6 +182,8 @@ def test_legacy_adoption_uses_verified_card_mapping_without_provider_read():
     project_id=uuid.uuid4();card='0123456789abcdef01234567'
     binding=SimpleNamespace(id=uuid.uuid4(),project_id=project_id,folder_id=None,review_share_token=None,
         request_id=None,trello_card_id=card,intent={'brief_url':f'https://trello.com/c/{card}','trello_short_link':'AbCd1234'})
+    from apps.api.services.checklists import snapshot_digest
+    binding.intent_sha256=snapshot_digest(binding.intent)
     folder=SimpleNamespace(id=uuid.uuid4(),project_id=project_id,description='https://trello.com/c/AbCd1234/title')
     db=MagicMock();db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value=binding
     assert binding_for_folder(db,binding.id,project_id,folder.description) is binding

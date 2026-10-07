@@ -51,10 +51,16 @@ def brand_slug(name: str) -> str:
 
 def register_request(share_token: str, brand: str, title: str, brief_text: str = "",
                      brief_url: str = "", brief_pdf_base64: str = "", receive_iterations: bool = False,
-                     brief_source_token: str = "", *, checklist: Optional[dict] = None) -> Optional[dict]:
+                     brief_source_token: str = "", *, checklist: Optional[dict] = None,
+                     engine: Optional[str] = None, tenant_id: Optional[str] = None, request_id: Optional[str] = None) -> Optional[dict]:
+    if engine is not None and (engine != 'continuity-v1' or not tenant_id or not request_id):
+        raise ValueError('review-engine-identity-invalid')
+    if engine is None and (tenant_id is not None or request_id is not None):
+        raise ValueError('review-engine-identity-invalid')
     return _call("POST", "/api/v1/requests", json={
         "share_token": share_token, "brand": brand, "title": title, "receive_iterations": receive_iterations,
         "brief_text": brief_text, "brief_url": brief_url, "brief_pdf_base64": brief_pdf_base64,
+        **({"engine":engine, "tenant_id":tenant_id, "request_id":request_id} if engine else {}),
         **({"checklist": checklist} if checklist else {}),
         **({"brief_source_token":brief_source_token} if brief_source_token else {}),
     }, timeout=60)

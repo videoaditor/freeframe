@@ -10,7 +10,7 @@ from ..models.project import Project
 from ..models.folder import Folder
 from ..models.upload_request import UploadRequest
 from ..services import review_bridge
-from ..services.checklists import advance_binding
+from ..services.checklists import advance_binding, registration_options, checklist_reference
 
 
 def _retire(db, row):
@@ -28,8 +28,7 @@ def _register(db, row, request=None):
         return
     if getattr(row, 'next_registration_at', None) and row.next_registration_at > datetime.now(timezone.utc):
         return
-    ref = {'tenant_id': str(row.project_id), 'binding_id': str(row.id), 'context_sha256': row.context_sha256,
-        'plan_id': row.plan_id, 'content_sha256': row.content_sha256}
+    ref = checklist_reference(row)
     brief = row.snapshot['briefing']['text'] if row.snapshot else row.intent.get('brief_text', '')
     url = '' if row.snapshot else row.intent.get('brief_url', '')
     # A project membership does not grant access to Trello's service account.
@@ -40,7 +39,7 @@ def _register(db, row, request=None):
         and getattr(request, 'iteration_mode', 'components') == 'components') if request is not None else row.intent.get('receive_iterations') is True
     result = review_bridge.register_request(row.review_share_token, row.intent['brand'], row.intent.get('title', ''),
         brief, url, '' if row.snapshot else row.intent.get('brief_pdf_base64', ''),
-        receive_iterations=receives_parts, checklist=ref)
+        receive_iterations=receives_parts, checklist=ref, **registration_options(row))
     if result and result.get('ok'):
         row.registered_at = datetime.now(timezone.utc)
         row.registration_attempts = 0

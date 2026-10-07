@@ -62,7 +62,7 @@ def create_standing_link(db: Session, project_id, created_by) -> Optional[ShareL
     return link
 
 
-def create_standing_folder_link(db: Session, project_id, folder_id, created_by) -> Optional[ShareLink]:
+def create_standing_folder_link(db: Session, project_id, folder_id, created_by, *, bound_review: bool = False) -> Optional[ShareLink]:
     """The same standing link, scoped to ONE FOLDER.
 
     Aditor files each hand-in as a folder inside a per-brand project. The automation needs a link
@@ -72,7 +72,8 @@ def create_standing_folder_link(db: Session, project_id, folder_id, created_by) 
     Same two switches as the project version, for the same reasons: without `comment` it cannot
     post the review, and without downloads only the streaming copy exists, which cannot be read.
     """
-    if not is_enabled():
+    # Selected new assignments register through the authenticated durable outbox.
+    if not bound_review and not is_enabled():
         return None
     link = ShareLink(
         folder_id=folder_id,

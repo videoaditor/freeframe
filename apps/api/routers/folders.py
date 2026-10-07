@@ -186,9 +186,12 @@ def create_folder(
         if folder.project_id != project_id:
             raise HTTPException(404, 'Folder not found')
         binding_for_folder(db, binding.id, project_id, folder.description)
-        binding.folder_id = folder.id
         existing_link = db.query(ShareLink).filter(ShareLink.folder_id == folder.id, ShareLink.deleted_at.is_(None),
             ShareLink.title == 'Auto Review').first()
+        from ..services.checklists import registration_options
+        if registration_options(binding):
+            raise HTTPException(409, 'Bound review requires a new folder share; existing folder adoption is unsupported')
+        binding.folder_id = folder.id
         binding.review_share_token = existing_link.token if existing_link else None
         db.commit()
         from ..services.checklists import dispatch_binding
@@ -232,7 +235,10 @@ def create_folder(
     db.flush()
     # A standing link for the automation, created WITH the hand-in so nobody has to remember.
     # Off unless a webhook URL is configured. See services/automation_share.py.
-    link = None if customer else automation_share.create_standing_folder_link(db, project_id, folder.id, current_user.id)
+    from ..services.checklists import registration_options
+    selected = binding is not None and bool(registration_options(binding))
+    link = None if customer else automation_share.create_standing_folder_link(db, project_id, folder.id, current_user.id,
+        **({'bound_review': True} if selected else {}))
     if binding is not None:
         binding.folder_id = folder.id
         binding.review_share_token = link.token if link is not None else None
@@ -240,7 +246,7 @@ def create_folder(
     db.refresh(folder)
     # Announce AFTER the commit: a webhook that fires for a folder the database then rolls back
     # would have the automation watching something that does not exist.
-    if link is not None:
+    if link is not None and not selected:
         automation_share.announce_folder(folder, link)
     if binding is not None:
         from ..services.checklists import dispatch_binding

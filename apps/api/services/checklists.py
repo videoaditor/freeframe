@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from fastapi import HTTPException
 from sqlalchemy.dialects.postgresql import insert
+from ..config import settings
 from ..models.checklist_binding import ChecklistBinding
 from ..models.user import User, UserStatus
 from ..services import review_bridge
@@ -35,20 +36,60 @@ def snapshot_digest(value) -> str:
     return hashlib.sha256(canonical_json(value).encode('utf-8')).hexdigest()
 
 
+def business_intent(intent):
+    """Only our frozen selector is outside the caller's business identity."""
+    if 'review_engine' in intent and intent['review_engine'] != 'continuity-v1':
+        raise ValueError('review-engine-invalid')
+    return {k: v for k, v in intent.items() if k != 'review_engine'}
+
+
+def validate_frozen_intent(row):
+    if row.intent_sha256 != snapshot_digest(row.intent):
+        raise HTTPException(409, 'Saved assignment intent is invalid')
+    return business_intent(row.intent)
+
+
+def registration_options(row):
+    if row is not None:
+        validate_frozen_intent(row)
+    if row is None or 'review_engine' not in row.intent:
+        return {}
+    return {'engine': 'continuity-v1', 'tenant_id': str(row.project_id), 'request_id': str(row.id)}
+
+
+def checklist_reference(row):
+    return {'tenant_id': str(row.project_id), 'binding_id': str(row.id),
+        'context_sha256': row.context_sha256, 'plan_id': row.plan_id, 'content_sha256': row.content_sha256}
+
+
+def request_binding(db, req):
+    row = db.query(ChecklistBinding).filter(ChecklistBinding.request_id == req.id,
+        ChecklistBinding.project_id == req.project_id, ChecklistBinding.folder_id == req.folder_id,
+        ChecklistBinding.deleted_at.is_(None)).first()
+    if row is not None and row.review_share_token != req.review_share_token:
+        raise HTTPException(409, 'Checklist share differs from assignment')
+    return row
+
+
 def reserve_binding(db, project_id, user_id, source_key, intent, trello_card_id=None):
     """Constraint is the arbiter; a row lock serializes assignment/folder adoption.
 
     Tombstones retain their uniqueness, so a deleted assignment cannot silently resurrect.
     """
-    digest = snapshot_digest(intent)
+    if 'review_engine' in intent:
+        raise HTTPException(422, 'Review engine is server-owned')
+    # Selection is considered only for INSERT. The uniqueness winner retains its choice.
+    selected = str(project_id) in {str(uuid.UUID(v.strip())) for v in settings.bound_review_project_ids.split(',') if v.strip()}
+    frozen_intent = {**intent, **({'review_engine': 'continuity-v1'} if selected else {})}
+    digest = snapshot_digest(frozen_intent)
     db.execute(insert(ChecklistBinding).values(id=uuid.uuid4(), project_id=project_id, created_by=user_id,
-        source_key=source_key, intent=intent, intent_sha256=digest, trello_card_id=trello_card_id,
+        source_key=source_key, intent=frozen_intent, intent_sha256=digest, trello_card_id=trello_card_id,
         status='queued', attempts=0).on_conflict_do_nothing(constraint='uq_checklist_project_source'))
     row = db.query(ChecklistBinding).filter(ChecklistBinding.project_id == project_id,
         ChecklistBinding.source_key == source_key).with_for_update().one()
     if row.deleted_at is not None:
         raise HTTPException(409, 'Assignment was deleted')
-    if row.intent_sha256 != digest:
+    if canonical_json(validate_frozen_intent(row)) != canonical_json(intent):
         raise HTTPException(409, 'Assignment already has a different brief; create a new request')
     return row
 
@@ -128,12 +169,13 @@ def advance_binding(db, row):
     """
     if row.status in ('ready', 'failed') or (row.next_attempt_at and row.next_attempt_at > datetime.now(timezone.utc)):
         return
+    validate_frozen_intent(row)
     row.attempts += 1
     if row.snapshot is None:
         error = _verify_request_card(db, row)
         if error:
             _failed_attempt(row, error); db.commit(); return
-        response = review_bridge.checklist_snapshot({**row.intent, 'tenant_id': str(row.project_id), 'binding_id': str(row.id), **({'trello_card_id': row.trello_card_id} if getattr(row, 'trello_card_id', None) else {})})
+        response = review_bridge.checklist_snapshot({**business_intent(row.intent), 'tenant_id': str(row.project_id), 'binding_id': str(row.id), **({'trello_card_id': row.trello_card_id} if getattr(row, 'trello_card_id', None) else {})})
         if not response:
             _failed_attempt(row, 'briefing-unavailable'); db.commit(); return
         try:

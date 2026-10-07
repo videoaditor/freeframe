@@ -79,7 +79,7 @@ def test_native_parts_wait_for_persisted_binding_before_any_worker_registration(
 def test_native_parts_registration_uses_frozen_text_and_ref_after_worker_cache_loss(monkeypatch):
     from apps.api.services import iteration_runner as runner
     req=SimpleNamespace(id=uuid.uuid4(),project_id=uuid.uuid4(),folder_id=uuid.uuid4(),brand_slug='brand',title='Review',review_share_token='source',iteration_state={'brief_resolved':True})
-    binding=SimpleNamespace(id=uuid.uuid4(),project_id=req.project_id,review_share_token='source',context_sha256='a'*64,plan_id='saved-plan',content_sha256='b'*64,snapshot={'briefing':{'text':'Frozen briefing'}})
+    binding=SimpleNamespace(id=uuid.uuid4(),project_id=req.project_id,intent={},intent_sha256='44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',review_share_token='source',context_sha256='a'*64,plan_id='saved-plan',content_sha256='b'*64,snapshot={'briefing':{'text':'Frozen briefing'}})
     db=MagicMock();db.query.return_value.filter.return_value.first.return_value=binding
     calls=[]
     monkeypatch.setattr(runner.review_bridge,'register_request',lambda *a,**kw:calls.append((a,kw)) or {'ok':True,'brief_status':'ready','brand':'brand'})
