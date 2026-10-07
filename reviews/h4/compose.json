@@ -41,32 +41,27 @@
       }
     },
     "minio": {
-      "image": "minio/minio:RELEASE.2025-04-22T22-12-26Z",
-      "command": "server /data",
-      "environment": {
-        "MINIO_ROOT_USER": "h4minio",
-        "MINIO_ROOT_PASSWORD": "h4minio-isolated"
-      },
+      "image": "chrislusf/seaweedfs:3.97",
+      "command": [
+        "server",
+        "-s3",
+        "-s3.port=9000",
+        "-s3.config=/etc/h4-s3.json",
+        "-dir=/data",
+        "-ip=minio",
+        "-master.volumeSizeLimitMB=128",
+        "-volume.max=16"
+      ],
       "ports": [
         "127.0.0.1:19044:9000"
       ],
       "volumes": [
-        "miniodata:/data"
-      ],
-      "healthcheck": {
-        "test": [
-          "CMD",
-          "curl",
-          "-f",
-          "http://localhost:9000/minio/health/live"
-        ],
-        "interval": "3s",
-        "timeout": "3s",
-        "retries": 20
-      }
+        "miniodata:/data",
+        "./s3-fixture.json:/etc/h4-s3.json:ro"
+      ]
     },
     "api": {
-      "image": "freeframe-h4-api:20261007",
+      "image": "${H4_API_IMAGE:-freeframe-h4-api:20261007}",
       "environment": {
         "DATABASE_URL": "postgresql://h4:h4@postgres:5432/h4",
         "REDIS_URL": "redis://redis:6379/0",
@@ -85,11 +80,11 @@
         "SHARE_COMMENT_DELETABLE_GUEST_EMAILS": "review@aditor.ai",
         "PASSWORD_LOGIN_ENABLED": "true",
         "SELF_SIGNUP_ENABLED": "false",
-        "INSTANCE_WIDE_PROJECT_ACCESS": "false"
+        "INSTANCE_WIDE_PROJECT_ACCESS": "true"
       },
       "volumes": [
-        "../../apps/api:/workspace/apps/api",
-        "../../packages/transcoder:/workspace/packages/transcoder"
+        "${H4_RUNTIME_ROOT:-../..}/apps/api:/workspace/apps/api",
+        "${H4_RUNTIME_ROOT:-../..}/packages/transcoder:/workspace/packages/transcoder"
       ],
       "depends_on": {
         "postgres": {
@@ -99,7 +94,7 @@
           "condition": "service_healthy"
         },
         "minio": {
-          "condition": "service_healthy"
+          "condition": "service_started"
         }
       },
       "ports": [
@@ -112,7 +107,7 @@
       ]
     },
     "worker": {
-      "image": "freeframe-h4-api:20261007",
+      "image": "${H4_API_IMAGE:-freeframe-h4-api:20261007}",
       "environment": {
         "DATABASE_URL": "postgresql://h4:h4@postgres:5432/h4",
         "REDIS_URL": "redis://redis:6379/0",
@@ -131,11 +126,11 @@
         "SHARE_COMMENT_DELETABLE_GUEST_EMAILS": "review@aditor.ai",
         "PASSWORD_LOGIN_ENABLED": "true",
         "SELF_SIGNUP_ENABLED": "false",
-        "INSTANCE_WIDE_PROJECT_ACCESS": "false"
+        "INSTANCE_WIDE_PROJECT_ACCESS": "true"
       },
       "volumes": [
-        "../../apps/api:/workspace/apps/api",
-        "../../packages/transcoder:/workspace/packages/transcoder"
+        "${H4_RUNTIME_ROOT:-../..}/apps/api:/workspace/apps/api",
+        "${H4_RUNTIME_ROOT:-../..}/packages/transcoder:/workspace/packages/transcoder"
       ],
       "depends_on": {
         "postgres": {
@@ -145,7 +140,7 @@
           "condition": "service_healthy"
         },
         "minio": {
-          "condition": "service_healthy"
+          "condition": "service_started"
         }
       },
       "command": [
@@ -154,7 +149,7 @@
         "apps.api.tasks.celery_app",
         "worker",
         "-Q",
-        "transcoding",
+        "transcoding,default",
         "-c",
         "1",
         "--loglevel=info"

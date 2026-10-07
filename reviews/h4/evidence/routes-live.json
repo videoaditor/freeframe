@@ -1,0 +1,125 @@
+{
+  "at": "2026-10-07T05:33:00.302662+00:00",
+  "chains": [
+    [
+      {
+        "url": "https://review.aditor.ai/o",
+        "status": 302,
+        "location": "https://feedback.aditor.ai/login?from=%2Fhome#",
+        "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "worker_version": null
+      },
+      {
+        "url": "https://feedback.aditor.ai/login?from=%2Fhome#",
+        "status": 200,
+        "location": null,
+        "body_sha256": "ff894db44fad1ff6b0f152beb2067a4d6bd43f4b8099868d6823be502c9748bd",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://review.aditor.ai/d/aditor",
+        "status": 200,
+        "location": null,
+        "body_sha256": "d310918dd3a62fd07bf87ffb4fc3c5515a7ccc5b99d088a1352d8e9aa346ba25",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://review.aditor.ai/u/h4-invalid-token",
+        "status": 200,
+        "location": null,
+        "body_sha256": "d310918dd3a62fd07bf87ffb4fc3c5515a7ccc5b99d088a1352d8e9aa346ba25",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://review.aditor.ai/review/h4-invalid-review",
+        "status": 404,
+        "location": null,
+        "body_sha256": "05454e6dc366a3031c40b270a63effd46da0b86a6de24185881e1e171454b604",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://review.aditor.ai/share/h4-invalid-token",
+        "status": 404,
+        "location": null,
+        "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://feedback.aditor.ai/r/Q7JENfgm6yPkL2Q8Q_N9bKUkGU_bZPFT",
+        "status": 200,
+        "location": null,
+        "body_sha256": "210cee645935a35105d09f6725c5885e7db7cbf71e5189d122c442888e4df548",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://feedback.aditor.ai/s/h4-invalid-token",
+        "status": 307,
+        "location": "/login?from=%2Fs%2Fh4-invalid-token",
+        "body_sha256": "f068ece19dcffac08b8cde20b31486fee3d8f013edd6919648a3ef29334ee9b2",
+        "worker_version": null
+      },
+      {
+        "url": "https://feedback.aditor.ai/login?from=%2Fs%2Fh4-invalid-token",
+        "status": 200,
+        "location": null,
+        "body_sha256": "51bbf715db239763cdaa6149195730c79e5a1482f78dca265d03baf47d9b21d1",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://feedback.aditor.ai/share/h4-invalid-token",
+        "status": 200,
+        "location": null,
+        "body_sha256": "0bbe1074f5c412ea51a7b60cf1181057cf178bdb33a53376092145426bb0fbce",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://feedback.aditor.ai/handin",
+        "status": 307,
+        "location": "/login?from=%2Fhandin",
+        "body_sha256": "d612abc3440843d92878a5f180c340033a82019ad9e52685a062f63330c9ea2a",
+        "worker_version": null
+      },
+      {
+        "url": "https://feedback.aditor.ai/login?from=%2Fhandin",
+        "status": 200,
+        "location": null,
+        "body_sha256": "f2352199c6ab1a35774fd4f38d039382d4b5fd3584eac1459a74dc1d98c46d09",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://feedback.aditor.ai/whop",
+        "status": 200,
+        "location": null,
+        "body_sha256": "00d02576836a1d536e3bf2b75f1ef1fbee2f4cd1819a69a5a1d7e6412d1a1c23",
+        "worker_version": null
+      }
+    ],
+    [
+      {
+        "url": "https://understanding-afterwards-capability-greater.trycloudflare.com/r/D4AqM7yHJfHrymXSBXnOAaTbztVhvxPx",
+        "status": 500,
+        "location": null,
+        "body_sha256": "e41656eb2ba6c6293bf6dd928e5a88cdbc50535cab661c1969e0f598e497ed62",
+        "worker_version": null
+      }
+    ]
+  ]
+}

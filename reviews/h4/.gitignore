@@ -1,3 +1,5 @@
 # Read-only private project screenshots stay in the local evidence packet.
 evidence/live-existing-request.jpg
 evidence/live-existing-request-mobile.jpg
+# Generated absolute-path candidate override is local-only.
+candidate-compose.json

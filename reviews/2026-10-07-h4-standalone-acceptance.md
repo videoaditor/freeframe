@@ -1,3 +1,5 @@
+> Historical first-pass report. Current integrated candidate evidence is in [the release qualification](2026-10-07-h4-integrated-release.md). Its older blockers are not the current release result.
+
 <!-- abnahme
 repo: videoaditor/freeframe
 branch: codex/autoreview-h4-acceptance
