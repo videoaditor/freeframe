@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Added
+- A service-authenticated read exposes the saved review context only for the matching assignment, project, asset and media version, so review integrations can reuse frozen inputs without exposing private rule text to guests.
 - Verified AutoReview requirement sources appear as small Basics, Brand and Briefing labels beside comments, including the private editor review. Trusted sources survive reload and CSV export; editing the text removes the source labels.
 - Saved review plans for file requests and Trello hand-ins, with one frozen briefing/rule snapshot shared across versions and a private checklist in Handin. Share dialogs stay focused on copying/sending links. Optional Engine preparation can be unavailable while upload links remain usable.
 - Hub current-card links prefill Handin and preserve the selected Trello card through sign-in.
