@@ -284,7 +284,9 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
 @router.get("/requests")
 def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = Depends(get_db),
                   current_user: User = Depends(get_current_user)):
-    q = db.query(UploadRequest)
+    # Filter before the limit so deleted assignments cannot hide active deliveries.
+    q = db.query(UploadRequest).filter(UploadRequest.folder_id.in_(
+        select(Folder.id).where(Folder.deleted_at.is_(None))))
     if project_id:
         require_project_role(db, project_id, current_user, ProjectRole.viewer)
         q = q.filter(UploadRequest.project_id == project_id)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Deleted request folders disappear from the owner overview without hiding active deliveries. Public share links respect deleted targets and projects; restoring a folder preserves its original request and share links.
 - Parts reviews reuse the assignment's saved briefing, brand context and rules, including after restarts. Retry preserves the original hand-in identity, and private original downloads retain their filename and video container.
 - Explicit legacy editor-link migrations retain their assignment and revocation state when the redirect cache is lost; unavailable verification stops the redirect safely.
 - Staff file requests with Trello briefings verify their canonical card before freezing review inputs; preparation retries preserve the original request and frozen context.
