@@ -19,6 +19,7 @@ celery_app = Celery(
         "apps.api.tasks.email_tasks",
         "apps.api.tasks.cleanup_tasks",
         "apps.api.tasks.product_feedback_tasks",
+        "apps.api.tasks.checklist_tasks",
     ],
 )
 
@@ -68,6 +69,7 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
+    "resume-checklists": {"task": "resume_checklists", "schedule": crontab(minute="*")},
     "daily-product-feedback": {
         "task": "send_product_feedback_digest",
         "schedule": crontab(minute=settings.product_feedback_digest_minute_utc,

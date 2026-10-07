@@ -50,10 +50,11 @@ def brand_slug(name: str) -> str:
 
 
 def register_request(share_token: str, brand: str, title: str, brief_text: str = "",
-                     brief_url: str = "", brief_pdf_base64: str = "") -> Optional[dict]:
+                     brief_url: str = "", brief_pdf_base64: str = "", *, checklist: Optional[dict] = None) -> Optional[dict]:
     return _call("POST", "/api/v1/requests", json={
         "share_token": share_token, "brand": brand, "title": title,
         "brief_text": brief_text, "brief_url": brief_url, "brief_pdf_base64": brief_pdf_base64,
+        **({"checklist": checklist} if checklist else {}),
     }, timeout=60)
 
 
@@ -112,3 +113,30 @@ def asset_stats(asset_ids: list[str], *, request_token: Optional[str] = None) ->
         if isinstance(values, dict):
             assets.update({key: value for key, value in values.items() if key in asset_ids and isinstance(value, dict)})
     return assets
+
+
+def checklist_card(url: str) -> Optional[dict]:
+    return _call("POST", "/api/v1/checklists/card", json={"url": url})
+
+
+def checklist_snapshot(intent: dict) -> Optional[dict]:
+    return _call("POST", "/api/v1/checklists/snapshot", json=intent, timeout=90)
+
+
+def checklist_plan(snapshot: dict, context_sha256: str, plan_id: Optional[str] = None) -> Optional[dict]:
+    # Preserve a bounded, safe error code for durable retry and the private checklist UI.
+    if not is_configured():
+        return {"error": "review-unconfigured"}
+    try:
+        response = httpx.request("POST", settings.review_bridge_url.rstrip("/") + "/api/v1/checklists/plan",
+            json={"snapshot": snapshot, "context_sha256": context_sha256, **({"plan_id": plan_id} if plan_id else {})},
+            headers={"authorization": f"Bearer {settings.review_bridge_secret}"}, timeout=30)
+        data = response.json()
+        if not isinstance(data, dict):
+            return None
+        if response.status_code >= 400:
+            allowed = {"plan-api-unavailable", "plan-busy", "plan-conflict", "plan-not-found", "snapshot-conflict", "plan-contract-invalid"}
+            return {"error": data.get("error") if data.get("error") in allowed else "plan-unavailable"}
+        return data
+    except (httpx.HTTPError, ValueError):
+        return None

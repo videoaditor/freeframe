@@ -1,0 +1,33 @@
+{
+  "input": {
+    "schema_version": "autoreview.snapshot-fixture.v1",
+    "briefing": {
+      "text": "Show product. 音楽\nNo music?",
+      "version": "v1"
+    },
+    "rules": [
+      {
+        "id": "r1",
+        "sources": [
+          {
+            "layer": "basics",
+            "reference_id": "r1",
+            "source_version": "kv:2"
+          }
+        ]
+      }
+    ],
+    "numbers": {
+      "threshold": 0.9,
+      "whole": 1,
+      "negativeZero": 0,
+      "tiny": 1e-7,
+      "numericKeys": {
+        "2": 2,
+        "10": 10
+      }
+    }
+  },
+  "canonical": "{\"briefing\":{\"text\":\"Show product. 音楽\\nNo music?\",\"version\":\"v1\"},\"numbers\":{\"negativeZero\":0,\"numericKeys\":{\"10\":10,\"2\":2},\"threshold\":0.9,\"tiny\":1e-7,\"whole\":1},\"rules\":[{\"id\":\"r1\",\"sources\":[{\"layer\":\"basics\",\"reference_id\":\"r1\",\"source_version\":\"kv:2\"}]}],\"schema_version\":\"autoreview.snapshot-fixture.v1\"}",
+  "sha256": "004546f1dbb70d7434bd751928e6144695565857acba37451851371e7253d18a"
+}

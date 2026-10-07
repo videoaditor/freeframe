@@ -9,7 +9,8 @@ def test_whop_migrations_follow_live_n8n_head_without_branching():
     config = Config()
     config.set_main_option("script_location", str(Path(__file__).parents[1] / "alembic"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ["e4f5a6b7c8d9"]
+    assert scripts.get_heads() == ["a1c7e10b2026"]
+    assert scripts.get_revision("a1c7e10b2026").down_revision == "e4f5a6b7c8d9"
     assert scripts.get_revision("e4f5a6b7c8d9").down_revision == "c3d4e5f6a7b8"
     assert scripts.get_revision("c3d4e5f6a7b8").down_revision == "d0e1f2a3b4c5"
     assert scripts.get_revision("d0e1f2a3b4c5").down_revision == "c9d0e1f2a3b4"
