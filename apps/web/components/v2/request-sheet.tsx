@@ -19,7 +19,6 @@ import type { Project } from '@/types'
 import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
 import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
-import { BrandLogo } from './brand-logo'
 
 export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }: {
   open: boolean
@@ -44,12 +43,16 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const [created, setCreated] = React.useState<FileRequest | null>(null)
+  const createIdentity = React.useRef<{ payload: string; key: string } | null>(null)
+  const sheetRef = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => { if (created) sheetRef.current?.scrollTo({ top: 0 }) }, [created])
   const titleRef = React.useRef<HTMLInputElement>(null)
   const brandRef = React.useRef<HTMLInputElement>(null)
 
   // Sensible default (the only brand, or the first) - and a fresh form every time it opens.
   React.useEffect(() => {
     if (!open) return
+    createIdentity.current = null
     setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError('')
     if (initialProjectId) setProjectId(initialProjectId)
   }, [open, initialProjectId])
@@ -77,13 +80,16 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
         pid = p.id
         await mutate()
       }
-      const r = await createRequest({
+      const payload = {
         project_id: pid,
         title: title.trim(),
         brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'),
         brief_url: isUrl ? text : '',
         brief_pdf_base64: file.pdf_base64 || '',
-      })
+      }
+      const fingerprint = JSON.stringify(payload)
+      if (createIdentity.current?.payload !== fingerprint) createIdentity.current = { payload: fingerprint, key: crypto.randomUUID() }
+      const r = await createRequest({ ...payload, idempotency_key: createIdentity.current.key })
       setCreated(r)
       onCreated?.(r)
     } catch (err) {
@@ -99,9 +105,10 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] fade-in" />
         <Dialog.Content
+          ref={sheetRef}
           // Focus the first thing to TYPE, not the first thing to tab to (the brand picker is prefilled).
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="owner-sheet glass sheet-in fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 outline-none sm:bottom-auto sm:top-[10vh] sm:rounded-[var(--radius-xl)] sm:p-7">
+          className="owner-sheet glass sheet-in fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 outline-none sm:bottom-auto sm:top-[10vh] sm:max-h-[80vh] sm:rounded-[var(--radius-xl)] sm:p-7">
           <div className="flex items-start justify-between gap-4">
             <div>
               <Dialog.Title className="text-[22px] font-semibold tracking-tight text-text-primary">
@@ -119,7 +126,6 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
           {created ? (
             <div className="mt-6 space-y-4 fade-in">
               <LinkCard url={created.url} />
-              <BrandLogo projectId={created.project_id} brandName={created.project_name} />
               <p className="text-[13px] text-text-tertiary">
                 Share this link with your editor. They enter their name and email before uploading and appear in your leaderboard after their first upload.
               </p>

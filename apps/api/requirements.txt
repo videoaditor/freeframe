@@ -28,3 +28,6 @@ pytest-asyncio==0.26.0
 email-validator==2.3.0
 jinja2==3.1.6
 kombu==5.6.2
+
+# Shared Worker/Python checklist snapshot hashing (RFC 8785, including decimal thresholds).
+rfc8785==0.1.4

@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class FolderCreate(BaseModel):
+    checklist_binding_id: Optional[uuid.UUID] = None
+    existing_folder_id: Optional[uuid.UUID] = None
     name: str = Field(..., min_length=1, max_length=255)
     parent_id: Optional[uuid.UUID] = None
     description: Optional[str] = Field(None, max_length=2000)

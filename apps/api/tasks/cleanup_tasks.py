@@ -1,4 +1,5 @@
 from ..models.upload_request import UploadRequest, RequestUpload
+from ..models.checklist_binding import ChecklistBinding
 import json
 import logging
 import re
@@ -133,6 +134,7 @@ def _purge_share_link(db, share_link_id, counts: PurgeCounts) -> None:
 
 
 def _purge_requests(db, request_ids):
+    db.query(ChecklistBinding).filter(ChecklistBinding.request_id.in_(request_ids)).delete(synchronize_session=False)
     db.query(RequestUpload).filter(RequestUpload.request_id.in_(request_ids)).delete(synchronize_session=False)
     db.query(UploadRequest).filter(UploadRequest.id.in_(request_ids)).delete(synchronize_session=False)
 
@@ -184,6 +186,7 @@ def _purge_folder(db, folder_id, counts: PurgeCounts) -> None:
         _purge_share_link(db, link.id, counts)
     db.query(ShareLinkItem).filter(ShareLinkItem.folder_id == folder_id).delete(synchronize_session=False)
     db.query(AssetShare).filter(AssetShare.folder_id == folder_id).delete(synchronize_session=False)
+    db.query(ChecklistBinding).filter(ChecklistBinding.folder_id == folder_id).delete(synchronize_session=False)
     _purge_requests(db, [r.id for r in db.query(UploadRequest).filter(UploadRequest.folder_id == folder_id).all()])
     db.query(Folder).filter(Folder.id == folder_id).delete(synchronize_session=False)
     counts.folders += 1
@@ -226,6 +229,7 @@ def _purge_project(db, project_id, counts: PurgeCounts) -> None:
         _safe(delete_object, p.poster_s3_key)
         counts.s3_deletes += 1
     _purge_requests(db, [r.id for r in db.query(UploadRequest).filter(UploadRequest.project_id == project_id).all()])
+    db.query(ChecklistBinding).filter(ChecklistBinding.project_id == project_id).delete(synchronize_session=False)
     db.query(Project).filter(Project.id == project_id).delete(synchronize_session=False)
     counts.projects += 1
     db.flush()
