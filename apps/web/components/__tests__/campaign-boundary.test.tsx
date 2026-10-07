@@ -29,3 +29,14 @@ it('replaces expired tool content with both plan choices and feedback', () => {
   expect(screen.getByText('Recommended for your usage: Team')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Give feedback' })).toBeInTheDocument()
 })
+
+it('offers one feedback entry for customers without a trial campaign', () => {
+  render(<CampaignBoundary><p>Tool content</p></CampaignBoundary>)
+  expect(screen.getAllByRole('button', { name: 'Give feedback' })).toHaveLength(1)
+})
+
+it('offers one feedback entry for paid customers after their preview ends', () => {
+  state.user.suite_campaign = { ...campaign, state: 'expired', previewOnly: false }
+  render(<CampaignBoundary><p>Tool content</p></CampaignBoundary>)
+  expect(screen.getAllByRole('button', { name: 'Give feedback' })).toHaveLength(1)
+})

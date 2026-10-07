@@ -610,3 +610,33 @@ button:not(:disabled), summary { cursor: pointer; }
   100% { transform: translate(var(--confetti-x), 180px) rotate(var(--confetti-turn)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .request-confetti { display: none; } .review-note .report-bug-trigger { transition: none; } }
+
+/* Product feedback: a persistent, quiet invitation outside the review controls. */
+.feedback-launcher {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 40;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border-color: oklch(0.7 0.15 35 / 0.4);
+  box-shadow: 0 4px 20px oklch(0 0 0 / 0.16);
+  transition: background-color 160ms, transform 160ms;
+}
+.feedback-launcher[data-viewer] { bottom: calc(88px + env(safe-area-inset-bottom)); }
+.feedback-launcher svg { color: var(--accent); }
+.feedback-panel { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.feedback-kind:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.feedback-panel[data-state="open"] { animation: feedback-in 200ms var(--ease-out); }
+@keyframes feedback-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 640px) {
+  .feedback-launcher { right: 24px; bottom: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feedback-panel[data-state="open"] { animation: none; }
+  .feedback-launcher { transition: none; }
+}

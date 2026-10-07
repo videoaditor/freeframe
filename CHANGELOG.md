@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Made product feedback and feature requests available through a persistent dashboard bubble for all signed-in customers, with a compact desktop panel and mobile sheet.
+
+
 ### Fixed
 - Whop sign-in returns a valid Hub hand-in link to the selected card instead of Home.
 - Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
