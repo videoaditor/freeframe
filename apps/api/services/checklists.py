@@ -2,12 +2,15 @@
 import hashlib
 import json
 import math
+import re
 import rfc8785
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from fastapi import HTTPException
 from sqlalchemy.dialects.postgresql import insert
 from ..models.checklist_binding import ChecklistBinding
+from ..models.user import User, UserStatus
 from ..services import review_bridge
 
 
@@ -84,7 +87,7 @@ def binding_for_folder(db, binding_id, project_id, description):
 
 def _failed_attempt(row, code):
     row.error_code = code
-    row.status = 'failed' if row.attempts >= 3 or code in {'plan-api-unavailable', 'review-unconfigured', 'plan-conflict', 'snapshot-conflict', 'snapshot-identity-invalid', 'plan-contract-invalid'} else 'queued'
+    row.status = 'failed' if row.attempts >= 3 or code in {'plan-api-unavailable', 'review-unconfigured', 'plan-conflict', 'snapshot-conflict', 'snapshot-identity-invalid', 'plan-contract-invalid', 'source-not-authorized'} else 'queued'
     row.next_attempt_at = None if row.status == 'failed' else datetime.now(timezone.utc) + timedelta(seconds=30 * row.attempts)
 
 
@@ -93,6 +96,28 @@ def pending_registration(row):
     row.registration_attempts = 0
     row.registration_error = None
     row.next_registration_at = None
+
+
+def _verify_request_card(db, row):
+    """Resolve missing staff-request metadata without changing the original intent."""
+    try:
+        is_trello = urlparse(row.intent.get('brief_url', '')).hostname in {'trello.com', 'www.trello.com'}
+    except ValueError:
+        return None  # Other malformed URLs retain the existing snapshot failure path.
+    if not is_trello:
+        return None
+    if not row.request_id:
+        return None if getattr(row, 'trello_card_id', None) else 'source-not-authorized'
+    creator = db.query(User).filter(User.id == row.created_by, User.deleted_at.is_(None)).first()
+    if creator is None or creator.is_staff is not True or creator.status != UserStatus.active:
+        return 'source-not-authorized'
+    if getattr(row, 'trello_card_id', None):
+        return None
+    card = review_bridge.checklist_card(row.intent['brief_url'])
+    if not card or not re.fullmatch(r'[a-f0-9]{24}', str(card.get('card_id', ''))) or not re.fullmatch(r'[A-Za-z0-9]{8}', str(card.get('short_link', ''))):
+        return 'card-unavailable'
+    row.trello_card_id = card['card_id']
+    return None
 
 
 def advance_binding(db, row):
@@ -105,6 +130,9 @@ def advance_binding(db, row):
         return
     row.attempts += 1
     if row.snapshot is None:
+        error = _verify_request_card(db, row)
+        if error:
+            _failed_attempt(row, error); db.commit(); return
         response = review_bridge.checklist_snapshot({**row.intent, 'tenant_id': str(row.project_id), 'binding_id': str(row.id), **({'trello_card_id': row.trello_card_id} if getattr(row, 'trello_card_id', None) else {})})
         if not response:
             _failed_attempt(row, 'briefing-unavailable'); db.commit(); return

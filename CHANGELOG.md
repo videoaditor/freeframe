@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Parts reviews reuse the assignment's saved briefing, brand context and rules, including after restarts. Retry preserves the original hand-in identity, and private original downloads retain their filename and video container.
 - Explicit legacy editor-link migrations retain their assignment and revocation state when the redirect cache is lost; unavailable verification stops the redirect safely.
+- Staff file requests with Trello briefings verify their canonical card before freezing review inputs; preparation retries preserve the original request and frozen context.
 - Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Link-sharing dialogs focus on copying/sending the link; review checklists and logo editing no longer appear there. Logo editing remains in Brand rules.
 - Parts and final-ad review views now show confirmed version-specific waiting state, preserve source upload elapsed time across reloads, and stop activity during status outages. Missing timing data does not prevent review or invent a time estimate.
