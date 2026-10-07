@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Added
+- A service-authenticated read exposes the saved review context only for the matching assignment, project, asset and media version, so review integrations can reuse frozen inputs without exposing private rule text to guests.
 - Saved review plans for file requests and Trello hand-ins, with one frozen briefing/rule snapshot shared across versions and a private checklist in Handin. Share dialogs stay focused on copying/sending links. Optional Engine preparation can be unavailable while upload links remain usable.
 - Hub current-card links prefill Handin and preserve the selected Trello card through sign-in.
 - Telehealth October preview with server-attested campaign identity, one brand per preview owner, a fixed November 1 Eastern cutoff and a recoverable plan-selection screen. Existing paid AutoReview access remains separate.
