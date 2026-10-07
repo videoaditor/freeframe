@@ -57,7 +57,7 @@ export function editorAccuracy(editors: EditorStats[]) {
   return { average, count: rated.length, outliers }
 }
 
-export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional' }
+export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional'; review_source?: import('@/types').ReviewSource | null }
 
 export interface TimeSaved {
   days: number

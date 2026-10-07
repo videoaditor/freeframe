@@ -195,6 +195,13 @@ export interface GuestAuthor {
   email?: string;
 }
 
+export interface ReviewSource {
+  schema_version: 'autoreview.comment-source.v1';
+  requirement_id: string;
+  plan_id?: string | null;
+  sources: { layer: 'basics' | 'brand' | 'briefing'; reference_id: string; source_version: string }[];
+}
+
 export interface Comment {
   id: string;
   asset_id: string;
@@ -207,6 +214,7 @@ export interface Comment {
   body: string;
   resolved: boolean;
   visibility: string;
+  review_source?: ReviewSource | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

@@ -534,8 +534,11 @@ def _version_review(db, req, asset, version, reviewer, evidence, include_media=T
         withdrawn = {r.parent_id for r in db.query(Comment).filter(
             Comment.asset_id == asset.id, Comment.version_id == version.id, Comment.guest_author_id == reviewer.id,
             Comment.parent_id.isnot(None), Comment.deleted_at.is_(None), Comment.body.like("You're right%")).all()}
+        from ..schemas.comment import public_review_source
         comments = [{'id': str(c.id), 't': c.timecode_start, 'body': c.body.replace('Must fix — ', '', 1),
-                     'must_fix': c.body.startswith('Must fix')} for c in rows if c.id not in withdrawn]
+                     'must_fix': c.body.startswith('Must fix'),
+                     'review_source': public_review_source(getattr(c, 'review_source', None))}
+                    for c in rows if c.id not in withdrawn]
     state = editor_review_state(version, evidence)
     # Visible unresolved blockers must never be contradicted by a green engine projection.
     if state == 'clear' and any(c.get('must_fix') for c in comments):

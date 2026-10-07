@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timecode, type ReviewComment } from '@/lib/platform'
+import { CommentSourceBadges } from '@/components/review/comment-source-badges'
 
 /**
  * The review as an editor reads it: what must be fixed first (serial position), then what is worth
@@ -63,6 +64,7 @@ function Group({ title, hint, items, must, onSeek, onObject }: { title: string; 
               <span className="h-7 shrink-0 rounded-full bg-bg-tertiary px-2.5 text-[12px] leading-7 text-text-tertiary">Whole video</span>
             )}
             <div className="min-w-0 flex-1">
+              <CommentSourceBadges source={c.review_source} />
               <p className="text-[15px] leading-[1.45] text-text-primary">{c.body}</p>
               {must && onObject && <Dispute c={c} onObject={onObject} />}
             </div>

@@ -1,4 +1,7 @@
 import logging
+import hashlib
+import hmac
+import json
 import re
 import uuid
 from collections import defaultdict
@@ -6,7 +9,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -32,6 +36,8 @@ from ..schemas.comment import (
     GuestCommentCreate,
     ReactionCreate,
     ReactionResponse,
+    ReviewCommentCreate,
+    public_review_source,
 )
 from ..services import s3_service
 from ..services import comment_export
@@ -456,6 +462,8 @@ def update_comment(
         ).first()
         if not member:
             raise HTTPException(status_code=403, detail="Can only edit your own comments")
+    if comment.body != body.body:
+        comment.review_source = None
     comment.body = body.body
     comment.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -761,6 +769,7 @@ def export_comments(
             resolved=bool(c.resolved),
             created_at=c.created_at,
             version_number=version.version_number,
+            review_source=public_review_source(getattr(c, "review_source", None)),
         ))
 
     duration_frames = 0
@@ -804,6 +813,79 @@ def export_comments(
 
 
 # ── Guest comments (via share link) ───────────────────────────────────────────
+
+def _require_review_bridge(authorization: Optional[str] = Header(default=None)) -> None:
+    secret = settings.review_bridge_secret.strip()
+    if not secret:
+        raise HTTPException(status_code=503, detail="Review bridge is not configured")
+    expected = f"Bearer {secret}".encode()
+    if not hmac.compare_digest((authorization or "").encode(), expected):
+        raise HTTPException(status_code=401, detail="Invalid review bridge credentials")
+
+
+@router.post("/review-bridge/share/{token}/comments", response_model=CommentResponse,
+             status_code=status.HTTP_201_CREATED, dependencies=[Depends(_require_review_bridge)])
+def publish_review_comment(
+    token: str,
+    body: ReviewCommentCreate,
+    share_session: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Bridge-only publication. Email selects an allowed identity AFTER service authentication.
+
+    The caller binds H1 sources before model planning. The API validates scope and a stable
+    publication identity; it never derives provenance from a name, email or comment text.
+    """
+    if body.guest_email not in _automation_guest_emails():
+        raise HTTPException(status_code=403, detail="Automation identity is not enabled")
+    link = validate_share_link_with_session(db, token, share_session=share_session)
+    if link.permission == SharePermission.view:
+        raise HTTPException(status_code=403, detail="This share link does not allow commenting")
+    asset = _get_asset(db, body.asset_id)
+    validate_asset_in_share(db, link, asset)
+    # Serializes simultaneous retries on this version. No latest-version guessing.
+    version = db.query(AssetVersion).filter(
+        AssetVersion.id == body.version_id, AssetVersion.asset_id == asset.id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).with_for_update().first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Ready version not found for this asset")
+
+    digest = hashlib.sha256(json.dumps(body.model_dump(mode="json"), sort_keys=True,
+                                       separators=(",", ":")).encode()).hexdigest()
+    # Include deleted rows to prevent a retry from resurrecting removed feedback.
+    existing = db.query(Comment).filter(Comment.review_publication_id == body.publication_id).first()
+    if existing:
+        if existing.asset_id != asset.id or existing.version_id != version.id or existing.review_publication_sha256 != digest:
+            raise HTTPException(status_code=409, detail="Publication ID already used for a different payload")
+        if existing.deleted_at is not None:
+            raise HTTPException(status_code=409, detail="Publication was deleted")
+        return _build_comment_response(existing, db)
+
+    guest = db.query(GuestUser).filter(GuestUser.email == body.guest_email).first()
+    if not guest:
+        guest = GuestUser(email=body.guest_email, name="Auto Review")
+        db.add(guest)
+        db.flush()
+    comment = Comment(
+        asset_id=asset.id, version_id=version.id, guest_author_id=guest.id,
+        body=body.body, timecode_start=body.timecode_start, timecode_end=body.timecode_end,
+        visibility="internal", review_source=body.review_source.model_dump(exclude_none=True) if body.review_source else None,
+        review_publication_id=body.publication_id, review_publication_sha256=digest,
+    )
+    db.add(comment)
+    try:
+        db.flush()
+        db.add(ShareLinkActivity(share_link_id=link.id, action=ShareActivityAction.commented,
+                                actor_email=guest.email, actor_name=guest.name,
+                                asset_id=asset.id, asset_name=asset.name))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Publication identity conflict")
+    db.refresh(comment)
+    return _build_comment_response(comment, db)
 
 @router.get("/share/{token}/comments")
 def list_share_comments(
