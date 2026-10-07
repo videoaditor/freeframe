@@ -84,21 +84,18 @@ def identity(req):
 
 
 def register(db, req, share_token):
-    from ..models.checklist_binding import ChecklistBinding
-    binding=db.query(ChecklistBinding).filter(ChecklistBinding.request_id==req.id,
-        ChecklistBinding.project_id==req.project_id,ChecklistBinding.folder_id==req.folder_id,
-        ChecklistBinding.deleted_at.is_(None)).first()
+    from .checklists import request_binding, registration_options, checklist_reference
+    binding=request_binding(db, req)
     if binding is None or not isinstance(binding.context_sha256,str) or not binding.snapshot or binding.review_share_token!=req.review_share_token:
         raise RuntimeError('The saved checklist is not available yet. Your files are saved; retry shortly.')
-    ref={'tenant_id':str(binding.project_id),'binding_id':str(binding.id),'context_sha256':binding.context_sha256,
-        'plan_id':binding.plan_id,'content_sha256':binding.content_sha256}
+    ref=checklist_reference(binding)
     r=review_bridge.register_request(req.review_share_token,req.brand_slug,req.title,
-        binding.snapshot['briefing']['text'],receive_iterations=True,checklist=ref)
+        binding.snapshot['briefing']['text'],receive_iterations=True,checklist=ref, **registration_options(binding))
     if not r or not r.get('ok') or r.get('brief_status')!='ready':
         raise RuntimeError('The briefing is not available yet. Your files are saved; retry its resolution.')
     if share_token!=req.review_share_token:
         r=review_bridge.register_request(share_token,req.brand_slug,req.title,receive_iterations=True,
-            brief_source_token=req.review_share_token)
+            brief_source_token=req.review_share_token, **registration_options(binding))
         if not r or not r.get('ok') or r.get('brief_status')!='ready':
             raise RuntimeError('The resolved briefing could not be attached to this output.')
     return r.get('brand') or req.brand_slug

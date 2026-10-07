@@ -20,7 +20,7 @@ def request_context(monkeypatch):
     intent = {'brand': 'synthetic', 'title': 'Synthetic request', 'brief_text': 'Full original brief',
         'brief_url': 'https://trello.com/c/AbCd1234/example', 'brief_pdf_base64': ''}
     row = SimpleNamespace(id=uuid.uuid4(), project_id=uuid.uuid4(), created_by=creator.id,
-        request_id=uuid.uuid4(), trello_card_id=None, intent=intent, intent_sha256='original-intent-hash',
+        request_id=uuid.uuid4(), trello_card_id=None, intent=intent, intent_sha256=checklists.snapshot_digest(intent),
         snapshot=None, context_sha256=None, status='queued', attempts=0, error_code=None,
         next_attempt_at=None, plan_id=None, content_sha256=None, plan=None)
     db = MagicMock()
@@ -59,7 +59,7 @@ def test_staff_request_freezes_context_after_canonical_card_verification(request
     assert c.row.snapshot['rules'][0]['id'] == 'frozen-rule'
     assert c.row.trello_card_id == CARD['card_id']
     assert c.row.intent == original
-    assert c.row.intent_sha256 == 'original-intent-hash'
+    assert c.row.intent_sha256 == checklists.snapshot_digest(original)
     assert c.row.error_code == 'plan-api-unavailable'
     assert c.calls == {'card': 1, 'snapshot': 1}
 

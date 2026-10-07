@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from urllib.parse import urlparse
-from pydantic import Field, model_validator
+from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default S3 endpoint (local MinIO). Shared between the field default and the
@@ -214,6 +214,14 @@ class Settings(BaseSettings):
     # REVIEW_BRIDGE_URL / _SECRET: Auto Review's /api/v1/* contract (review.aditor.ai), called from
     # this server only - the secret never reaches a browser. Unset = requests still work, they are
     # preserved with review unavailable; missing evidence never claims Ready or completion.
+    # Comma-separated project UUIDs; applies only to newly inserted assignments.
+    bound_review_project_ids: str = ""
+    @field_validator('bound_review_project_ids')
+    @classmethod
+    def valid_bound_projects(cls, value):
+        import uuid
+        return ','.join(str(uuid.UUID(part.strip())) for part in value.split(',') if part.strip())
+
     review_bridge_url: str = ""
     review_bridge_secret: str = ""
     mixer_iterations_url: str = ""

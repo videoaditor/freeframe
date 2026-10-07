@@ -301,7 +301,7 @@ def test_every_iteration_registration_inherits_original_brief(monkeypatch):
     calls=[]
     monkeypatch.setattr(review_bridge,'register_request',lambda *a,**kw:calls.append(kw) or {'ok':True,'brand':'brand','brief_status':'ready'})
     db=MagicMock();db.query.return_value.filter.return_value.first.return_value=SimpleNamespace(
-        id=uuid.uuid4(),project_id=req.project_id,review_share_token='original',context_sha256='a'*64,
+        id=uuid.uuid4(),project_id=req.project_id,intent={},intent_sha256='44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',review_share_token='original',context_sha256='a'*64,
         plan_id=None,content_sha256=None,snapshot={'briefing':{'text':'Frozen original'}})
     iteration_runner.register(db,req,'original');iteration_runner.register(db,req,'final')
     assert calls[-1]['brief_source_token']=='original'

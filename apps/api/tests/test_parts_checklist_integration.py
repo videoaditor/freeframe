@@ -27,6 +27,8 @@ def test_parts_registration_retains_frozen_brief_and_excludes_ordinary_folder_re
         intent={'brand': 'demo', 'title': 'Parts', 'brief_text': 'Mutable input',
                 'receive_iterations': True},
     )
+    from apps.api.services.checklists import snapshot_digest
+    row.intent_sha256 = snapshot_digest(row.intent)
     _register(MagicMock(), row)
     assert sent[0]['receive_iterations'] is True
     assert sent[0]['brief_text'] == 'Frozen original brief'
