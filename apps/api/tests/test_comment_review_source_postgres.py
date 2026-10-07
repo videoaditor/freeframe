@@ -2,11 +2,12 @@
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -126,3 +127,35 @@ def test_postgres_foreign_version_and_spoof_payload_are_rejected(pg):
         version_id=str(version.id), review_source=SOURCE))
     assert spoof.status_code == 422
     assert db.query(Comment).filter(Comment.asset_id == asset.id).count() == 0
+
+
+def test_postgres_concurrent_first_automation_posts_on_distinct_versions(pg, monkeypatch):
+    client, db, user, asset, version, link, original = pg
+    email = f'h2-first-{uuid.uuid4()}@example.test'
+    monkeypatch.setattr(settings, 'automation_guest_emails', email)
+    other = AssetVersion(asset_id=asset.id, version_number=2, processing_status=ProcessingStatus.ready, created_by=user.id)
+    db.add(other); db.commit()
+    payloads = [dict(original, guest_email=email), dict(original, guest_email=email,
+                version_id=str(other.id), publication_id=str(uuid.uuid4()))]
+    # Both requests finish their initial missing-guest lookup before either inserts.
+    barrier, lock = Barrier(2), Lock()
+    lookups = 0
+    def synchronize_lookup(conn, cursor, statement, parameters, context, executemany):
+        nonlocal lookups
+        if 'FROM guest_users' not in statement or 'guest_users.email =' not in statement:
+            return
+        with lock:
+            lookups += 1
+            first_pair = lookups <= 2
+        if first_pair:
+            barrier.wait(timeout=10)
+    event.listen(engine, 'after_cursor_execute', synchronize_lookup)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(lambda p: publish(pg, p), payloads))
+    finally:
+        event.remove(engine, 'after_cursor_execute', synchronize_lookup)
+    assert [r.status_code for r in responses] == [201, 201], [r.text for r in responses]
+    rows = db.query(Comment).filter(Comment.asset_id == asset.id).all()
+    assert len(rows) == 2 and len({c.guest_author_id for c in rows}) == 1
+    assert {c.version_id for c in rows} == {version.id, other.id}

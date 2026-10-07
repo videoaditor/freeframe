@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -865,9 +866,10 @@ def publish_review_comment(
 
     guest = db.query(GuestUser).filter(GuestUser.email == body.guest_email).first()
     if not guest:
-        guest = GuestUser(email=body.guest_email, name="Auto Review")
-        db.add(guest)
-        db.flush()
+        # Different reviewed versions can publish this identity for the first time together.
+        db.execute(insert(GuestUser).values(id=uuid.uuid4(), email=body.guest_email, name="Auto Review")
+                   .on_conflict_do_nothing(index_elements=["email"]))
+        guest = db.query(GuestUser).filter(GuestUser.email == body.guest_email).first()
     comment = Comment(
         asset_id=asset.id, version_id=version.id, guest_author_id=guest.id,
         body=body.body, timecode_start=body.timecode_start, timecode_end=body.timecode_end,
