@@ -16,6 +16,7 @@ pytestmark = pytest.mark.skipif(not os.getenv('ITERATIONS_TEST_DATABASE_URL'), r
 def test_staged_revision_history_and_serialized_completion(monkeypatch):
     from apps.api.database import Base
     from apps.api.models import User, Project, Folder, UploadRequest, Asset, AssetVersion, RequestUpload, MediaFile, ShareLink
+    from apps.api.models.project import ProjectMember, ProjectRole
     from apps.api.models.asset import ProcessingStatus
     from apps.api.routers import requests as rq
     admin = create_engine(os.environ['ITERATIONS_TEST_DATABASE_URL'])
@@ -38,6 +39,8 @@ def test_staged_revision_history_and_serialized_completion(monkeypatch):
         with Session() as db:
             owner = User(email='owner@example.test', name='Owner'); db.add(owner); db.flush()
             project = Project(name='Brand', created_by=owner.id); db.add(project); db.flush()
+            # create_project grants its creator an owner membership; model fixtures must too.
+            db.add(ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner))
             folder = Folder(name='Hand in', project_id=project.id, created_by=owner.id); db.add(folder); db.flush()
             req = UploadRequest(token='token', review_share_token='share', title='Launch', project_id=project.id, folder_id=folder.id, created_by=owner.id)
             db.add(req)

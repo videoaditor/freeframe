@@ -1,0 +1,102 @@
+[
+  {
+    "state": "overrun",
+    "theme": "light",
+    "preview": true,
+    "progress": true,
+    "scan": "true",
+    "scrollWidth": 375,
+    "text": "Review in progressChecking the videoAnalysis usually 1.5–3 min4:03 elapsedBased on 12 recent similar videos. Preparation, queue time and feedback publication are additional.Taking longer than usual. Your review is still running.",
+    "width": 375
+  },
+  {
+    "state": "offline",
+    "theme": "dark",
+    "preview": true,
+    "progress": false,
+    "scan": "false",
+    "scrollWidth": 375,
+    "text": "Review unavailableYour file is safe. We cannot confirm the review yet.Check again",
+    "width": 375
+  },
+  {
+    "state": "error",
+    "theme": "light",
+    "preview": true,
+    "progress": false,
+    "scan": "false",
+    "scrollWidth": 375,
+    "text": "Review unavailableYour file is safe. We cannot confirm the review yet.Check again",
+    "width": 375
+  },
+  {
+    "state": "offline",
+    "theme": "dark",
+    "progress": false,
+    "scrollWidth": 375,
+    "text": "Connection pausedYour file is safe. Reconnect to check the review.Check again",
+    "width": 375
+  },
+  {
+    "state": "new-version",
+    "theme": "light",
+    "progress": true,
+    "scrollWidth": 375,
+    "text": "Review in progressWaiting for reviewMeasuring typical wait time0:04 elapsedNot enough matching reviews to give a reliable time range yet. Feedback appears automatically.",
+    "width": 375
+  },
+  {
+    "state": "total",
+    "theme": "light",
+    "progress": true,
+    "scrollWidth": 375,
+    "text": "Review in progressChecking the videoFeedback usually 4–7 min after upload4:03 elapsedBased on 40 matching completed reviews, including preparation, queue and feedback publication.",
+    "width": 375
+  },
+  {
+    "state": "remaining",
+    "theme": "dark",
+    "progress": true,
+    "scrollWidth": 375,
+    "text": "Review in progressChecking the videoAbout 1–2 min remaining4:03 elapsedMeasured from similar reviews still in this phase. Updated when status is checked.",
+    "width": 375
+  },
+  {
+    "file": "before-dark-desktop.png",
+    "case": "baseline",
+    "width": 1440
+  },
+  {
+    "file": "after-dark-desktop.png",
+    "case": "current",
+    "width": 1440
+  },
+  {
+    "case": "reload",
+    "before": "4:17 elapsed",
+    "after": "4:18 elapsed",
+    "files": [
+      "reload-before-light-mobile.png",
+      "reload-after-light-mobile.png"
+    ]
+  },
+  {
+    "case": "scan-park",
+    "scanning": false
+  },
+  {
+    "case": "pause",
+    "animationPlayState": "paused"
+  },
+  {
+    "case": "200-percent-css-zoom",
+    "width": 375,
+    "scrollWidth": 369,
+    "file": "zoom-200-light-mobile.png"
+  },
+  {
+    "case": "baseline-css-restored",
+    "base": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+    "file": "before-dark-desktop.png"
+  }
+]

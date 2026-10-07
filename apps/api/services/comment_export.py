@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -105,6 +106,7 @@ class CommentRow:
     resolved: bool
     created_at: datetime
     version_number: int
+    review_source: Optional[dict] = None
 
 
 @dataclass
@@ -167,7 +169,7 @@ def build_markers(rows: list[CommentRow], spec: FpsSpec, include_resolved: bool 
 CSV_COLUMNS = [
     "comment_id", "parent_id", "version_number", "timecode_smpte",
     "timecode_start_seconds", "timecode_end_seconds",
-    "author_name", "author_email", "body", "resolved", "created_at",
+    "author_name", "author_email", "body", "resolved", "created_at", "review_source",
 ]
 
 
@@ -186,6 +188,7 @@ def to_csv(rows: list[CommentRow], spec: Optional[FpsSpec]) -> str:
             "" if r.timecode_end is None else r.timecode_end,
             r.author_name, r.author_email, r.body,
             str(r.resolved).lower(), r.created_at.isoformat(),
+            json.dumps(r.review_source, separators=(",", ":")) if r.review_source else "",
         ])
     return buf.getvalue()
 

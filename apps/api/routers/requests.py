@@ -40,6 +40,8 @@ from ..services import s3_service
 from ..models.upload_request import RequestUpload, UploadRequest
 from ..models.user import GuestUser, User
 from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
+from ..models.checklist_binding import ChecklistBinding
+from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
 from ..services.permissions import effective_project_role, require_project_role
 from ..services.s3_service import (
@@ -113,10 +115,11 @@ class RequestCreate(BaseModel):
     brief_text: str = ""
     brief_url: str = ""
     brief_pdf_base64: str = ""
+    idempotency_key: Optional[uuid.UUID] = None
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
 
 
-def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[dict] = None, assets: int = 0) -> dict:
+def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[dict] = None, assets: int = 0, binding=None) -> dict:
     base = (settings.frontend_url or "").rstrip("/")
     return {
         "id": str(req.id),
@@ -133,6 +136,8 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
         "assets": assets,
         "state": request_state(req, datetime.now(timezone.utc)),
         "created_at": req.created_at.isoformat() if req.created_at else None,
+        "checklist_binding_id": str(binding.id) if binding else None,
+        "checklist": binding_out(binding) if binding else None,
         **(st or {"status": "reviewing", "open_must_fixes": 0}),
     }
 
@@ -143,6 +148,19 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
+
+    brand = project_brand(db, project)
+    intent = {'brand': brand, 'title': body.title.strip(), 'brief_text': body.brief_text,
+        'brief_url': body.brief_url, 'brief_pdf_base64': body.brief_pdf_base64,
+        'expires_in_days': body.expires_in_days}
+    binding = reserve_binding(db, project.id, current_user.id, f"request:{body.idempotency_key or uuid.uuid4()}", intent)
+    if binding.request_id:
+        req = db.query(UploadRequest).filter(UploadRequest.id == binding.request_id, UploadRequest.project_id == project.id).first()
+        if req is None:
+            raise HTTPException(409, 'Assignment request is unavailable')
+        db.commit()
+        dispatch_binding(binding.id)
+        return _request_out(req, project, binding=binding)
 
     folder = Folder(project_id=project.id, name=body.title.strip(),
                     description=(body.brief_url or "File request")[:2000], created_by=current_user.id)
@@ -164,11 +182,15 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         expires_at=(datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)) if body.expires_in_days else None,
     )
     db.add(req)
+    db.flush()
+    binding.request_id = req.id
+    binding.folder_id = folder.id
+    binding.review_share_token = link.token
     db.commit()
     db.refresh(req)
     # After the commit, and fail-open: a request the review never heard of is still a working link.
-    review_bridge.register_request(link.token, brand, req.title, body.brief_text, body.brief_url, body.brief_pdf_base64)
-    return _request_out(req, project)
+    dispatch_binding(binding.id)
+    return _request_out(req, project, binding=binding)
 
 
 @router.get("/requests")
@@ -183,14 +205,23 @@ def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = D
             ProjectMember.user_id == current_user.id, ProjectMember.deleted_at.is_(None)).all()]
         q = q.filter((UploadRequest.created_by == current_user.id) | (UploadRequest.project_id.in_(member_projects or [uuid.uuid4()])))
     reqs = q.order_by(UploadRequest.created_at.desc()).limit(100).all()
+    projects = {}
+    for project in db.query(Project).filter(Project.id.in_({r.project_id for r in reqs} or {uuid.uuid4()}), Project.deleted_at.is_(None)).all():
+        try:
+            require_project_role(db, project.id, current_user, ProjectRole.viewer)
+        except HTTPException:
+            continue
+        projects[project.id] = project
+    reqs = [r for r in reqs if r.project_id in projects]
     statuses = review_bridge.request_status([r.review_share_token for r in reqs])
-    projects = {p.id: p for p in db.query(Project).filter(Project.id.in_({r.project_id for r in reqs} or {uuid.uuid4()})).all()}
     assets = {r.id: _submitted_assets(db, r) for r in reqs}
     stats = review_bridge.asset_stats([str(a.id) for items in assets.values() for a in items])
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
+    bindings = {b.request_id: b for b in db.query(ChecklistBinding).filter(
+        ChecklistBinding.request_id.in_([r.id for r in reqs]), ChecklistBinding.deleted_at.is_(None)).all()}
     out = [_request_out(r, projects.get(r.project_id),
         _request_gate(_review_assets(db, r, assets[r.id], reviewer, stats, include_media=False), statuses.get(r.review_share_token)),
-        len(assets[r.id])) for r in reqs]
+        len(assets[r.id]), bindings.get(r.id)) for r in reqs]
     db.commit()  # Persist observed campaign usage after assembling the response.
     return out
 
@@ -534,8 +565,11 @@ def _version_review(db, req, asset, version, reviewer, evidence, include_media=T
         withdrawn = {r.parent_id for r in db.query(Comment).filter(
             Comment.asset_id == asset.id, Comment.version_id == version.id, Comment.guest_author_id == reviewer.id,
             Comment.parent_id.isnot(None), Comment.deleted_at.is_(None), Comment.body.like("You're right%")).all()}
+        from ..schemas.comment import public_review_source
         comments = [{'id': str(c.id), 't': c.timecode_start, 'body': c.body.replace('Must fix — ', '', 1),
-                     'must_fix': c.body.startswith('Must fix')} for c in rows if c.id not in withdrawn]
+                     'must_fix': c.body.startswith('Must fix'),
+                     'review_source': public_review_source(getattr(c, 'review_source', None))}
+                    for c in rows if c.id not in withdrawn]
     state = editor_review_state(version, evidence)
     # Visible unresolved blockers must never be contradicted by a green engine projection.
     if state == 'clear' and any(c.get('must_fix') for c in comments):
@@ -575,8 +609,12 @@ def _review_assets(db, req, assets, reviewer, stats, include_media=True):
             RequestUpload.asset_id == asset.id, RequestUpload.version_number == current.version_number).first() if current else None
         if current and current.processing_status != ProcessingStatus.uploading and (not record or not record.submitted_at):
             entry['review_state'] = 'unavailable'
-        if record and record.submitted_at and (entry.get('review_progress') or {}).get('stage') == 'waiting':
+        if record and record.submitted_at and entry.get('review_progress'):
             entry['review_progress']['queued_at'] = record.submitted_at.isoformat()
+            submitted = record.submitted_at
+            if submitted.tzinfo is None:
+                submitted = submitted.replace(tzinfo=timezone.utc)
+            entry['review_progress']['elapsedSeconds'] = max(0, (datetime.now(timezone.utc) - submitted).total_seconds())
         entry['versions'] = [{'id': str(v.id), 'version_number': v.version_number, 'processing': v.processing_status.value} for v in versions]
         out.append(entry)
     from ..services.campaign_usage import record_request_successes

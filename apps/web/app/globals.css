@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+.comment-source-label {
+  color: oklch(0.88 0 0);
+  background: oklch(0.28 0 0);
+}
+
+[data-theme="light"] .comment-source-label {
+  color: oklch(0.37 0 0);
+  background: oklch(0.95 0 0);
+}
+
 :root,
 [data-theme="dark"] {
   /* Aditor platform v2 (2026-09-28): dark-first, true-black base, one orange accent, glass.
@@ -568,7 +578,7 @@ button:not(:disabled), summary { cursor: pointer; }
 .review-analysis[data-scanning="false"] .review-analysis-scan { animation: none; transform: translateY(calc(100% - 8px)); opacity: .12; }
 .review-analysis[data-scanning="false"] .review-frame-grid, .review-analysis[data-scanning="false"] .review-frame-target { opacity: .18; }
 .review-frame-grid, .review-frame-target { transition: opacity 150ms; }
-.review-progress-fill { background: color-mix(in oklch, var(--accent) 55%, transparent); overflow: hidden; transition: width 150ms ease-out; }
+.review-progress-fill { width: 100%; overflow: hidden; }
 .review-progress-activity { animation: review-progress-activity 2s linear infinite; }
 .review-step-text { animation: review-step-enter 150ms ease-out; }
 .review-analysis[data-paused="true"] .review-analysis-scan, .review-analysis[data-paused="true"] .review-progress-activity { animation-play-state: paused; }

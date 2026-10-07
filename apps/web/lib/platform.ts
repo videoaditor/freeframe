@@ -32,6 +32,8 @@ export interface FileRequest {
   status: GateStatus
   open_must_fixes: number
   created_at: string | null
+  checklist_binding_id?: string | null
+  checklist?: import('./checklist').ChecklistState | null
 }
 
 export interface EditorStats {
@@ -57,7 +59,7 @@ export function editorAccuracy(editors: EditorStats[]) {
   return { average, count: rated.length, outliers }
 }
 
-export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional' }
+export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional'; review_source?: import('@/types').ReviewSource | null }
 
 export interface TimeSaved {
   days: number
@@ -183,7 +185,7 @@ export async function tryReview(
 // ── Owner ──────────────────────────────────────────────────────────────────────
 
 export const listRequests = () => api.get<FileRequest[]>('/requests')
-export const createRequest = (body: { project_id: string; title: string; brief_text?: string; brief_url?: string; brief_pdf_base64?: string }) =>
+export const createRequest = (body: { project_id: string; title: string; idempotency_key?: string; brief_text?: string; brief_url?: string; brief_pdf_base64?: string }) =>
   api.post<FileRequest>('/requests', body)
 export const revokeRequest = (id: string) => api.delete(`/requests/${id}`)
 export const getTimeSaved = (days = 30) => api.get<TimeSaved>(`/insights/time-saved?days=${days}`)
@@ -253,7 +255,17 @@ export interface RequestView {
   expires_at: string | null
 }
 
+export interface ReviewTimeRange {
+  lowerSeconds: number; upperSeconds: number; sampleCount: number
+  scope: 'submission-to-publication' | 'phase-conditioned-remaining' | 'analysis'
+}
+export interface ReviewTiming {
+  schema_version: 'autoreview.timing.v1'; calibration: 'measured' | 'collecting'
+  started_at?: number; server_now?: number; phase_started_at?: number; phase?: string
+  total?: ReviewTimeRange; remaining?: ReviewTimeRange; analysis?: ReviewTimeRange
+}
 export interface ReviewProgress {
+  elapsedSeconds?: number; timing?: ReviewTiming
   stage: 'waiting' | 'reading' | 'failed' | 'skipped' | 'done'
   step?: 'preparing' | 'measuring' | 'analysing' | 'finishing'
   version_id?: string; queued_at?: string

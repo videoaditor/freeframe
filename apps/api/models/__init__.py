@@ -13,3 +13,4 @@ from .upload_request import UploadRequest, RequestUpload
 
 from .product_feedback import ProductFeedback, FeedbackDigest
 from .campaign_review import CampaignReview
+from .checklist_binding import ChecklistBinding

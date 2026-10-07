@@ -13,6 +13,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.asset import Asset
 from ..models.folder import Folder
+from ..models.share import ShareLink
 from ..models.project import Project, ProjectRole
 from ..models.user import User
 from ..schemas.folder import (
@@ -166,6 +167,34 @@ def create_folder(
 ):
     require_project_role(db, project_id, current_user, ProjectRole.editor)
 
+    binding = None
+    if body.checklist_binding_id:
+        if getattr(current_user, 'is_staff', True) is False:
+            raise HTTPException(403, 'Staff only')
+        from ..services.checklists import binding_for_folder
+        binding = binding_for_folder(db, body.checklist_binding_id, project_id, body.description)
+        if binding.folder_id:
+            folder = _get_folder(db, binding.folder_id)
+            if folder.project_id != project_id:
+                raise HTTPException(404, 'Folder not found')
+            return _folder_to_response(db, folder)
+
+    if body.existing_folder_id:
+        if binding is None:
+            raise HTTPException(400, 'Existing folder adoption requires a checklist')
+        folder = _get_folder(db, body.existing_folder_id)
+        if folder.project_id != project_id:
+            raise HTTPException(404, 'Folder not found')
+        binding_for_folder(db, binding.id, project_id, folder.description)
+        binding.folder_id = folder.id
+        existing_link = db.query(ShareLink).filter(ShareLink.folder_id == folder.id, ShareLink.deleted_at.is_(None),
+            ShareLink.title == 'Auto Review').first()
+        binding.review_share_token = existing_link.token if existing_link else None
+        db.commit()
+        from ..services.checklists import dispatch_binding
+        dispatch_binding(binding.id)
+        return _folder_to_response(db, folder)
+
     # Validate parent exists and belongs to project
     if body.parent_id:
         parent = _get_folder(db, body.parent_id)
@@ -204,12 +233,18 @@ def create_folder(
     # A standing link for the automation, created WITH the hand-in so nobody has to remember.
     # Off unless a webhook URL is configured. See services/automation_share.py.
     link = None if customer else automation_share.create_standing_folder_link(db, project_id, folder.id, current_user.id)
+    if binding is not None:
+        binding.folder_id = folder.id
+        binding.review_share_token = link.token if link is not None else None
     db.commit()
     db.refresh(folder)
     # Announce AFTER the commit: a webhook that fires for a folder the database then rolls back
     # would have the automation watching something that does not exist.
     if link is not None:
         automation_share.announce_folder(folder, link)
+    if binding is not None:
+        from ..services.checklists import dispatch_binding
+        dispatch_binding(binding.id)
     return _folder_to_response(db, folder)
 
 
