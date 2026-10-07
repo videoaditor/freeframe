@@ -133,12 +133,13 @@ services:
         condition: service_healthy
     command: >
       sh -c "cd /workspace/apps/api && alembic upgrade head && cd /workspace &&
-      gunicorn apps.api.main:app
+      exec gunicorn apps.api.main:app
       -w $${API_WORKERS:-4}
       -k uvicorn.workers.UvicornWorker
       --bind 0.0.0.0:8000
       --timeout 120
       --graceful-timeout 30"
+    stop_grace_period: 45s
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
