@@ -102,11 +102,11 @@ export function ProductFeedback() {
               {message.length > 4000 && <p role="alert" className="text-sm">Please shorten the text to 4,000 characters. Your audio stays attached.</p>}
               <div className="flex items-center justify-between gap-3">
                 {voice.phase === 'recording' || voice.phase === 'starting' ? (
-                  <Button type="button" variant="secondary" size="lg" onClick={voice.stop}><Square size={14} aria-hidden="true" />{voice.phase === 'starting' ? 'Cancel' : `Stop · ${Math.floor(voice.seconds / 60)}:${String(voice.seconds % 60).padStart(2, '0')}`}</Button>
+                  <Button type="button" variant="secondary" size="lg" onClick={voice.stop}><Square size={12} aria-hidden="true" />{voice.phase === 'recording' && <span aria-hidden="true" className="feedback-wave flex h-5 items-center gap-[2px]">{[.35, .65, .85, 1, .85, .65, .35].map((weight, index) => <span key={index} className="h-5 w-[3px] rounded-full bg-current transition-transform duration-100 ease-out motion-reduce:!transform-none motion-reduce:!h-1" style={{ transform: `scaleY(${.15 + (voice.level || 0) * .85 * weight})` }} />)}</span>}{voice.phase === 'starting' ? 'Cancel' : `Stop · ${Math.floor(voice.seconds / 60)}:${String(voice.seconds % 60).padStart(2, '0')}`}</Button>
                 ) : <Button type="button" variant="ghost" size="lg" className="-ml-2 px-2" disabled={sending || voice.busy || Boolean(voice.audioUrl)} onClick={() => void voice.start()}><Mic size={17} aria-hidden="true" />{voice.phase === 'uploading' ? 'Saving audio…' : voice.phase === 'transcribing' ? 'Dictating…' : 'Dictate'}</Button>}
                 <Button type="submit" size="lg" loading={sending} aria-label={sending ? 'Saving feedback…' : 'Send feedback'} disabled={voice.busy || voice.unsaved || message.length > 4000 || (!message.trim() && !voice.recordingId)}>{sending ? 'Sending…' : <>Send<ArrowUp size={17} aria-hidden="true" /></>}</Button>
               </div>
-              <p className="text-xs leading-4 text-text-secondary">Voice notes are saved and transcribed by Wispr. Up to 2 min.</p>
+              <p className="text-xs leading-4 text-text-secondary">Your recording is saved with your feedback. Up to 2 min.</p>
             </form>
           )}
         </Dialog.Content>

@@ -63,7 +63,7 @@ it('retains original and upload ID after network failure, then retries safely', 
   expect(result.current.recordingId).toBe('audio-1')
 })
 
-it('keeps the saved recording attachable when Wispr is unavailable', async () => {
+it('keeps the saved recording attachable when local dictation is unavailable', async () => {
   vi.mocked(api.post).mockResolvedValue({ status: 'unavailable', text: null })
   const onTranscript = vi.fn()
   const { result } = renderHook(() => useFeedbackRecording(onTranscript))
@@ -116,4 +116,29 @@ it('stops before the strict two-minute server limit and saves without manual act
   expect(recorder.state).toBe('inactive')
   expect(stopTrack).toHaveBeenCalled()
   expect(result.current.recordingId).toBe('audio-1')
+})
+
+it('drives the wave from microphone samples and closes the analyser when stopped', async () => {
+  vi.useFakeTimers()
+  const close = vi.fn().mockResolvedValue(undefined)
+  const disconnect = vi.fn()
+  let sample = 128
+  class FakeAudioContext {
+    createAnalyser() { return { fftSize: 256, getByteTimeDomainData: (data: Uint8Array) => data.fill(sample) } }
+    createMediaStreamSource() { return { connect: vi.fn(), disconnect } }
+    close = close
+    resume = vi.fn().mockResolvedValue(undefined)
+  }
+  vi.stubGlobal('AudioContext', FakeAudioContext)
+  const { result } = renderHook(() => useFeedbackRecording(vi.fn()))
+  await act(async () => result.current.start())
+  await act(async () => vi.advanceTimersByTimeAsync(80))
+  expect(result.current.level).toBe(0)
+  sample = 180
+  await act(async () => vi.advanceTimersByTimeAsync(80))
+  expect(result.current.level).toBeGreaterThan(0)
+  await act(async () => result.current.stop())
+  expect(result.current.level).toBe(0)
+  expect(close).toHaveBeenCalledOnce()
+  expect(disconnect).toHaveBeenCalledOnce()
 })

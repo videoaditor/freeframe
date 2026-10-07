@@ -59,9 +59,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 90
     frontend_url: str = "http://localhost:3000"
-    # Optional server-side dictation; originals remain saved without a provider key.
-    wispr_api_key: str = ""
-    wispr_api_url: str = "https://platform-api.wisprflow.ai/api/v1/dash/api"
+    # Optional local whisper.cpp dictation; originals remain saved without a model.
+    product_feedback_whisper_binary: str = "whisper-cli"
+    product_feedback_whisper_model: str = ""
+    product_feedback_whisper_threads: int = Field(default=2, ge=1, le=8)
     product_feedback_audio_max_bytes: int = Field(default=8 * 1024 * 1024, ge=1024, le=25 * 1024 * 1024)
     product_feedback_audio_max_seconds: int = Field(default=120, ge=1, le=360)
     product_feedback_audio_timeout_seconds: int = Field(default=30, ge=1, le=120)

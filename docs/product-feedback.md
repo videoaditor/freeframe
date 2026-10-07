@@ -12,7 +12,11 @@ The microphone records only after an explicit click and browser permission. The 
 
 `POST /product-feedback/recordings` accepts an authenticated multipart `file` and UUID `recording_id`. It validates MIME, container signature, size and decoded duration, saves the original under private `product-feedback/audio/`, then commits its receipt. Retries with the same author, ID and content return the same receipt; conflicting content is rejected. The default caps are 8 MB and 120 seconds. Conversion uses bounded FFmpeg execution and mono 16 kHz PCM WAV. Browser uploads support WebM, Ogg, MP4 and WAV.
 
-`POST /product-feedback/recordings/{id}/transcribe` is owner-only and calls Wispr server-side. An absent key or provider failure preserves the saved original. Successful transcripts are cached; row locking serializes concurrent retries. Upload and transcription each permit 10 requests per 10 minutes per IP using the existing limiter. No provider key reaches the browser. Contract: [Wispr REST quickstart](https://api-docs.wisprflow.ai/rest_api_quickstart). API access requires an approved organization and key from [Wispr Platform](https://platform.wisprflow.ai); a consumer desktop subscription does not configure this integration.
+`POST /product-feedback/recordings/{id}/transcribe` is owner-only and runs local [whisper.cpp](https://github.com/ggml-org/whisper.cpp), the open-source Whisper engine used by [OpenWhispr](https://github.com/OpenWhispr/openwhispr). It does not embed the OpenWhispr desktop app or call Wispr Cloud. A missing model/binary, timeout or transcription failure preserves the saved original. Successful transcripts are cached; row locking serializes concurrent retries. Upload and transcription each permit 10 requests per 10 minutes per IP. Audio stays on the existing storage/API infrastructure. CPU inference uses two threads by default, language auto-detection and an explicit process timeout. Temporary decoded audio and text are cleaned on success and failure.
+
+Install a compatible `whisper-cli` binary in the API runtime and mount a multilingual GGML model read-only; set the absolute model path below. This change does not automatically download models or alter the production container. Local deployment smoke test used the installed whisper.cpp with multilingual `ggml-base.bin`. A desktop installation on a customer's computer is not required. Larger models may improve accuracy but must be benchmarked within the configured timeout before rollout. The original and editable text remain available when the model makes mistakes.
+
+While recording, a compact monochrome wave follows the microphone amplitude. Silence shows a quiet baseline; reduced-motion uses stationary bars. The analyser never connects to speakers, and stop/close/unmount releases its resources.
 
 Feedback submissions may attach an owned `recording_id`, with text or audio alone. The staff queue fetches playback on demand through `GET /product-feedback/recordings/{id}`; only owner/staff can obtain the five-minute private playback URL. Original audio remains stored if transcription fails or the draft is not submitted; removing it from the editor detaches it from that draft and is not a server deletion. No automatic retention cleanup is added in this change. Audio-only daily digest items point to the staff queue, never a signed media URL.
 
@@ -22,11 +26,12 @@ Apply the Alembic migration with the normal release procedure, and run the exist
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `WISPR_API_KEY` | Empty | Optional server-side dictation key; no key still allows voice notes |
-| `WISPR_API_URL` | `https://platform-api.wisprflow.ai/api/v1/dash/api` | Official REST endpoint |
+| `PRODUCT_FEEDBACK_WHISPER_BINARY` | `whisper-cli` | Installed local executable in the API runtime |
+| `PRODUCT_FEEDBACK_WHISPER_MODEL` | Empty | Absolute read-only GGML model path; absent still allows voice notes |
+| `PRODUCT_FEEDBACK_WHISPER_THREADS` | `2` | CPU threads per transcription, 1–8 |
 | `PRODUCT_FEEDBACK_AUDIO_MAX_BYTES` | `8388608` | Server upload cap |
 | `PRODUCT_FEEDBACK_AUDIO_MAX_SECONDS` | `120` | Server duration cap; browser stops at 119 s |
-| `PRODUCT_FEEDBACK_AUDIO_TIMEOUT_SECONDS` | `30` | FFmpeg/provider timeout |
+| `PRODUCT_FEEDBACK_AUDIO_TIMEOUT_SECONDS` | `30` | FFmpeg/local transcription timeout |
 | `PRODUCT_FEEDBACK_SLACK_TOKEN` | Empty | Existing Slack bot token; absent disables delivery, not intake |
 | `PRODUCT_FEEDBACK_SLACK_CHANNEL` | `C07UL6BAG1Z` | Verified private #automations channel |
 | `PRODUCT_FEEDBACK_DIGEST_HOUR_UTC` | `0` | Daily UTC hour, 0–23 |
@@ -61,3 +66,6 @@ Local mocks cover durable intake, author-scoped idempotency, customer rejection 
 Backend: 490 passed / 51 existing environment-dependent skips. Tests exercise actual FFmpeg conversion for supported containers; storage and Wispr responses are mocked. A separate disposable PostgreSQL 16 container passed the full migration chain, latest migration downgrade, re-upgrade and foreign-key inspection. Frontend checks cover draft/retry identity, microphone denial/cancellation/cleanup, automatic stop, upload-before-transcription, saved-audio fallback, audio-only submit and preservation of typed edits. Desktop/mobile light/dark screenshots are in `docs/design/feedback-bubble/compact-*`.
 
 No live Wispr request, live microphone capture, production migration, production audio upload or Slack delivery is claimed. Both WISPR_API_KEY and PRODUCT_FEEDBACK_SLACK_TOKEN were absent in the read-only production configuration check. This revision remains in PR #65 until deployment and provider acceptance.
+
+## Open-source revision (2026-10-07)
+Supersedes the Wispr-specific configuration above in the historical verification notes. Local real-audio smoke test transcribed a 39-second clip in 18.45 seconds on this Mac with CPU2/base. Raw text had recognition errors, so the editor remains editable; this is not a quality guarantee or production benchmark. Production whisper binary/model and microphone-to-storage acceptance remain unverified. No Wispr key is required.

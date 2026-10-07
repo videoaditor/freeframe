@@ -1,5 +1,4 @@
 """Voice feedback must survive transcription failures and stay private."""
-import base64
 import hashlib
 import io
 import uuid
@@ -7,7 +6,8 @@ import wave
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import httpx
+import subprocess
+from pathlib import Path
 import pytest
 
 
@@ -95,7 +95,7 @@ def test_playback_owner_and_staff_get_private_link(client, auth_headers, test_us
 
 def test_unconfigured_transcription_preserves_saved_audio(client, auth_headers, test_user, mock_db, monkeypatch):
     from apps.api.config import settings
-    monkeypatch.setattr(settings, 'wispr_api_key', '')
+    monkeypatch.setattr(settings, 'product_feedback_whisper_model', '')
     row = recording(test_user)
     mock_db.first.return_value = row
     response = client.post(f'/product-feedback/recordings/{row.id}/transcribe', headers=auth_headers)
@@ -106,26 +106,22 @@ def test_unconfigured_transcription_preserves_saved_audio(client, auth_headers, 
 
 def test_provider_failure_preserves_audio_then_retry_caches_text(client, auth_headers, test_user, mock_db, monkeypatch):
     from apps.api.config import settings
-    monkeypatch.setattr(settings, 'wispr_api_key', 'test-key')
+    monkeypatch.setattr(settings, 'product_feedback_whisper_model', '/models/ggml-base.bin')
     row = recording(test_user)
     mock_db.first.return_value = row
-    with patch('apps.api.services.s3_service.get_s3_client') as s3, patch('apps.api.services.feedback_recordings.httpx.post') as post:
+    with patch('apps.api.services.s3_service.get_s3_client') as s3, patch('apps.api.services.feedback_recordings.transcribe_audio') as transcribe:
         s3.return_value.get_object.return_value = {'Body': io.BytesIO(wav())}
-        post.side_effect = httpx.ReadTimeout('timed out')
+        transcribe.side_effect = subprocess.TimeoutExpired('whisper-cli', 30)
         endpoint = f'/product-feedback/recordings/{row.id}/transcribe'
         assert client.post(endpoint, headers=auth_headers).json() == {'status': 'failed', 'text': None}
         assert row.transcript is None
         assert row.s3_key == 'product-feedback/audio/test.wav'
         s3.return_value.get_object.return_value = {'Body': io.BytesIO(wav())}
-        post.side_effect = None
-        post.return_value = httpx.Response(200, json={'text': 'Upload does not work.'}, request=httpx.Request('POST', settings.wispr_api_url))
+        transcribe.side_effect = None
+        transcribe.return_value = 'Upload does not work.'
         assert client.post(endpoint, headers=auth_headers).json() == {'status': 'transcribed', 'text': 'Upload does not work.'}
-        assert post.call_args.kwargs['headers'] == {'Authorization': 'Bearer test-key'}
-        converted = base64.b64decode(post.call_args.kwargs['json']['audio'])
-        with wave.open(io.BytesIO(converted)) as audio:
-            assert audio.getframerate() == 16000
         assert client.post(endpoint, headers=auth_headers).json()['text'] == 'Upload does not work.'
-        assert post.call_count == 2
+        assert transcribe.call_count == 2
 
 
 def test_audio_only_feedback_attaches_owned_recording(client, auth_headers, test_user, mock_db):
@@ -241,3 +237,34 @@ def test_transcription_locks_recording_before_using_cached_result(client, auth_h
     assert response.json() == {'status': 'transcribed', 'text': 'Already transcribed.'}
     mock_db.with_for_update.assert_called_once()
     provider.assert_not_called()
+
+
+def test_local_whisper_uses_wav_without_shell_and_cleans_temporary_audio(monkeypatch):
+    from apps.api.config import settings
+    from apps.api.services.feedback_recordings import transcribe_audio
+    monkeypatch.setattr(settings, 'product_feedback_whisper_model', '/models/ggml-base.bin')
+    paths = []
+    def run(args, **kwargs):
+        assert args[0] == 'whisper-cli'
+        assert kwargs.get('shell', False) is False
+        assert kwargs['timeout'] > 0
+        assert args[args.index('-l') + 1] == 'auto'
+        path = Path(args[args.index('-f') + 1]); paths.append(path)
+        with wave.open(str(path)) as audio:
+            assert audio.getframerate() == 16000
+        Path(args[args.index('-of') + 1] + '.txt').write_text('  Make uploads faster.  ')
+    with patch('apps.api.services.feedback_recordings.normalize_audio', return_value=wav()), patch('apps.api.services.feedback_recordings.subprocess.run', side_effect=run):
+        assert transcribe_audio(wav()) == 'Make uploads faster.'
+    assert paths and not paths[0].exists()
+
+
+@pytest.mark.parametrize('output', ['', 'x' * 4001])
+def test_local_whisper_rejects_empty_or_oversized_transcript(monkeypatch, output):
+    from apps.api.config import settings
+    from apps.api.services.feedback_recordings import transcribe_audio
+    monkeypatch.setattr(settings, 'product_feedback_whisper_model', '/models/ggml-base.bin')
+    def run(args, **kwargs):
+        Path(args[args.index('-of') + 1] + '.txt').write_text(output)
+    with patch('apps.api.services.feedback_recordings.normalize_audio', return_value=wav()), patch('apps.api.services.feedback_recordings.subprocess.run', side_effect=run):
+        with pytest.raises(ValueError):
+            transcribe_audio(wav())

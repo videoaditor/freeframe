@@ -17,6 +17,8 @@ export function useFeedbackRecording(onTranscript: (text: string) => void) {
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [seconds, setSeconds] = useState(0)
+  const [level, setLevel] = useState(0)
+  const meter = useRef<{ context: AudioContext; source: MediaStreamAudioSourceNode; timer: ReturnType<typeof setInterval> } | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
   const stream = useRef<MediaStream | null>(null)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -28,6 +30,13 @@ export function useFeedbackRecording(onTranscript: (text: string) => void) {
   transcriptCallback.current = onTranscript
 
   function releaseMic() {
+    if (meter.current) {
+      clearInterval(meter.current.timer)
+      meter.current.source.disconnect()
+      void meter.current.context.close().catch(() => {})
+      meter.current = null
+    }
+    if (mounted.current) setLevel(0)
     if (timer.current) clearInterval(timer.current)
     timer.current = null
     stream.current?.getTracks().forEach(track => track.stop())
@@ -125,6 +134,25 @@ export function useFeedbackRecording(onTranscript: (text: string) => void) {
         if (active.state === 'recording') active.stop()
         releaseMic()
       }
+      // Decorative only: recording still works if Web Audio is unavailable.
+      if (typeof AudioContext !== 'undefined') {
+        let context: AudioContext | undefined
+        try {
+          context = new AudioContext()
+          const analyser = context.createAnalyser()
+          analyser.fftSize = 256
+          const source = context.createMediaStreamSource(input)
+          source.connect(analyser)
+          const samples = new Uint8Array(analyser.fftSize)
+          const meterTimer = setInterval(() => {
+            analyser.getByteTimeDomainData(samples)
+            const rms = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length)
+            if (mounted.current) setLevel(Math.min(1, rms * 5))
+          }, 80)
+          meter.current = { context, source, timer: meterTimer }
+          void context.resume().catch(() => {})
+        } catch { if (context) void context.close().catch(() => {}) }
+      }
       active.start(1000)
       setPhase('recording')
       const started = Date.now()
@@ -152,7 +180,7 @@ export function useFeedbackRecording(onTranscript: (text: string) => void) {
 
   return {
     start, stop, reset, retry: () => clipRef.current && !working.current ? save(clipRef.current) : Promise.resolve(),
-    phase, seconds, error, note, recordingId, audioUrl: clip?.url,
+    phase, seconds, level, error, note, recordingId, audioUrl: clip?.url,
     busy: phase !== 'idle', unsaved: Boolean(clip && !recordingId),
   }
 }

@@ -163,7 +163,7 @@ def transcribe_recording(recording_id: uuid.UUID, user: User = Depends(get_ident
     row = get_recording(recording_id, user, db, lock=True)
     if row.transcript is not None:
         return {'status': 'transcribed', 'text': row.transcript}
-    if not settings.wispr_api_key:
+    if not settings.product_feedback_whisper_model:
         return {'status': 'unavailable', 'text': None}
     try:
         body = s3_service.get_s3_client().get_object(Bucket=settings.s3_bucket, Key=row.s3_key)['Body']

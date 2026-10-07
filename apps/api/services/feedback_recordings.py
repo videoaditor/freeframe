@@ -1,12 +1,10 @@
-"""Bounded audio validation/conversion and server-side Wispr transcription."""
-import base64
+"""Bounded audio validation/conversion and local whisper.cpp transcription."""
 import io
 from pathlib import Path
 import subprocess
 import tempfile
 import wave
 
-import httpx
 from fastapi import HTTPException
 
 from ..config import settings
@@ -57,16 +55,24 @@ def normalize_audio(data: bytes) -> bytes:
 
 
 def transcribe_audio(data: bytes) -> str:
-    response = httpx.post(settings.wispr_api_url,
-                          headers={'Authorization': f'Bearer {settings.wispr_api_key}'},
-                          json={'audio': base64.b64encode(normalize_audio(data)).decode('ascii')},
-                          timeout=settings.product_feedback_audio_timeout_seconds)
-    response.raise_for_status()
-    text = response.json().get('text')
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError('No transcript returned')
-    # Match the feedback editor limit; an unexpectedly large response is a failure,
-    # never a silent truncation. The original recording remains available.
-    if len(text.strip()) > 4000:
-        raise ValueError('Transcript exceeds feedback limit')
-    return text.strip()
+    # Same open local engine used by OpenWhispr; no desktop app or cloud key.
+    # Only trusted server configuration supplies binary/model paths. No shell.
+    with tempfile.TemporaryDirectory(prefix='feedback-whisper-') as directory:
+        source = Path(directory) / 'audio.wav'
+        output = Path(directory) / 'transcript'
+        source.write_bytes(normalize_audio(data))
+        subprocess.run([
+            settings.product_feedback_whisper_binary,
+            '-m', settings.product_feedback_whisper_model,
+            '-f', str(source), '-l', 'auto', '-otxt', '-of', str(output),
+            '-t', str(settings.product_feedback_whisper_threads), '-ng',
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=settings.product_feedback_audio_timeout_seconds)
+        with output.with_suffix('.txt').open(encoding='utf-8') as transcript:
+            raw = transcript.read(16001)
+            if len(raw) > 16000:
+                raise ValueError('Transcript exceeds feedback limit')
+            text = raw.strip()
+    if not text or len(text) > 4000:
+        raise ValueError('No usable transcript returned')
+    return text
