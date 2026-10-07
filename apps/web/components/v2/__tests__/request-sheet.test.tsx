@@ -36,7 +36,7 @@ it('exposes links beside files and keeps a failed request intact for retry', asy
   fireEvent.change(screen.getByRole('textbox', { name: 'Briefing text or link' }), { target: { value: 'https://docs.google.com/document/d/test' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Please retry')
-  expect(createRequest).toHaveBeenCalledWith({ project_id: 'brand1', title: 'Launch', brief_text: '', brief_url: 'https://docs.google.com/document/d/test', brief_pdf_base64: '' })
+  expect(createRequest).toHaveBeenCalledWith({ project_id: 'brand1', title: 'Launch', brief_text: '', brief_url: 'https://docs.google.com/document/d/test', brief_pdf_base64: '', idempotency_key: expect.any(String) })
   expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Launch')
 })
 it('sends Markdown contents through brief_text, along with an optional link', async () => {
@@ -45,7 +45,7 @@ it('sends Markdown contents through brief_text, along with an optional link', as
   fireEvent.change(view.container.ownerDocument.querySelector('input[type=file]')!, { target: { files: [file] } })
   fireEvent.change(screen.getByRole('textbox', { name: 'Briefing text or link' }), { target: { value: 'https://example.test/brief' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
-  await waitFor(() => expect(createRequest).toHaveBeenCalledWith({ project_id: 'brand1', title: 'Launch', brief_text: '# Launch\nKeep the logo visible.', brief_url: 'https://example.test/brief', brief_pdf_base64: '' }))
+  await waitFor(() => expect(createRequest).toHaveBeenCalledWith({ project_id: 'brand1', title: 'Launch', brief_text: '# Launch\nKeep the logo visible.', brief_url: 'https://example.test/brief', brief_pdf_base64: '', idempotency_key: expect.any(String) }))
 })
 it('does not send unsupported files to the server', async () => {
   const view = await mount()
@@ -53,4 +53,33 @@ it('does not send unsupported files to the server', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('PDF, Markdown')
   expect(createRequest).not.toHaveBeenCalled()
+})
+it('reuses the create identity after a lost response and changes it for a new brief', async () => {
+  await mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await screen.findByRole('alert')
+  const first=vi.mocked(createRequest).mock.calls[0][0].idempotency_key
+  expect(first).toEqual(expect.any(String))
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await waitFor(()=>expect(createRequest).toHaveBeenCalledTimes(2))
+  expect(vi.mocked(createRequest).mock.calls[1][0].idempotency_key).toBe(first)
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Create link'})).not.toBeDisabled())
+  fireEvent.change(screen.getByRole('textbox',{name:'Briefing text or link'}),{target:{value:'New briefing'}})
+  fireEvent.click(screen.getByRole('button',{name:'Create link'}))
+  await waitFor(()=>expect(createRequest).toHaveBeenCalledTimes(3))
+  expect(vi.mocked(createRequest).mock.calls[2][0].idempotency_key).not.toBe(first)
+})
+
+it('starts a new assignment when the sheet is reopened with the same brief', async () => {
+  const view = await mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await screen.findByRole('alert')
+  const first=vi.mocked(createRequest).mock.calls[0][0].idempotency_key
+  const config={provider:()=>new Map(),dedupingInterval:0}
+  view.rerender(<SWRConfig value={config}><RequestSheet open={false} onOpenChange={vi.fn()} /></SWRConfig>)
+  view.rerender(<SWRConfig value={config}><RequestSheet open onOpenChange={vi.fn()} /></SWRConfig>)
+  fireEvent.change(screen.getByRole('textbox', {name:'Title'}), {target:{value:'Launch'}})
+  fireEvent.click(screen.getByRole('button', {name:'Create link'}))
+  await waitFor(()=>expect(createRequest).toHaveBeenCalledTimes(2))
+  expect(vi.mocked(createRequest).mock.calls[1][0].idempotency_key).not.toBe(first)
 })

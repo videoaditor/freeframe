@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Added
+- Private saved review checklists for file requests and Trello hand-ins, with one frozen briefing/rule snapshot shared across versions. Optional Engine preparation can be unavailable while upload links remain usable.
 - Hub current-card links prefill Handin and preserve the selected Trello card through sign-in.
 - Telehealth October preview with server-attested campaign identity, one brand per preview owner, a fixed November 1 Eastern cutoff and a recoverable plan-selection screen. Existing paid AutoReview access remains separate.
 - Durable product feedback with saved receipts, a staff queue and an optional daily Slack digest; draft edits and retries preserve their own submission identity.

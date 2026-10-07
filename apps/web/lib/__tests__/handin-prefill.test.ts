@@ -21,3 +21,11 @@ it('returns Whop sign-in only to a valid Hub hand-in', () => {
     expect(handinReturnPath('?from='+encodeURIComponent(from))).toBe('/home')
   }
 })
+
+it('does not guess a workspace when the card matches several workspaces', async () => {
+  const { uniqueChecklistWorkspace } = await import('../checklist')
+  const projects = [{id:'a',name:'Studio',is_workspace:true},{id:'b',name:'Studio - Workspace',is_workspace:true}]
+  expect(uniqueChecklistWorkspace(projects,'Studio','Launch')).toBeNull()
+  expect(uniqueChecklistWorkspace(projects,'','Launch')).toBeNull()
+  expect(uniqueChecklistWorkspace(projects.slice(0,1),'Studio','Launch')?.id).toBe('a')
+})

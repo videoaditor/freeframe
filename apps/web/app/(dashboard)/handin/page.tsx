@@ -28,6 +28,8 @@ import * as React from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { Check, Film, FolderOpen, Loader2, Upload } from "lucide-react";
+import { SavedChecklist, ChecklistPanel, useChecklistPreparation } from "@/components/v2/checklist";
+import { prepareChecklist, uniqueChecklistWorkspace } from "@/lib/checklist";
 import { api } from "@/lib/api";
 import {
   GATE_BASE,
@@ -51,11 +53,6 @@ import { useUploadStore } from "@/stores/upload-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePageTitle } from "@/hooks/use-page-title";
 import type { Project, ShareLink } from "@/types";
-
-/** Loosely normalize a name for matching a card's brand to a workspace project. */
-function norm(s: string): string {
-  return s.toLowerCase().replace(/\bgmbh\b|\bug\b|\bco\b|\bkg\b|\bb\.?v\.?\b|\bltd\b|\binc\b/g, "").replace(/[^a-z0-9]/g, "");
-}
 
 /** How often to ask the gate for the review once an asset exists. */
 const REVIEW_POLL_MS = 5000;
@@ -160,6 +157,7 @@ export default function HandinPage() {
   // Only an admin (or the brand-onboarding automation) creates a workspace. Editors file into an
   // existing brand workspace - a per-card workspace is what left a share link pointing at nothing.
   const isSuperAdmin = useAuthStore((s) => s.isSuperAdmin);
+  const checklist = useChecklistPreparation(user && user.is_staff !== false && workspace?.kind === "existing" ? workspace.id : null, cardUrl);
 
   // The workspaces the editor can file this hand-in into. The card can't be mapped to a project
   // automatically (projects carry no brand), so the editor picks - pre-filled when we can guess.
@@ -177,16 +175,10 @@ export default function HandinPage() {
   );
 
   // Best-effort pre-select: match the card's brand/name to a "- Workspace" project. The editor
-  // still sees and can change it, so a wrong guess is visible, never silent.
+  // chooses explicitly when more than one workspace matches.
   React.useEffect(() => {
     if (workspace || !projects?.length || !card) return;
-    const hint = norm(String(card.brand || "") + String(card.name || ""));
-    if (!hint) return;
-    const workspaces = projects.filter((p) => p.is_workspace);
-    const hit = workspaces.find((p) => {
-      const n = norm(p.name.replace(/ - workspace$/i, ""));
-      return n.length > 2 && (hint.includes(n) || n.includes(norm(String(card.brand || ""))));
-    });
+    const hit = uniqueChecklistWorkspace(projects, String(card.brand || ""), String(card.name || ""));
     if (hit) setWorkspace({ kind: "existing", id: hit.id, name: hit.name });
   }, [projects, card, workspace]);
 
@@ -366,18 +358,20 @@ export default function HandinPage() {
         card?.name?.trim() ? card : await lookUpCard(cardUrl.trim()).catch(() => card);
       const folderName = (resolvedCard?.name ?? "").trim() || files[0].name;
       const cardKey = (cardUrl.match(/trello\.com\/c\/([A-Za-z0-9]+)/i)?.[1] || "").toLowerCase();
+      const prepared = checklist.data || await prepareChecklist(projectId, cardUrl.trim()).catch(() => undefined);
       const existingFolder = cardKey
         ? await api
             .get<{ id: string; description?: string | null }[]>(`/projects/${projectId}/folders`)
-            .then((fs) => fs.find((f) => (f.description || "").toLowerCase().includes(`/c/${cardKey}`)))
+            .then((fs) => fs.find((f) => (f.description || "").toLowerCase().includes(`/c/${cardKey}`) || (!!prepared?.trello_card_id && (f.description || "").includes(`/c/${prepared.trello_card_id}`))))
             .catch(() => undefined)
         : undefined;
       const folder =
-        existingFolder ??
+        (!prepared && existingFolder) ||
         (await api.post<{ id: string }>(`/projects/${projectId}/folders`, {
           name: folderName,
           parent_id: null,
-          description: cardUrl.trim(),
+          description: prepared?.trello_card_id ? `https://trello.com/c/${prepared.trello_card_id}` : cardUrl.trim(),
+          ...(prepared ? { checklist_binding_id: prepared.id, ...(existingFolder ? { existing_folder_id: existingFolder.id } : {}) } : {}),
         }));
 
       // 3. Every video goes INTO that one folder. They upload together; the
@@ -666,7 +660,9 @@ export default function HandinPage() {
                 ))}
               </ul>
             )}
-            <UploadZone className="mt-2" onFilesSelected={addFiles} />
+            {checklist.data ? <SavedChecklist key={checklist.data.id} bindingId={checklist.data.id} initial={checklist.data} /> : checklist.isLoading ? <ChecklistPanel /> : checklist.error ? <ChecklistPanel error="The card could not be prepared. You can still upload." onRetry={() => checklist.mutate()} /> : null}
+
+          <UploadZone className="mt-2" onFilesSelected={addFiles} />
           </div>
 
           {error && (
