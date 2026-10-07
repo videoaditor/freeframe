@@ -40,7 +40,7 @@ def prepare_checklist(body: ChecklistPrepare, db: Session = Depends(get_db), cur
     card = review_bridge.checklist_card(body.trello_url)
     if not card:
         raise HTTPException(503, 'Card could not be verified; upload remains available')
-    if not re.fullmatch(r'[a-f0-9]{24}', str(card.get('card_id', ''))):
+    if not re.fullmatch(r'[a-f0-9]{24}', str(card.get('card_id', ''))) or not re.fullmatch(r'[A-Za-z0-9]{8}', str(card.get('short_link', ''))):
         raise HTTPException(404, 'Card not found')
     from .requests import project_brand
     # Canonical URL ensures short/full links deduplicate against the same immutable intent.
