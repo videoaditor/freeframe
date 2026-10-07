@@ -1,3 +1,4 @@
+import hmac
 import logging
 import hashlib
 import hmac
@@ -12,6 +13,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -944,6 +946,21 @@ def list_share_comments(
     return _build_comment_responses_batched(asset_id, top_level, db, exclude_internal=True)
 
 
+def automation_comment_id(token, asset_id, version_id, key, authorization):
+    secret = settings.review_bridge_secret
+    if not secret or not hmac.compare_digest(authorization or '', f'Bearer {secret}'):
+        raise HTTPException(403, 'Only the connected reviewer may use a comment idempotency key.')
+    return uuid.uuid5(uuid.NAMESPACE_URL, f'freeframe-review:{token}:{asset_id}:{version_id}:{key}')
+
+
+def validate_comment_version(db, asset_id, version_id):
+    version = db.query(AssetVersion).filter(AssetVersion.id == version_id, AssetVersion.asset_id == asset_id,
+        AssetVersion.deleted_at.is_(None)).first()
+    if not version or (version.processing_status != ProcessingStatus.ready and not (version.processing_status == ProcessingStatus.processing and getattr(version,'iteration_review_ready',False) is True)):
+        raise HTTPException(409, 'This video version is unavailable. Refresh the review.')
+    return version
+
+
 @router.post("/share/{token}/comment", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
 def guest_comment(
     token: str,
@@ -951,6 +968,7 @@ def guest_comment(
     share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
+    authorization: Optional[str] = Header(default=None),
 ):
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
@@ -980,6 +998,20 @@ def guest_comment(
             version_id = latest.id
         else:
             raise HTTPException(status_code=400, detail="No ready version found for this asset")
+
+    if not current_user and (not body.guest_email or not body.guest_name):
+        raise HTTPException(400,'guest_email and guest_name required for anonymous comments')
+    if body.version_id:
+        validate_comment_version(db, asset.id, version_id)
+    comment_id = None
+    if body.idempotency_key:
+        comment_id = automation_comment_id(token, asset.id, version_id, body.idempotency_key, authorization)
+        # Serialize retries even across processes; the unique comment ID is the durable backstop.
+        lock_key = int.from_bytes(comment_id.bytes[:8], 'big', signed=True)
+        db.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': lock_key})
+        prior = db.query(Comment).filter(Comment.id == comment_id).first()
+        if prior:
+            return _build_comment_response(prior, db)
 
     # Determine author: logged-in user or guest
     author_id = None
@@ -1013,6 +1045,8 @@ def guest_comment(
         body=body.body,
         visibility=visibility,
     )
+    if comment_id:
+        comment.id = comment_id
     db.add(comment)
     db.flush()
 

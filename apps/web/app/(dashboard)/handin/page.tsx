@@ -25,6 +25,8 @@
  */
 
 import * as React from "react";
+import { PartsHandin } from "@/components/handin/parts-handin";
+import { partsEnabled } from "@/lib/iterations";
 import Link from "next/link";
 import useSWR from "swr";
 import { Check, Film, FolderOpen, Loader2, Upload } from "lucide-react";
@@ -52,7 +54,7 @@ import { Input } from "@/components/ui/input";
 import { useUploadStore } from "@/stores/upload-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePageTitle } from "@/hooks/use-page-title";
-import type { Project, ShareLink } from "@/types";
+import type { Project } from "@/types";
 
 /** How often to ask the gate for the review once an asset exists. */
 const REVIEW_POLL_MS = 5000;
@@ -69,7 +71,7 @@ function formatSize(bytes: number): string {
 
 type Phase = "form" | "working" | "done";
 
-export default function HandinPage() {
+function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
   usePageTitle("Hand in");
 
   const [cardUrl, setCardUrl] = React.useState("");
@@ -84,6 +86,7 @@ export default function HandinPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
+  const [editorUrl, setEditorUrl] = React.useState<string | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
   // Where the just-created folder lives in FreeFrame, so the editor can open it after handing in.
   const [folderHref, setFolderHref] = React.useState<string | null>(null);
@@ -320,6 +323,7 @@ export default function HandinPage() {
     e.preventDefault();
     if (!files.length || !workspace) return;
 
+    onStarted?.();
     setPhase("working");
     setError(null);
 
@@ -385,27 +389,15 @@ export default function HandinPage() {
         }),
       );
 
-      // 4. The link to post. Creating the folder minted the standing "Auto Review" folder link;
-      //    reuse it - it is folder-scoped (this hand-in only) and already carries the two settings
-      //    the review needs. Only if it is somehow absent do we mint one, with those same settings.
-      setStep("Getting the share link");
-      const shares = await api
-        .get<{ token: string; title?: string; permission: string; is_enabled?: boolean }[]>(`/folders/${folder.id}/shares`)
-        .catch(() => []);
-      const standing = (shares ?? []).find(
-        (s) => s.title === "Auto Review" && s.permission === "comment" && s.is_enabled !== false,
+      // The API binds the existing folder and versions to the native editor.
+      // Canonical origins are server-owned: Whop's iframe origin is not a share URL.
+      setStep("Getting the review link");
+      const request = await api.post<{ url: string; share_url: string; review_share_token: string }>(
+        `/folders/${folder.id}/editor-request`, {},
       );
-      let token: string;
-      if (standing) {
-        token = standing.token;
-      } else {
-        const res = await api.post<ShareLink>(`/folders/${folder.id}/share`, {
-          permission: "comment",
-          allow_download: true,
-        });
-        token = res.token;
-      }
-      const url = `${window.location.origin}/share/${token}`;
+      const token = request.review_share_token;
+      const url = request.share_url;
+      setEditorUrl(request.url);
 
       // 5. Deliver to the Trello card - GATED ON THE REVIEW (Shawn+Saskia, 2026-09-14). This records
       //    the intent to deliver (with the editor's name) and posts the @aditorteam1 comment now IF
@@ -461,7 +453,7 @@ export default function HandinPage() {
     <div className="mx-auto max-w-2xl p-8">
       <h1 className="text-lg font-medium text-text-primary">Hand in</h1>
       <p className="mt-1 text-sm text-text-tertiary">
-        Upload your cut - or all the cuts for this card at once. You get a craft review for each here,
+        Upload your cut - or all the cuts for this card at once. Open each review in the video player,
         and once nothing mandatory is open it&apos;s delivered to your Trello card automatically - one
         link posted there with your name, the card marked done. If a note is wrong, reply to it and it
         gets checked.
@@ -473,6 +465,7 @@ export default function HandinPage() {
               every video; one review per video, labelled when there are several. */}
           <HandinResult
             shareUrl={shareUrl}
+            editorUrl={editorUrl ?? undefined}
             reviews={assets.map((a) => ({
               label: assets.length > 1 ? a.name : undefined,
               review: reviews[a.id] ?? null,
@@ -688,4 +681,17 @@ export default function HandinPage() {
       )}
     </div>
   );
+}
+
+export default function HandinPage() {
+  const [mode, setMode] = React.useState<'components' | 'complete'>('components');
+  const [locked, setLocked] = React.useState(false);
+  const lock = React.useCallback(() => setLocked(true), []);
+  if (!partsEnabled) return <CompleteHandinPage />;
+  return <div className="owner-workspace handin-workspace min-h-full">
+    <div className="mx-auto flex max-w-[1040px] gap-2 px-5 pt-6 sm:px-8" aria-label="Submission format">
+      {(['components', 'complete'] as const).map(value => <button key={value} disabled={locked} aria-pressed={mode === value} onClick={() => setMode(value)} className={`press min-h-11 rounded-full px-4 text-sm font-medium ${mode === value ? 'bg-bg-hover text-text-primary' : 'text-text-secondary'}`}>{value === 'components' ? 'Separate parts' : 'Complete ads'}</button>)}
+    </div>
+    {mode === 'components' ? <PartsHandin onStarted={lock} /> : <CompleteHandinPage onStarted={lock} />}
+  </div>;
 }

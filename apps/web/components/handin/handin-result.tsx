@@ -241,15 +241,22 @@ export interface HandinReviewItem {
  */
 export function HandinResult({
   shareUrl,
+  editorUrl,
   reviews,
 }: {
   shareUrl: string;
+  editorUrl?: string;
   reviews: HandinReviewItem[];
 }) {
   return (
     <div data-testid="handin-result">
       <ShareLinkPanel url={shareUrl} />
-      {reviews.map((item, i) =>
+      {editorUrl ? (
+        <a href={editorUrl} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+          <ExternalLink className="h-4 w-4" />
+          Open review
+        </a>
+      ) : reviews.map((item, i) =>
         item.failedDetail !== undefined ? (
           <ProcessingFailureNotice key={i} label={item.label} detail={item.failedDetail} stageView={item.stageView} />
         ) : (

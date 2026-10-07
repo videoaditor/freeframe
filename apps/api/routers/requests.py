@@ -15,10 +15,12 @@ VERSION - that is how a V2 clears the gate.
 """
 import base64
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Literal
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from botocore.exceptions import ClientError
@@ -43,6 +45,7 @@ from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..models.checklist_binding import ChecklistBinding
 from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
+from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
 from ..services.permissions import effective_project_role, require_project_role
 from ..services.s3_service import (
     abort_multipart_upload, complete_multipart_upload, create_multipart_upload, presign_upload_part,
@@ -110,11 +113,14 @@ def project_brand(db: Session, project: Project) -> str:
 # ── Owner ──────────────────────────────────────────────────────────────────────
 
 class RequestCreate(BaseModel):
+    receive_iterations: bool = False
+    iteration_plan_token: Optional[str] = None
+    aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
     project_id: uuid.UUID
     title: str = Field(min_length=1, max_length=255)
     brief_text: str = ""
     brief_url: str = ""
-    brief_pdf_base64: str = ""
+    brief_pdf_base64: str = Field(default="", max_length=15_000_000)
     idempotency_key: Optional[uuid.UUID] = None
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
 
@@ -125,6 +131,7 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
         "id": str(req.id),
         "token": req.token,
         "url": f"{base}/r/{req.token}",
+        "share_url": f"{base}/share/{req.review_share_token}",
         "title": req.title,
         "project_id": str(req.project_id),
         "project_name": project.name if project else "",
@@ -139,6 +146,7 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
         "checklist_binding_id": str(binding.id) if binding else None,
         "checklist": binding_out(binding) if binding else None,
         **(st or {"status": "reviewing", "open_must_fixes": 0}),
+        **request_fields(req),
     }
 
 
@@ -152,7 +160,9 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
     brand = project_brand(db, project)
     intent = {'brand': brand, 'title': body.title.strip(), 'brief_text': body.brief_text,
         'brief_url': body.brief_url, 'brief_pdf_base64': body.brief_pdf_base64,
-        'expires_in_days': body.expires_in_days}
+        'expires_in_days': body.expires_in_days,
+        **({'receive_iterations': True, 'aspect_ratio': body.aspect_ratio,
+            'iteration_plan_token': body.iteration_plan_token} if body.receive_iterations else {})}
     binding = reserve_binding(db, project.id, current_user.id, f"request:{body.idempotency_key or uuid.uuid4()}", intent)
     if binding.request_id:
         req = db.query(UploadRequest).filter(UploadRequest.id == binding.request_id, UploadRequest.project_id == project.id).first()
@@ -162,6 +172,17 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         dispatch_binding(binding.id)
         return _request_out(req, project, binding=binding)
 
+    manifest = None
+    if body.receive_iterations:
+        from .iterations import require_connected
+        from ..services.iteration_manifest import read_plan
+        require_connected()
+        manifest = {'schema_version':1,'summary':'All selected combinations','slots':[],'recipes':[]}
+        if body.iteration_plan_token:
+            try:
+                manifest=read_plan(body.iteration_plan_token,str(current_user.id),str(project.id),
+                    {'brief_text':body.brief_text,'brief_url':body.brief_url,'brief_pdf_base64':body.brief_pdf_base64})
+            except ValueError as error: raise HTTPException(422,str(error)) from error
     folder = Folder(project_id=project.id, name=body.title.strip(),
                     description=(body.brief_url or "File request")[:2000], created_by=current_user.id)
     db.add(folder)
@@ -179,6 +200,11 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,
         created_by=current_user.id, title=body.title.strip(), brand_slug=brand,
         review_share_token=link.token, brief_excerpt=excerpt,
+        receive_iterations=body.receive_iterations, iteration_manifest=manifest,
+        iteration_state={'submitted':False,'structured':bool(body.iteration_plan_token),
+            'brief_input':{'url':body.brief_url,'pdf':body.brief_pdf_base64}} if body.receive_iterations else None,
+        iteration_mode='components',iteration_ratio=body.aspect_ratio,iteration_brief=body.brief_text,
+        iteration_owner_id=project.created_by if body.receive_iterations else None,
         expires_at=(datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)) if body.expires_in_days else None,
     )
     db.add(req)
@@ -190,6 +216,66 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
     db.refresh(req)
     # After the commit, and fail-open: a request the review never heard of is still a working link.
     dispatch_binding(binding.id)
+    return _request_out(req, project, binding=binding)
+
+
+@router.post('/folders/{folder_id}/editor-request')
+def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    """Give a staff hand-in its native editor without moving files or widening a share."""
+    if getattr(current_user, 'is_staff', False) is not True:
+        raise HTTPException(403, 'Internal hand-in is available to staff.')
+    folder = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).with_for_update().first()
+    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).first() if folder else None
+    if not project or not project.is_workspace:
+        raise HTTPException(404, 'Workspace hand-in not found')
+    require_project_role(db, project.id, current_user, ProjectRole.editor)
+    if not re.fullmatch(r'https://trello\.com/c/(?:[A-Za-z0-9]{8}|[A-Fa-f0-9]{24})(?:/[^?#\s]*)?/?', (folder.description or '').strip()):
+        raise HTTPException(409, 'This folder is not an internal card hand-in.')
+    requests = db.query(UploadRequest).filter(UploadRequest.folder_id == folder.id).limit(2).all()
+    bindings = db.query(ChecklistBinding).filter(ChecklistBinding.folder_id == folder.id,
+        ChecklistBinding.project_id == project.id, ChecklistBinding.deleted_at.is_(None)).limit(2).all()
+    if len(requests) > 1 or len(bindings) > 1:
+        raise HTTPException(409, 'This hand-in has conflicting assignments.')
+    req = requests[0] if requests else None
+    binding = bindings[0] if bindings else None
+    if req and request_state(req, datetime.now(timezone.utc)) != 'live':
+        raise HTTPException(410, 'The editor link was closed by its owner.')
+    if binding and binding.request_id and (not req or binding.request_id != req.id):
+        raise HTTPException(409, 'The checklist belongs to another assignment.')
+    shares = db.query(ShareLink).filter(ShareLink.folder_id == folder.id, ShareLink.deleted_at.is_(None),
+        ShareLink.title == 'Auto Review', ShareLink.permission == SharePermission.comment).all()
+    wanted = req.review_share_token if req else binding.review_share_token if binding else None
+    share = next((s for s in shares if s.token == wanted), None) if wanted else shares[0] if len(shares) == 1 else None
+    if not share or not share.is_enabled or (share.expires_at and share.expires_at <= datetime.now(timezone.utc)):
+        raise HTTPException(409, 'The review share link is unavailable. Open the project to check its sharing settings.')
+    if req is None:
+        req = UploadRequest(token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,
+            created_by=current_user.id, title=folder.name, brand_slug=project_brand(db, project),
+            review_share_token=share.token, brief_excerpt=folder.description,
+            iteration_state={'internal_handin': {'card_url': folder.description}})
+        db.add(req); db.flush()
+    if binding:
+        binding.request_id = req.id
+    if not components(req):
+        now = datetime.now(timezone.utc)
+        for asset in _submitted_assets(db, req):
+            versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id,
+                AssetVersion.deleted_at.is_(None)).all()
+            for version in versions:
+                record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
+                    RequestUpload.asset_id == asset.id, RequestUpload.version_number == version.version_number).first()
+                if not record:
+                    author = db.get(User, version.created_by)
+                    record = RequestUpload(request_id=req.id, asset_id=asset.id, version_number=version.version_number,
+                        uploader_name=author.name, uploader_email=author.email)
+                    db.add(record)
+                if record.submitted_at is None and version.processing_status in (ProcessingStatus.processing, ProcessingStatus.ready):
+                    record.submitted_at = now  # Confirmed adoption time; never invent an earlier transfer clock.
+                if req.completion_versions and req.completion_versions.get(str(asset.id)) != str(version.id) and version == max(versions, key=lambda v: v.version_number):
+                    req.completed_at = None
+                    req.completion_versions = None
+    db.commit()
     return _request_out(req, project, binding=binding)
 
 
@@ -271,7 +357,7 @@ def _project_brand(db: Session, project_id: uuid.UUID, user: User, role: Project
 
 @router.get("/insights/rules")
 def list_rules(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    brand = _project_brand(db, project_id, current_user, ProjectRole.viewer)
+    brand = _project_brand(db, project_id, current_user, ProjectRole.owner)
     r = review_bridge.rules(brand)
     if r is None:
         raise HTTPException(status_code=503, detail="Auto Review is not reachable right now.")
@@ -287,7 +373,7 @@ class RulesImport(BaseModel):
 
 @router.post("/insights/rules/import")
 def import_rules(body: RulesImport, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    brand = _project_brand(db, body.project_id, current_user, ProjectRole.editor)
+    brand = _project_brand(db, body.project_id, current_user, ProjectRole.owner)
     if not (body.text.strip() or body.url.strip() or body.pdf_base64):
         raise HTTPException(status_code=400, detail="Drop a PDF, paste text or a link.")
     r = review_bridge.import_rules(brand, body.text, body.url, body.pdf_base64)
@@ -326,12 +412,41 @@ def _submitted_assets(db, req):
         Asset.id.in_(alive)).order_by(Asset.created_at).all()
 
 
+def _public_brief(req, folder):
+    text = getattr(req, "iteration_brief", None)
+    state = req.iteration_state if isinstance(req.iteration_state, dict) else {}
+    internal = state.get("internal_handin", {})
+    pending = state.get("brief_input", {})
+    description = getattr(folder, "description", None)
+    candidates = [
+        internal.get("card_url") if isinstance(internal, dict) else None,
+        description if isinstance(description, str) and len(description) < 2000 else None,
+        pending.get("url") if isinstance(pending, dict) else None,
+    ]
+    url = None
+    for candidate in candidates:
+        if not isinstance(candidate, str) or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\" for c in candidate):
+            continue
+        try:
+            parsed = urlsplit(candidate)
+            _ = parsed.port  # Reject malformed ports rather than return an unusable source link.
+            if parsed.scheme in ("http", "https") and parsed.hostname and parsed.username is None and parsed.password is None:
+                url = candidate
+                break
+        except ValueError:
+            continue
+    return {"brief_text": text if isinstance(text, str) and text.strip() else None, "brief_url": url}
+
+
 @router.get("/r/{token}", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def view_request(token: str, db: Session = Depends(get_db)):
     req = _live_request(db, token)
     project = db.query(Project).filter(Project.id == req.project_id).first()
+    folder = db.query(Folder).filter(Folder.id == req.folder_id, Folder.project_id == req.project_id, Folder.deleted_at.is_(None)).first()
     assets = _submitted_assets(db, req)
     return {
+        **request_fields(req),
+        **_public_brief(req, folder),
         "title": req.title,
         "brand": project.name if project else "",
         "logo_url": _brand_logo(db, req.project_id),
@@ -345,7 +460,7 @@ def view_request(token: str, db: Session = Depends(get_db)):
 
 def _writable_request(db, token):
     req = locked_request(db, _live_request(db, token).id)
-    if req.completed_at:
+    if req.completed_at or (components(req) and (req.iteration_state or {}).get('delivery',{}).get('started')):
         raise HTTPException(409, 'This request is complete.')
     return req
 
@@ -378,6 +493,7 @@ class GuestIdentity(BaseModel):
 
 
 class GuestInitiate(GuestIdentity):
+    slot_id: Optional[str] = Field(default=None,max_length=80)
     asset_id: Optional[uuid.UUID] = None
     original_filename: str = Field(min_length=1, max_length=500)
     mime_type: str
@@ -395,8 +511,16 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
     if guard:
         raise HTTPException(status_code=400, detail=guard)
 
-    name = asset_name_for(body.original_filename)
-    if body.asset_id:
+    slot=upload_slot(req,body.slot_id,body.mime_type)
+    if slot and body.file_size_bytes>200*1024*1024:
+        raise HTTPException(422,'Each source part must be 200 MiB or smaller.')
+    name = slot['label'] if slot else asset_name_for(body.original_filename)
+    if slot:
+        bound=revision_target(req,slot['id'],body.asset_id)
+        asset=db.query(Asset).filter(Asset.id==uuid.UUID(bound),Asset.folder_id==req.folder_id,
+            Asset.project_id==req.project_id,Asset.deleted_at.is_(None)).first() if bound else None
+        if bound and not asset: raise HTTPException(404,'File not found in this request.')
+    elif body.asset_id:
         asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.folder_id == req.folder_id,
                                        Asset.project_id == req.project_id, Asset.deleted_at.is_(None)).first()
         if not asset:
@@ -408,7 +532,7 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
                                        Asset.deleted_at.is_(None)).first()
     if not asset:
         asset = Asset(project_id=req.project_id, name=name, asset_type=mime_to_asset_type(body.mime_type),
-                      created_by=req.created_by, folder_id=req.folder_id)
+                      created_by=req.created_by, folder_id=req.folder_id, iteration_source=bool(slot))
         db.add(asset)
         db.flush()
     # A retried upload must not leave dead "uploading" versions on top: they would become "the latest
@@ -431,6 +555,7 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
     file_type = {AssetType.image: FileType.image, AssetType.audio: FileType.audio}.get(asset.asset_type, FileType.video)
     db.add(MediaFile(version_id=version.id, file_type=file_type, original_filename=body.original_filename,
                      mime_type=body.mime_type, file_size_bytes=body.file_size_bytes, s3_key_raw=s3_key))
+    if slot: bind_upload(req,slot,asset,version,db)
     if body.name is not None:
         _record_uploader(db, req, version, body)
     db.commit()
@@ -485,8 +610,10 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     # requires active campaign access; cleanup remains available separately.
     _live_request(db, token)
     if req.completed_at:
-        raise HTTPException(409, 'This request is complete.')
+        raise HTTPException(409, "This request is complete.")
     record = _record_uploader(db, req, version, body)
+    # Identity can arrive only at completion; SessionLocal disables autoflush.
+    db.flush()
     try:
         complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
     except ClientError as error:
@@ -506,6 +633,7 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
         db.commit()
         raise HTTPException(status_code=413, detail="The file is larger than announced. Upload it again.")
     record.submitted_at = datetime.now(timezone.utc)
+    if components(req): stored_upload(req,version)
     version.processing_status = ProcessingStatus.processing
     db.commit()
     background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
@@ -526,8 +654,15 @@ def guest_abort(token: str, body: GuestPart, db: Session = Depends(get_db)):
     version.processing_status = ProcessingStatus.failed
     version.deleted_at = datetime.now(timezone.utc)
     db.flush()
-    if not db.query(AssetVersion).filter(AssetVersion.asset_id == version.asset_id, AssetVersion.deleted_at.is_(None)).first():
+    previous=db.query(AssetVersion).filter(AssetVersion.asset_id==version.asset_id,
+        AssetVersion.deleted_at.is_(None)).order_by(AssetVersion.version_number.desc()).first()
+    if not previous:
         db.get(Asset, version.asset_id).deleted_at = version.deleted_at
+    if components(req):
+        from ..services.iteration_requests import aborted_upload
+        record=db.query(RequestUpload).filter(RequestUpload.request_id==req.id,
+            RequestUpload.asset_id==version.asset_id,RequestUpload.version_number==previous.version_number).first() if previous else None
+        aborted_upload(req,version,previous,bool(record and record.submitted_at))
     db.commit()
 
 
@@ -571,6 +706,12 @@ def _version_review(db, req, asset, version, reviewer, evidence, include_media=T
                      'review_source': public_review_source(getattr(c, 'review_source', None))}
                     for c in rows if c.id not in withdrawn]
     state = editor_review_state(version, evidence)
+    if version and components(req):
+        item=next((v for category in ('slots','outputs') for v in (req.iteration_state or {}).get(category,{}).values()
+            if v.get('asset_id')==str(asset.id) and v.get('version_id')==str(version.id)),None)
+        if item:
+            state={'clear':'clear','delivered':'clear','held':'held','error':'unavailable'}.get(item.get('status'),'reviewing')
+            comments=item.get('findings',[])
     # Visible unresolved blockers must never be contradicted by a green engine projection.
     if state == 'clear' and any(c.get('must_fix') for c in comments):
         state = 'held'
@@ -642,9 +783,10 @@ def guest_review(token: str, db: Session = Depends(get_db)):
 @router.get("/r/{token}/assets/{asset_id}/versions/{version_id}", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def guest_version(token: str, asset_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db)):
     req = _live_request(db, token)
-    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.folder_id == req.folder_id,
+    asset = db.query(Asset).filter(Asset.id == asset_id,
                                   Asset.project_id == req.project_id, Asset.deleted_at.is_(None)).first()
-    if not asset:
+    allowed_output=components(req) and any(v.get('asset_id')==str(asset_id) and v.get('version_id')==str(version_id) for v in (req.iteration_state or {}).get('outputs',{}).values())
+    if not asset or (asset.folder_id!=req.folder_id and not allowed_output):
         raise HTTPException(404, 'File not found in this request.')
     version = db.query(AssetVersion).filter(AssetVersion.id == version_id, AssetVersion.asset_id == asset.id,
                                           AssetVersion.deleted_at.is_(None)).first()
@@ -659,6 +801,7 @@ def guest_version(token: str, asset_id: uuid.UUID, version_id: uuid.UUID, db: Se
 def finish_request(token: str, db: Session = Depends(get_db)):
     req = locked_request(db, _live_request(db, token).id)
     if not req.completed_at:
+        if components(req): raise HTTPException(409,'Component batches finish after every assembled ad passes final review.')
         review = _editor_review(db, req)
         if any(a.get('review_error') for a in review['assets']):
             raise HTTPException(409, 'This request includes an attachment automatic review cannot verify. Ask the owner to move it out of the request.')
@@ -678,7 +821,7 @@ class SuggestionDecision(BaseModel):
 
 @router.post("/insights/rules/suggestion")
 def decide_suggestion(body: SuggestionDecision, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    brand = _project_brand(db, body.project_id, current_user, ProjectRole.editor)
+    brand = _project_brand(db, body.project_id, current_user, ProjectRole.owner)
     r = review_bridge.decide_suggestion(brand, body.suggestion_id, body.action, current_user.email)
     if r is None:
         raise HTTPException(status_code=503, detail="Auto Review could not save that right now.")
@@ -722,6 +865,11 @@ def guest_object(token: str, body: GuestObjection, db: Session = Depends(get_db)
                                      body.text, body.name or req.last_uploader_name or "the editor", version_id=str(current.id))
     if r is None:
         raise HTTPException(status_code=503, detail="Could not reach the reviewer. Try again in a minute.")
+    if components(req) and r.get('withdrawn') is True:
+        from ..services.iteration_requests import withdraw_finding
+        req=locked_request(db,req.id)
+        withdraw_finding(req,str(asset.id),str(current.id),body.comment_id)
+        db.commit()
     return r
 
 

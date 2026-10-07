@@ -15,6 +15,8 @@ import {
   Upload,
   Search,
 } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
+import { canManageWorkspace } from "@/lib/workspace-access";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { Film, Music, Image as ImageIcon } from "lucide-react";
@@ -37,6 +39,7 @@ interface CommandItem {
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter();
+  const user = useAuthStore(s => s.user);
   const [query, setQuery] = React.useState("");
 
   const [debouncedQuery, setDebouncedQuery] = React.useState("");
@@ -95,7 +98,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       id: "home",
       label: "Home",
       icon: LayoutDashboard,
-      href: "/",
+      href: "/home",
       group: "navigation",
       shortcut: "G H",
     },
@@ -131,7 +134,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     },
     {
       id: "upload-asset",
-      label: "Upload Asset",
+      label: "Hand in",
       icon: Upload,
       href: "/handin",
       group: "actions",
@@ -175,7 +178,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   }
 
   const navItems = staticItems.filter((i) => i.group === "navigation");
-  const actionItems = staticItems.filter((i) => i.group === "actions");
+  const actionItems = staticItems.filter((i) => i.group === "actions" && (i.id !== "new-project" || canManageWorkspace(user, projects)));
 
   const hasQuery = query.trim().length > 0;
 

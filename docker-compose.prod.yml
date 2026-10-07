@@ -178,7 +178,8 @@ services:
     # with no worker consuming that queue they pile up in Redis forever, silently.
     # They ride with transcoding rather than with email so that a long sweep can
     # never sit in front of somebody's login code.
-    command: sh -c "celery -A apps.api.tasks.celery_app worker -Q transcoding,default -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning"
+    command: sh -c "exec celery -A apps.api.tasks.celery_app worker -Q transcoding,default -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning"
+    stop_grace_period: 5m
     restart: unless-stopped
 
   email_worker:
@@ -190,7 +191,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: sh -c "celery -A apps.api.tasks.celery_app worker -Q email_high,email_low -c $${EMAIL_CONCURRENCY:-2} --loglevel=warning"
+    command: sh -c "exec celery -A apps.api.tasks.celery_app worker -Q email_high,email_low -c $${EMAIL_CONCURRENCY:-2} --loglevel=warning"
+    stop_grace_period: 90s
     restart: unless-stopped
 
   beat:
@@ -202,7 +204,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: sh -c "celery -A apps.api.tasks.celery_app beat --loglevel=warning -s /tmp/celerybeat-schedule"
+    command: sh -c "exec celery -A apps.api.tasks.celery_app beat --loglevel=warning -s /tmp/celerybeat-schedule"
+    stop_grace_period: 30s
     restart: unless-stopped
 
   web:
@@ -211,6 +214,7 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED: ${NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED:-false}
     env_file:
       - .env.prod
     environment:

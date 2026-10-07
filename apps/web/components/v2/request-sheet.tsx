@@ -14,6 +14,7 @@ import useSWR from 'swr'
 import { Check, ChevronDown, FileText, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
+import { partsEnabled } from '@/lib/iterations'
 import { createRequest, type FileRequest } from '@/lib/platform'
 import type { Project } from '@/types'
 import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
@@ -40,6 +41,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
   const [title, setTitle] = React.useState('')
   const [briefFile, setBriefFile] = React.useState<File | null>(null)
   const [briefText, setBriefText] = React.useState('')
+  const [receiveParts, setReceiveParts] = React.useState(partsEnabled)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const [created, setCreated] = React.useState<FileRequest | null>(null)
@@ -82,6 +84,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
       }
       const payload = {
         project_id: pid,
+        ...(partsEnabled ? { receive_iterations: receiveParts } : {}),
         title: title.trim(),
         brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'),
         brief_url: isUrl ? text : '',
@@ -150,6 +153,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
                 <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UraVia 48 · 3 hooks"
                   className="field" aria-label="Title" />
               </Field>
+              {partsEnabled && <Field label="Submission format"><div className="flex gap-2">{[true, false].map(value => <button key={String(value)} type="button" disabled={busy} aria-pressed={receiveParts === value} onClick={() => setReceiveParts(value)} className={`press min-h-11 rounded-full px-4 text-sm ${receiveParts === value ? 'bg-bg-hover font-medium' : 'text-text-secondary'}`}>{value ? 'Hooks & bodies' : 'Complete ads'}</button>)}</div><p className="mt-2 text-sm text-text-secondary">{receiveParts ? 'Your editor uploads each part once. We create and check the final combinations.' : 'Your editor uploads finished cuts for review.'}</p></Field>}
               <Field label="Briefing" hint="Optional">
                 {briefFile ? (
                   <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-bg-primary/50 p-3 pl-4">

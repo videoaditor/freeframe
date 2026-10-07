@@ -58,7 +58,7 @@ export function WorkspacePicker({
         className="flex w-full items-center justify-between rounded-md border border-border bg-bg-primary px-3 py-2 text-left text-sm text-text-primary transition-colors hover:border-border-focus"
       >
         <span className={label ? "truncate text-text-primary" : "text-text-tertiary"}>
-          {label || "Select or create a workspace"}
+          {label || (allowCreate ? "Select or create a workspace" : "Select a workspace")}
         </span>
         <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-text-tertiary" />
       </button>

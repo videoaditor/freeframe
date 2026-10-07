@@ -23,6 +23,8 @@ from ..schemas.upload import (
 )
 from ..services.storage import upload_guard_error
 
+from ..services.iteration_requests import require_unmanaged, require_unmanaged_destination
+
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
@@ -60,6 +62,7 @@ def initiate_upload(
         asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.deleted_at.is_(None)).first()
         if not asset:
             raise HTTPException(status_code=404, detail="Asset not found")
+        require_unmanaged(asset)
         if asset.project_id != body.project_id:
             raise HTTPException(status_code=400, detail="Asset does not belong to the specified project")
     else:
@@ -76,6 +79,7 @@ def initiate_upload(
             if not folder:
                 raise HTTPException(status_code=404, detail="Folder not found")
 
+        require_unmanaged_destination(db,body.folder_id)
         asset_type = mime_to_asset_type(body.mime_type)
         asset = Asset(
             project_id=body.project_id,
@@ -148,6 +152,8 @@ def presign_part(
     if not version or version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
     _campaign_upload_access(db, version)
+
+    require_unmanaged(db.query(Asset).filter(Asset.id==version.asset_id).first())
     url = presign_upload_part(body.s3_key, body.upload_id, body.part_number)
     return PresignPartResponse(presigned_url=url, part_number=body.part_number)
 
@@ -176,6 +182,7 @@ def complete_upload(
         return CompleteUploadResponse(status='processing', asset_id=version.asset_id, version_id=version.id)
     _campaign_upload_access(db, version)
 
+    require_unmanaged(db.query(Asset).filter(Asset.id==version.asset_id).first())
     # Then complete S3 multipart
     complete_multipart_upload(body.s3_key, body.upload_id, [p.model_dump() for p in body.parts])
 
@@ -216,6 +223,7 @@ def abort_upload(
     if version.processing_status != ProcessingStatus.uploading:
         return
 
+    require_unmanaged(db.query(Asset).filter(Asset.id==version.asset_id).first())
     abort_multipart_upload(body.s3_key, body.upload_id)
     version.processing_status = ProcessingStatus.failed
     db.commit()

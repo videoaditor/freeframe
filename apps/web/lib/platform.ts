@@ -185,7 +185,7 @@ export async function tryReview(
 // ── Owner ──────────────────────────────────────────────────────────────────────
 
 export const listRequests = () => api.get<FileRequest[]>('/requests')
-export const createRequest = (body: { project_id: string; title: string; idempotency_key?: string; brief_text?: string; brief_url?: string; brief_pdf_base64?: string }) =>
+export const createRequest = (body: { project_id: string; title: string; idempotency_key?: string; brief_text?: string; brief_url?: string; brief_pdf_base64?: string; receive_iterations?: boolean; aspect_ratio?: string }) =>
   api.post<FileRequest>('/requests', body)
 export const revokeRequest = (id: string) => api.delete(`/requests/${id}`)
 export const getTimeSaved = (days = 30) => api.get<TimeSaved>(`/insights/time-saved?days=${days}`)
@@ -245,11 +245,15 @@ export function fileToBase64(file: File): Promise<string> {
 // ── Editor with a link (no account) ────────────────────────────────────────────
 
 export interface RequestView {
+  receive_iterations?: boolean
+  iteration_manifest?: import('./iterations').IterationManifest | null
   completed_at?: string | null
   title: string
   brand: string
   logo_url?: string | null
   brief_excerpt: string | null
+  brief_text?: string | null
+  brief_url?: string | null
   review_share_token: string
   assets: { id: string; name: string }[]
   expires_at: string | null
@@ -287,7 +291,7 @@ export interface RequestReview {
   review_share_token: string
 }
 
-async function pub<T>(method: string, path: string, body?: unknown, editorSession?: string): Promise<T> {
+export async function pub<T>(method: string, path: string, body?: unknown, editorSession?: string): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, {
     method,
     headers: body || editorSession ? { ...(body ? { 'content-type': 'application/json' } : {}), ...(editorSession ? { Authorization: `Bearer ${editorSession}` } : {}) } : undefined,
@@ -316,13 +320,14 @@ export async function uploadToRequest(
   who: { name: string; email: string },
   file: File,
   onProgress: (fraction: number) => void,
-  options?: { assetId?: string; identity?: () => Promise<{ name: string; email: string }> },
+  options?: { slotId?: string; assetId?: string; identity?: () => Promise<{ name: string; email: string }> },
 ): Promise<{ asset_id: string; version_number: number }> {
   const init = await pub<{ upload_id: string; s3_key: string; asset_id: string; version_id: string; version_number: number }>(
     'POST', `/r/${token}/upload/initiate`, {
       ...(!options?.identity && who.name.trim() && who.email.trim() ? { name: who.name, email: who.email } : {}), original_filename: file.name,
       mime_type: file.type || 'video/mp4', file_size_bytes: file.size,
       ...(options?.assetId ? { asset_id: options.assetId } : {}),
+      ...(options?.slotId ? { slot_id: options.slotId } : {}),
     })
   const parts: { PartNumber: number; ETag: string }[] = []
   const total = Math.ceil(file.size / CHUNK)
