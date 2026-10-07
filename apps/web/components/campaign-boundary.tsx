@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import useSWR from 'swr'
+import { X } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
 import { ProductFeedback } from './product-feedback'
@@ -29,11 +30,7 @@ export function CampaignBoundary({ children }: { children: ReactNode }) {
   if (!campaign?.previewOnly) return <>{children}</>
   const expired = campaign.state === 'expired' || now >= Date.parse(campaign.endsAt)
   if (!expired) return <>
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-bg-secondary px-4 py-3 sm:px-8">
-      <div><p className="text-sm font-semibold">Telehealth preview</p>
-        <p className="text-sm text-text-secondary">Free through October 31 · ends November 1, 12:00 am Eastern. One brand. No automatic charge.</p></div>
-      <ProductFeedback />
-    </div>
+    <PreviewNotice key={`${user?.id}:${campaign.id}:${campaign.endsAt}`} storageKey={`autoreview:preview-notice:${user?.id}:${campaign.id}:${campaign.endsAt}`} />
     {children}
   </>
 
@@ -61,4 +58,34 @@ export function CampaignBoundary({ children }: { children: ReactNode }) {
       <p className="text-sm text-text-secondary">Something we could improve? We still want to hear it.</p><ProductFeedback />
     </div>
   </section>
+}
+
+
+function PreviewNotice({ storageKey }: { storageKey: string }) {
+  const [dismissed, setDismissed] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    try { setDismissed(localStorage.getItem(storageKey) === 'dismissed') }
+    catch { setDismissed(false) }
+  }, [storageKey])
+
+  function dismiss() {
+    setDismissed(true)
+    try { localStorage.setItem(storageKey, 'dismissed') }
+    catch { /* Storage can be blocked; dismissal still works for this visit. */ }
+  }
+
+  if (dismissed === null) return null
+  return <>
+    {!dismissed && <aside aria-label="Preview access notice" className="campaign-preview-notice flex items-start justify-between gap-3 border-b px-4 py-3 sm:items-center sm:px-8">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">Telehealth preview</p>
+        <p className="mt-1 text-sm leading-5">Free through October 31 · ends November 1, 12:00 am Eastern. One brand. No automatic charge.</p>
+      </div>
+      <button type="button" onClick={dismiss} aria-label="Dismiss preview notice" title="Dismiss preview notice" className="campaign-preview-dismiss flex h-11 w-11 shrink-0 items-center justify-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:opacity-70">
+        <X size={18} aria-hidden="true" />
+      </button>
+    </aside>}
+    <div className="fixed bottom-4 right-4 z-30 rounded-full border border-border bg-bg-elevated shadow-sm"><ProductFeedback /></div>
+  </>
 }
