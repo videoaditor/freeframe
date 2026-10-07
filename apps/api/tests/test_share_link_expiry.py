@@ -64,6 +64,7 @@ def _mock_db_returning(link):
     db.query.return_value = db
     db.filter.return_value = db
     db.first.return_value = link
+    db.get.return_value = MagicMock(deleted_at=None, created_by=None)
     return db
 
 

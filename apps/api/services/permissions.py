@@ -196,13 +196,18 @@ def validate_share_link(db: Session, token: str) -> ShareLink:
     if link.expires_at and link.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Share link has expired")
     from .campaign_access import require_project_access
-    project_id = link.project_id
-    if not project_id and (link.folder_id or link.asset_id):
+    target = None
+    if link.folder_id or link.asset_id:
         target = db.get(Folder, link.folder_id) if link.folder_id else db.get(Asset, link.asset_id)
-        project_id = target.project_id if target is not None else None
+        if target is None or target.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="Share link not found")
+    project_id = link.project_id
+    if not project_id and target is not None:
+        project_id = target.project_id
     project = db.get(Project, project_id) if project_id else None
-    if project is not None:
-        require_project_access(db, project.created_by)
+    if project is None or project.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    require_project_access(db, project.created_by)
     return link
 
 
