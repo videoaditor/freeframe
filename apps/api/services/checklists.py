@@ -104,11 +104,15 @@ def _verify_request_card(db, row):
         is_trello = urlparse(row.intent.get('brief_url', '')).hostname in {'trello.com', 'www.trello.com'}
     except ValueError:
         return None  # Other malformed URLs retain the existing snapshot failure path.
-    if not is_trello or getattr(row, 'trello_card_id', None):
+    if not is_trello:
         return None
-    creator = db.query(User).filter(User.id == row.created_by, User.deleted_at.is_(None)).first() if row.request_id else None
+    if not row.request_id:
+        return None if getattr(row, 'trello_card_id', None) else 'source-not-authorized'
+    creator = db.query(User).filter(User.id == row.created_by, User.deleted_at.is_(None)).first()
     if creator is None or creator.is_staff is not True or creator.status != UserStatus.active:
         return 'source-not-authorized'
+    if getattr(row, 'trello_card_id', None):
+        return None
     card = review_bridge.checklist_card(row.intent['brief_url'])
     if not card or not re.fullmatch(r'[a-f0-9]{24}', str(card.get('card_id', ''))) or not re.fullmatch(r'[A-Za-z0-9]{8}', str(card.get('short_link', ''))):
         return 'card-unavailable'

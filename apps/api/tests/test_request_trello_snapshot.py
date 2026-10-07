@@ -64,11 +64,13 @@ def test_staff_request_freezes_context_after_canonical_card_verification(request
     assert c.calls == {'card': 1, 'snapshot': 1}
 
 
-@pytest.mark.parametrize('untrusted', ['customer', 'deactivated', 'missing', 'not-request'])
+@pytest.mark.parametrize('untrusted', ['customer', 'deactivated', 'missing', 'not-request', 'demoted-after-verification'])
 def test_unverified_request_cannot_use_private_trello_service(request_context, monkeypatch, untrusted):
     c = request_context
-    if untrusted == 'customer':
+    if untrusted in ('customer', 'demoted-after-verification'):
         c.creator.is_staff = False
+        if untrusted == 'demoted-after-verification':
+            c.row.trello_card_id = CARD['card_id']
     elif untrusted == 'deactivated':
         c.creator.status = UserStatus.deactivated
     elif untrusted == 'missing':
@@ -83,7 +85,7 @@ def test_unverified_request_cannot_use_private_trello_service(request_context, m
     monkeypatch.setattr(checklists.review_bridge, 'checklist_snapshot', forbidden)
     checklists.advance_binding(c.db, c.row)
     assert c.row.snapshot is None
-    assert c.row.trello_card_id is None
+    assert c.row.trello_card_id == (CARD['card_id'] if untrusted == 'demoted-after-verification' else None)
     assert c.row.status == 'failed'
     assert c.row.error_code == 'source-not-authorized'
 
@@ -133,3 +135,13 @@ def test_frozen_request_retry_never_reloads_card_or_snapshot(request_context, mo
     checklists.advance_binding(c.db, c.row)
     assert c.row.snapshot == frozen
     assert c.row.context_sha256 == digest
+
+
+def test_preverified_internal_handin_keeps_its_existing_authorization(request_context):
+    c = request_context
+    c.row.request_id = None
+    c.row.trello_card_id = CARD['card_id']
+    c.db.query.side_effect = AssertionError('Existing verified Handin must not enter request resolution')
+    checklists.advance_binding(c.db, c.row)
+    assert c.row.snapshot is not None
+    assert c.calls['card'] == 0
