@@ -7,9 +7,27 @@ import { Button } from '@/components/ui/button'
 
 type Feedback = {
   id: string; author_id: string; campaign_id: string | null; tool: string
-  kind: 'bug' | 'idea'; message: string; triage_status: string; created_at: string
+  kind: 'bug' | 'idea'; recording_id?: string | null; message: string; triage_status: string; created_at: string
 }
 type Queue = { items: Feedback[]; next_offset: number | null }
+
+function VoiceNote({ id }: { id: string }) {
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
+  async function load() {
+    setLoading(true); setError(false)
+    try {
+      const recording = await api.get<{ url: string }>(`/product-feedback/recordings/${id}`)
+      setUrl(recording.url)
+    } catch { setError(true) }
+    finally { setLoading(false) }
+  }
+  return <div className="space-y-2">
+    {url ? <audio aria-label="Feedback voice note" controls src={url} className="max-w-full" onError={() => { setUrl(''); setError(true) }} /> : <Button variant="secondary" size="lg" loading={loading} onClick={() => void load()}>{error ? 'Retry voice note' : 'Play voice note'}</Button>}
+    {error && <p role="alert" className="text-sm text-text-secondary">Audio could not be loaded. Try again.</p>}
+  </div>
+}
 
 export default function FeedbackQueuePage() {
   const [offset, setOffset] = useState(0)
@@ -24,6 +42,7 @@ export default function FeedbackQueuePage() {
         {data.items.map(item => <article id={item.id} key={item.id} className="space-y-3 rounded-xl border border-border bg-bg-secondary p-6">
           <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{item.kind === 'bug' ? 'Bug report' : 'Improvement idea'}</h2><time className="text-sm text-text-secondary" dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></div>
           <p className="whitespace-pre-wrap break-words text-[1.0625rem] leading-6">{item.message}</p>
+          {item.recording_id && <VoiceNote id={item.recording_id} />}
           <p className="break-words text-sm text-text-secondary">{item.tool} · {item.campaign_id || 'No campaign'} · {item.triage_status}</p>
           <p className="break-all text-xs text-text-secondary">Receipt: {item.id} · Author: {item.author_id}</p>
         </article>)}

@@ -15,6 +15,10 @@ const plans = [
 ] as const
 
 export function CampaignBoundary({ children }: { children: ReactNode }) {
+  return <><CampaignContent>{children}</CampaignContent><ProductFeedback /></>
+}
+
+function CampaignContent({ children }: { children: ReactNode }) {
   const { user } = useAuthStore()
   const campaign = user?.suite_campaign
   const [now, setNow] = useState(() => Date.now())
@@ -32,7 +36,6 @@ export function CampaignBoundary({ children }: { children: ReactNode }) {
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-bg-secondary px-4 py-3 sm:px-8">
       <div><p className="text-sm font-semibold">Telehealth preview</p>
         <p className="text-sm text-text-secondary">Free through October 31 · ends November 1, 12:00 am Eastern. One brand. No automatic charge.</p></div>
-      <ProductFeedback />
     </div>
     {children}
   </>
@@ -58,7 +61,7 @@ export function CampaignBoundary({ children }: { children: ReactNode }) {
     </div>
     <p className="mt-4 text-sm text-text-secondary">Review pricing and terms on Whop before choosing a plan. After upgrading, reopen AutoReview from Whop.</p>
     <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
-      <p className="text-sm text-text-secondary">Something we could improve? We still want to hear it.</p><ProductFeedback />
+      <p className="text-sm text-text-secondary">Something we could improve? We still want to hear it.</p>
     </div>
   </section>
 }
