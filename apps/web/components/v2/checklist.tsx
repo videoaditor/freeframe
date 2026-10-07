@@ -13,17 +13,17 @@ export function useChecklistPreparation(projectId: string | null, url: string) {
 }
 
 export function SavedChecklist({ bindingId, initial }: { bindingId?: string | null; initial?: ChecklistState | null }) {
-  const [retryError, setRetryError] = useState('')
+  const [retryError, setRetryError] = useState<{ bindingId: string; message: string } | null>(null)
   const { data, error, mutate } = useSWR(bindingId ? ['saved-checklist', bindingId] : null,
     () => getChecklist(bindingId!), { fallbackData: initial || undefined, refreshInterval: checklistPollInterval,
       revalidateOnFocus: false, shouldRetryOnError: false, keepPreviousData: false })
   if (!bindingId) return null
-  return <ChecklistPanel data={data} error={retryError || (error ? 'The checklist could not be loaded.' : undefined)} onRetry={async () => {
-    setRetryError('')
+  return <ChecklistPanel data={data} error={(retryError?.bindingId === bindingId ? retryError.message : undefined) || (error ? 'The checklist could not be loaded.' : undefined)} onRetry={async () => {
+    setRetryError(null)
     try {
       if (data?.status === 'failed') await mutate(await retryChecklist(bindingId), false)
       else await mutate()
-    } catch { setRetryError('The checklist could not be retried. Try again.') }
+    } catch { setRetryError({ bindingId, message: 'The checklist could not be retried. Try again.' }) }
   }} />
 }
 

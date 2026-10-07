@@ -14,45 +14,45 @@ No Engine changes, paid calls, deployment, merge, production KV writes or custom
 Cross-tenant reads/writes; retried accepted-but-timed-out requests; concurrent paste/folder attachment; partial or oversized brief/rules; stale A response after B selection.
 
 ### Task 1: H1A shared contract
-- [ ] Add tests for canonical JSON/hash fixtures, sources/dedup/max-eight, global/brand/trainee and context limits; run RED.
-- [ ] Implement src/briefing-checklist.ts pure exports; run focused tests GREEN; commit and publish export path/fixtures in H1.json.
+- [x] Add tests for canonical JSON/hash fixtures, sources/dedup/max-eight, global/brand/trainee and context limits; run RED.
+- [x] Implement src/briefing-checklist.ts pure exports; run focused tests GREEN; commit and publish export path/fixtures in H1.json.
 Produces RequirementSource, ChecklistSnapshot, canonicalJson, snapshotDigest, buildSnapshot.
 
 ### Task 2: H1A bridge
 Consumes Task 1. Produces authenticated /api/v1/checklists prepare/status, frozen snapshot and optional engine plan reference.
-- [ ] Tests first for duplicate events, timeout after acceptance, restart, unreadable briefing, tenant isolation and disabled Engine API.
-- [ ] Persist original intent before resolving. Persist full snapshot before submit; retry from durable state via the existing poll/worker mechanisms. Engine dedup required; never claim KV exactly-once.
-- [ ] npm test; compare TypeScript diagnostics with base. Commit and Draft PR against main.
+- [x] Tests first for duplicate events, timeout after acceptance, restart, unreadable briefing, tenant isolation and disabled Engine API.
+- [x] Persist original intent before resolving. Persist full snapshot before submit; retry from durable state via the existing poll/worker mechanisms. Engine dedup required; never claim KV exactly-once.
+- [x] npm test; compare TypeScript diagnostics with base. Commit and Draft PR against main.
 
 ### Task 3: H1B platform binding
 Consumes H1A wire schema. Produces persistent authorization-bound binding, source intent, plan status, folder/request linkage.
-- [ ] Tests first; model/schema/migration with unique constraints. Customer request and intent commit together. Internal staff POST before folder exists.
-- [ ] Existing Celery machinery resumes intent and polls plans; endpoint reads are authorized and read-only. Folder creation atomically adopts same binding.
-- [ ] Run API suite and isolated Postgres upgrade/downgrade/concurrent insert/rollback/reconnect checks; commit.
+- [x] Tests first; model/schema/migration with unique constraints. Customer request and intent commit together. Internal staff POST before folder exists.
+- [x] Existing Celery machinery resumes intent and polls plans; endpoint reads are authorized and read-only. Folder creation atomically adopts same binding.
+- [x] Run API suite and isolated Postgres upgrade/downgrade/concurrent insert/rollback/reconnect checks; commit.
 
 ### Task 4: H1C interface
 Consumes H1B. Produces shared private checklist disclosure on request workspace and handin.
-- [ ] Read design skills and fill handoff. Component tests before behavior; paste/blur dedup, stale A/B, retry and ready/failed poll termination.
-- [ ] Wire existing creation/paste/workspace selection; preserve working link and upload.
-- [ ] Frontend build/test/types/lint and desktop/mobile light/dark/zoom/reduced motion browser evidence. Commit and Draft PR.
+- [x] Read design skills and fill handoff. Component tests before behavior; paste/blur dedup, stale A/B, retry and ready/failed poll termination.
+- [x] Wire existing creation/paste/workspace selection; preserve working link and upload.
+- [x] Frontend build/test/types/lint and desktop/mobile light/dark browser evidence. Zoom/reduced-motion acceptance remains explicitly unverified. Commit and Draft PR.
 
 ### Task 5: Review and handoff
-- [ ] Review full ranges for auth/idempotency/privacy and missing coverage; fix verified issues with regression tests.
-- [ ] Record code_verified separately from real Engine integration/live evidence. Update own reviews and H1.json; no other session state writes.
+- [x] Review full ranges for auth/idempotency/privacy and missing coverage; fix verified issues with regression tests.
+- [x] Record code_verified separately from real Engine integration/live evidence. Update own reviews and H1.json; no other session state writes.
 
 ## Interface audit / rulings
 H1A → H1B → H1C use versioned payloads; H2 consumes only RequirementSource exports. Disabled Engine API is an explicit integration blocker, not a reason to skip platform work. The already authorized execution overrides skill requests for another plan/design approval.
 
 ## Execution ledger
 Task 1 complete: 7fd1e43, shared source/hash contract 5/5 tests RED→GREEN, published in H1.json.
-Task 2 ruling: durable state stays in FreeFrame’s existing Postgres/Celery path. Worker resolves snapshot; FreeFrame commits it; Worker forwards only that frozen payload. This avoids a second mutable KV outbox/single-writer problem. Cost if wrong: adapter boundary can change without Engine/compiler changes.
+Task 2: Ruling: durable state stays in FreeFrame’s existing Postgres/Celery path. Worker resolves snapshot; FreeFrame commits it; Worker forwards only that frozen payload. This avoids a second mutable KV outbox/single-writer problem. Cost if wrong: adapter boundary can change without Engine/compiler changes.
 Task 2: Worker suite 1403/1403, TypeScript base/head 161/161 with no new diagnostics (before trusted-reference addition); final full run still required.
 Task 3: 9 focused binding tests pass. Existing migration head assertion extended with the new additive successor rather than removing the floor guard.
 
 Task 2 complete: 7334e0d, authenticated snapshot/plan adapter and additive trusted share reference; 15 focused tests pass. Decimal correction b8c8757 adds cross-language decimal/numeric-key fixture.
 Task 3 complete: e0ac6b7; API 470 passed, 51 skipped. Real disposable Postgres verifies concurrent reservation/customer creation, conflict/rollback/reconnect, migration downgrade/reupgrade.
 Task 4 complete: 620057f; two additional UI regressions observed RED then GREEN (new assignment after reopen, caught failed retry). Unique workspace matching regression observed RED then GREEN. Browser confirms persisted reload and no folder/request from paste, synthetic data only.
-Task 4 ruling: screenshots use a synthetic bridge harness because the Engine API is not available/confirmed. They establish UI behavior only; cost if wrong: integration must still fail closed and pass real Engine evidence before live activation.
+Task 4: Ruling: screenshots use a synthetic bridge harness because the Engine API is not available/confirmed. They establish UI behavior only; cost if wrong: integration must still fail closed and pass real Engine evidence before live activation.
 Browser limitation: browser zoom shortcuts have no effect and no reduced-motion emulation API is exposed. No false 200%/reduced-motion verification claim. Native disclosure adds no animation.
 
 Final review: one fresh gpt-6-astra reviewer inspected both complete branches, found one Critical and five Important issues, no minors. All six entered one regression-led fix pass.
@@ -67,3 +67,6 @@ Final: Ruling: no production activation/delivery verification — user authorize
 Final: Ruling: 200% zoom/reduced-motion acceptance remains unverified — exposed browser controls cannot provide it — cost if wrong: a human/browser acceptance check remains before merge.
 Final: Ruling: existing broad staff policy and legacy brand matching remain platform policy — H1 adds current-role checks and ambiguity guard without redesigning permissions — cost if wrong: a separately scoped permission/brand policy change is required.
 No deferred minors.
+
+Final: fixed late retry A error leaking into selected B — saved checklist switch test RED→GREEN, full web suite 546/546; build/types/lint pass.
+Final: fixed missing retention cascade discovered by GitHub CI — request/folder/project real-Postgres regressions plus inbound-FK guard RED→GREEN; full API suite with Postgres 522 passed, 8 skipped. Earlier mock-only run skipped cleanup tests; final verification now runs them.

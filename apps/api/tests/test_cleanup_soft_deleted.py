@@ -1,5 +1,6 @@
 """Tests for the retention-window cascade GC (issue #65 core)."""
 import uuid
+import pytest
 from datetime import datetime, timezone, timedelta
 
 import apps.api.tasks.cleanup_tasks as ct
@@ -15,6 +16,7 @@ from apps.api.models.share import ShareLink, ShareLinkItem, ShareLinkActivity, A
 from apps.api.models.metadata import MetadataField, AssetMetadata, Collection, CollectionShare, FieldType
 from apps.api.models.branding import ProjectBranding, WatermarkSettings
 from apps.api.models.activity import Mention, ActivityLog, Notification, NotificationType
+from apps.api.models.checklist_binding import ChecklistBinding
 
 
 # ── seed helpers (module-level; extended by later tasks) ─────────────────────────
@@ -422,10 +424,12 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
         "collection_shares", "share_link_items", "share_link_activity", "watermark_settings",
         "project_members", "project_brandings", "activity_logs", "annotations", "comment_attachments",
         "comment_reactions", "mentions", "notifications",
-        "upload_requests", "request_uploads",
+        "upload_requests", "request_uploads", "checklist_bindings",
     }
     # (referencing_table, referencing_column) confirmed handled by a _purge_* helper.
     KNOWN_HANDLED = {
+        ("checklist_bindings", "project_id"), ("checklist_bindings", "folder_id"),
+        ("checklist_bindings", "request_id"),
         ("request_uploads", "request_id"),
         ("request_uploads", "asset_id"), ("upload_requests", "folder_id"), ("upload_requests", "project_id"),
         # -> projects.id
@@ -532,3 +536,33 @@ def test_purge_folder_removes_request_uploads_and_request(real_db):
     ct._purge_folder(real_db, folder.id, ct.PurgeCounts())
     assert real_db.query(UploadRequest).filter_by(id=req.id).count() == 0
     assert real_db.query(RequestUpload).filter_by(id=upload.id).count() == 0
+
+
+@pytest.mark.parametrize('scope', ['request', 'folder', 'project'])
+def test_retention_gc_removes_scoped_checklist_binding(real_db, scope):
+    from apps.api.models.upload_request import UploadRequest
+    owner = _user(real_db)
+    project = _project(real_db, owner)
+    other_project = _project(real_db, owner)
+    folder = Folder(name='Checklist', project_id=project.id, created_by=owner.id)
+    real_db.add(folder); real_db.flush()
+    request = UploadRequest(token=str(uuid.uuid4()), review_share_token='s', title='Checklist',
+        project_id=project.id, folder_id=folder.id, created_by=owner.id)
+    real_db.add(request); real_db.flush()
+    binding = ChecklistBinding(project_id=project.id, created_by=owner.id, source_key='purge',
+        intent={}, intent_sha256='a' * 64,
+        request_id=request.id if scope == 'request' else None,
+        folder_id=folder.id if scope == 'folder' else None,
+        deleted_at=datetime.now(timezone.utc) - timedelta(days=90))
+    retained = ChecklistBinding(project_id=other_project.id, created_by=owner.id,
+        source_key='retain', intent={}, intent_sha256='b' * 64)
+    real_db.add_all([binding, retained]); real_db.flush()
+    binding_id, retained_id = binding.id, retained.id
+    if scope == 'request':
+        ct._purge_requests(real_db, [request.id])
+    elif scope == 'folder':
+        ct._purge_folder(real_db, folder.id, ct.PurgeCounts())
+    else:
+        ct._purge_project(real_db, project.id, ct.PurgeCounts())
+    assert real_db.query(ChecklistBinding).filter_by(id=binding_id).count() == 0
+    assert real_db.query(ChecklistBinding).filter_by(id=retained_id).count() == 1

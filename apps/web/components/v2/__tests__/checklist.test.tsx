@@ -55,3 +55,15 @@ it('shows a failed retry without losing the saved checklist or rejecting unhandl
   fireEvent.click(await screen.findByRole('button',{name:'Try again'}))
   expect(await screen.findByText('The checklist could not be retried. Try again.')).toBeVisible()
 })
+it('does not show an old retry failure on a newly selected saved checklist',async()=>{
+  let failA!:(reason:Error)=>void
+  vi.mocked(api.get).mockImplementation(async(path)=>path.includes('binding-a')?{...ready,status:'failed'}:{...ready,id:'binding-b'})
+  vi.mocked(api.post).mockImplementation(()=>new Promise((_,reject)=>{failA=reject}))
+  const view=render(<SavedChecklist bindingId='binding-a' />,{wrapper})
+  fireEvent.click(await screen.findByRole('button',{name:'Try again'}))
+  view.rerender(<SavedChecklist bindingId='binding-b' />)
+  await screen.findByText('1 review check')
+  await act(async()=>failA(new Error('late failure')))
+  expect(screen.getByText('1 review check')).toBeVisible()
+  expect(screen.queryByText('The checklist could not be retried. Try again.')).toBeNull()
+})
