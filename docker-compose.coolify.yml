@@ -1,0 +1,230 @@
+# ============================================================
+# FreeFrame — Coolify deployment
+# ============================================================
+# Coolify reads exactly one compose file and brings its own Traefik, so this is
+# docker-compose.prod.yml + docker-compose.aditor.yml folded into one, minus the
+# bundled Traefik, the host port bindings and the routing labels. Domains are set
+# per service in Coolify:
+#   web -> https://<host>
+#   api -> https://<host>/api      (Coolify strips the /api prefix, as the
+#                                   upstream Traefik middleware / nginx did)
+#
+# Configuration comes from Coolify's environment variables. Coolify only hands a
+# variable to a container when the compose file references it, hence the shared
+# list below. Unset optional integrations stay off:
+#   AUTOMATION_SHARE_WEBHOOK_URL, REVIEW_BRIDGE_URL  empty -> no outbound calls
+#   BEAT_ENABLED != "true"                           -> no scheduled tasks
+# so a second instance (staging, migration test) can run beside production
+# without acting on its behalf. Keep docker-compose.prod.yml/.aditor.yml and
+# this file in step when services change.
+# ============================================================
+
+x-app-env: &app-env
+  POSTGRES_USER: ${POSTGRES_USER:-freeframe}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_DB: ${POSTGRES_DB:-freeframe}
+  DATABASE_URL: ${DATABASE_URL}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_URL: ${REDIS_URL}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-}
+  DOMAIN: ${DOMAIN}
+  FRONTEND_URL: ${FRONTEND_URL}
+  NEXT_PUBLIC_API_URL: /api
+  CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+  S3_STORAGE: ${S3_STORAGE:-}
+  S3_BUCKET: ${S3_BUCKET}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_REGION: ${S3_REGION:-}
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  API_WORKERS: ${API_WORKERS:-4}
+  TRANSCODING_CONCURRENCY: ${TRANSCODING_CONCURRENCY:-2}
+  EMAIL_CONCURRENCY: ${EMAIL_CONCURRENCY:-2}
+  TRANSCODER_ENGINE: ${TRANSCODER_ENGINE:-}
+  MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-}
+  SOFT_DELETE_RETENTION_DAYS: ${SOFT_DELETE_RETENTION_DAYS:-}
+  ORPHAN_SWEEP_GRACE_HOURS: ${ORPHAN_SWEEP_GRACE_HOURS:-}
+  ORPHAN_SWEEP_DELETE: ${ORPHAN_SWEEP_DELETE:-false}
+  MAIL_PROVIDER: ${MAIL_PROVIDER:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-}
+  SMTP_USE_TLS: ${SMTP_USE_TLS:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  BRAND_NAME: ${BRAND_NAME:-}
+  PASSWORD_LOGIN_ENABLED: ${PASSWORD_LOGIN_ENABLED:-false}
+  SERVICE_API_KEY: ${SERVICE_API_KEY:-}
+  SERVICE_API_KEY_EMAIL: ${SERVICE_API_KEY_EMAIL:-}
+  DIRECTORY_LOOKUP_URL: ${DIRECTORY_LOOKUP_URL:-}
+  DIRECTORY_NAME_FIELD: ${DIRECTORY_NAME_FIELD:-}
+  DIRECTORY_STATUS_FIELD: ${DIRECTORY_STATUS_FIELD:-}
+  DIRECTORY_ALLOWED_STATUSES: ${DIRECTORY_ALLOWED_STATUSES:-}
+  DIRECTORY_TIMEOUT_SECONDS: ${DIRECTORY_TIMEOUT_SECONDS:-}
+  DIRECTORY_TOKEN: ${DIRECTORY_TOKEN:-}
+  REQUIRE_FOLDER_DESCRIPTION_PATTERN: ${REQUIRE_FOLDER_DESCRIPTION_PATTERN:-}
+  REQUIRE_FOLDER_DESCRIPTION_HINT: ${REQUIRE_FOLDER_DESCRIPTION_HINT:-}
+  AUTOMATION_GUEST_EMAILS: ${AUTOMATION_GUEST_EMAILS:-}
+  SUITE_URL: ${SUITE_URL:-}
+  WHOP_APP_ID: ${WHOP_APP_ID:-}
+  REVIEW_BRIDGE_URL: ${REVIEW_BRIDGE_URL:-}
+  REVIEW_BRIDGE_SECRET: ${REVIEW_BRIDGE_SECRET:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  SELF_SIGNUP_ENABLED: ${SELF_SIGNUP_ENABLED:-false}
+  # Formerly in docker-compose.aditor.yml (see the reasoning there).
+  INSTANCE_WIDE_PROJECT_ACCESS: ${INSTANCE_WIDE_PROJECT_ACCESS:-true}
+  SHARE_COMMENT_DELETABLE_GUEST_EMAILS: ${SHARE_COMMENT_DELETABLE_GUEST_EMAILS:-review@aditor.ai}
+  AUTOMATION_SHARE_WEBHOOK_URL: ${AUTOMATION_SHARE_WEBHOOK_URL:-}
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment: *app-env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-freeframe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes;
+      else
+        redis-server --appendonly yes;
+      fi"
+    environment: *app-env
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping || redis-cli ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.prod
+    environment:
+      <<: *app-env
+      DISABLE_DOCS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "cd /workspace/apps/api && alembic upgrade head && cd /workspace &&
+      gunicorn apps.api.main:app
+      -w $${API_WORKERS:-4}
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --timeout 120
+      --graceful-timeout 30"
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.prod
+    environment:
+      <<: *app-env
+      FFMPEG_THREADS: ${FFMPEG_THREADS:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # `default` belongs here too: beat schedules the maintenance tasks onto it
+    # (see docker-compose.prod.yml).
+    command: sh -c "exec celery -A apps.api.tasks.celery_app worker -Q transcoding,default -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning"
+    stop_grace_period: 5m
+    cpus: "12.0"
+    mem_limit: 8g
+    restart: unless-stopped
+
+  email_worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.prod
+    environment: *app-env
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: sh -c "exec celery -A apps.api.tasks.celery_app worker -Q email_high,email_low -c $${EMAIL_CONCURRENCY:-2} --loglevel=warning"
+    stop_grace_period: 90s
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.prod
+    environment:
+      <<: *app-env
+      BEAT_ENABLED: ${BEAT_ENABLED:-false}
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Off unless BEAT_ENABLED=true: exactly one instance per database may run the
+    # schedule (soft-delete purges, reminders, sweeps).
+    command: >
+      sh -c "if [ \"$$BEAT_ENABLED\" = \"true\" ]; then
+        exec celery -A apps.api.tasks.celery_app beat --loglevel=warning -s /tmp/celerybeat-schedule;
+      else
+        echo 'beat disabled (BEAT_ENABLED != true)'; exec sleep infinity;
+      fi"
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED: ${NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED:-false}
+        # Same values and reasoning as docker-compose.aditor.yml.
+        NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
+        NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "false"
+        NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS: "review@aditor.ai"
+        NEXT_PUBLIC_FOLDER_LINK_LABEL: "Trello card link"
+        NEXT_PUBLIC_FOLDER_LINK_PLACEHOLDER: "https://trello.com/c/..."
+        NEXT_PUBLIC_UPLOAD_REVIEW_NOTICE: "Sent for review - feedback appears on the video in a few minutes, and in #card-feedback"
+        NEXT_PUBLIC_REVIEW_GATE_URL: "https://review.aditor.ai"
+    environment:
+      <<: *app-env
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      - api
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
