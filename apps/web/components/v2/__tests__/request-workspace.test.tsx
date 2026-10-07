@@ -123,3 +123,18 @@ it('stops cached review motion on a status outage and resumes on recovery', () =
   rerender(<RequestWorkspace {...props} statusUnavailable={false} />)
   expect(screen.getByRole('progressbar')).toBeVisible()
 })
+
+it('retains saved source labels in the actual editor workspace while preserving timestamp navigation', () => {
+  const asset: RequestAsset = { asset_id: 'a', name: 'October launch', version: 1, version_id: 'v1', processing: 'ready', review_state: 'held', media_url: '/cut.mp4', comments: [
+    { id: 'c1', t: 2, body: 'Hold the end card.', must_fix: true, review_source: {
+      schema_version: 'autoreview.comment-source.v1', requirement_id: 'req-1',
+      sources: [{ layer: 'briefing', reference_id: 'request-1', source_version: 'v1' }],
+    } },
+    { id: 'c2', t: 3, body: 'Give the logo room to breathe.' },
+  ] }
+  render(<RequestWorkspace token="t" assets={[asset]} onSelect={vi.fn()} onRefresh={vi.fn()} />)
+  expect(screen.getByLabelText('Requirement sources')).toHaveTextContent('Briefing')
+  expect(screen.getAllByLabelText('Requirement sources')).toHaveLength(1)
+  expect(screen.getByRole('button', { name: '0:02' })).toBeVisible()
+  expect(screen.getByText('Hold the end card.')).toBeVisible()
+})

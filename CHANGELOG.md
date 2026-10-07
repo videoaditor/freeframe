@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Whop sign-in returns a valid Hub hand-in link to the selected card instead of Home.
 - Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
 - The review timeline now supports native touch dragging and keyboard seeking, with a larger hit area, visible thumb and spaced second labels.

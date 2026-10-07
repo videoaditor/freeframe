@@ -7,6 +7,7 @@ Editors reading an AutoReview comment need to see which saved requirements suppo
 | State | Reached from | Presentation | Exit |
 | --- | --- | --- | --- |
 | Comment with source | Existing asset/share review | Existing comment row | Existing navigation |
+| Editor request review | /r/[token] → RequestWorkspace | Existing VideoPlayer with timeline markers and CommentItem; native adapter carries review_source | Existing upload/version navigation |
 | Old/human/unknown source | Same | Existing row, no source labels | Same |
 
 No navigation changes or extra controls.
@@ -38,4 +39,4 @@ None. H1's verified source commit remains the dependency for Worker integration.
 - [x] Labels match data, stable order, no duplicates or private prose.
 - [x] Seek/reply/reload retain labels; the unchanged time button seeks to 2.75s. Opening Reply retains the existing row seek behavior.
 - [ ] Native 200% browser zoom and OS Reduced Motion emulation unavailable. CSS zoom and stationary computed styles inspected; see reviews/H2.md.
-- [x] Existing mobile video/comments implementation retained; local harness shows separate video and comments, without overlap at 390px.
+- [x] Actual /r/[token] editor route verified after preserving review_source in RequestWorkspace; existing VideoPlayer timeline markers seek/focus the source-labelled comment on desktop and 390px. Earlier component fixture was not the full editor screen.
