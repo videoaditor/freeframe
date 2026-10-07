@@ -52,7 +52,7 @@ The existing n8n feedback views and automation webhook contracts are unchanged. 
 | Caller | Endpoint | Contract |
 | --- | --- | --- |
 | Owner | `POST /requests` | Add `receive_iterations:true`, optional aspect ratio; brief remains optional. |
-| Internal editor | `POST /handins` | Authorized `project_id` and Trello `card_url`; returns resumable request token/URL. |
+| Internal editor | `POST /handins` | Authorized `project_id`, Trello `card_url`, required operation UUID `idempotency_key`; returns resumable request token/URL. Same-intent retries reuse the saved title and assignment. |
 | Request editor | `POST /r/{token}/iterations/parts` | Add stable client IDs, explicit role and filename label before upload. |
 | Request editor | Existing `/r/{token}/upload/*` | `slot_id` pins source role; explicit `asset_id` selects a revision. |
 | Request editor | `POST /r/{token}/iterations/submit` | Seal intended membership after all declared bytes are stored. |
@@ -69,7 +69,9 @@ Detailed adapter contracts live in the AutoReview and Mixer repositories: `docs/
 
 “Uploaded” means stored bytes, “checked” means required checks for the exact version, and “delivered” means current final outputs plus required internal delivery completed. Source checks alone never approve a final ad. Partial delivery is counted separately. Closing the tab does not cancel accepted jobs; incomplete local transfers still require the browser.
 
-URL/PDF briefing inputs remain in private request state only while resolution is pending, allowing registration/extraction failures to be retried. Once acknowledged, pending inputs are removed and source/final reviews inherit the same resolved briefing. Guest projections never include those private inputs.
+Native Parts reviews require a persisted checklist binding and frozen snapshot before registering or scoring any source. Registration carries the frozen briefing and exact binding/hash/optional plan metadata; derived shares inherit that identity. Every native review requires saved context, so a lost Worker registration marker stops scoring instead of falling back to current rules. The private iteration snapshot read accepts only the current source version or a current derived recipe whose source versions still match the database. Verified findings use the trusted exact-version comment bridge and retain Basics/Brand/Briefing provenance. The existing ordinary-review snapshot contract still permits its original historical versions.
+
+URL/PDF briefing inputs remain private while preparation is pending; native Parts registration waits for the frozen snapshot rather than resolving mutable inputs independently. Once acknowledged, pending inputs are removed. Guest projections never include those private inputs. Private original downloads preserve the actual video content type and filename, including MOV and WebM.
 
 Aborted first uploads retain the declared slot but release the failed asset binding; aborted revisions restore stored prior bytes for a fresh check. A late abort cannot detach a newer attempt. Replacement invalidates only recipes referencing that slot. Generic upload/version endpoints cannot bypass the iteration state machine. Service outages appear as unavailable/retry, not creative failure. Policy changes invalidate review evidence. Internal delivery is serialized through the FreeFrame durable lease; AutoReview records immutable receipts and reconciles Trello retries. The Worker KV store is not a general concurrent transaction lock.
 
@@ -80,3 +82,11 @@ Inputs are videos up to 200 MiB each; the private renderer currently accepts 2�
 Automated tests exercise the real request/worker transitions and exact-version contracts; optional PostgreSQL tests exercise persistence and leases. UI screenshots in `docs/design/handin-evidence` use local synthetic fixtures, not live customer submissions. The fixtures demonstrate layout and interactions; they do not prove production timing, model quality or live Trello delivery.
 
 Before activation, run a staging batch with two hooks and one shared body; replace only one hook; verify no duplicate render/delivery on retry; verify another account cannot list/download originals; reopen the submission; verify service-failure recovery. Production performance and deployed secret/config compatibility still require that controlled activation check.
+
+## Native complete-ad editor and legacy links
+
+Staff complete-ad Handin calls `POST /folders/{folder_id}/editor-request` after upload. The endpoint reuses the current project/folder, public comment share and actual asset versions, without inventing transfer timing. It returns canonical backend-configured `/r/{token}` and customer `/share/{token}` URLs. Existing protected, revoked, ambiguous or foreign assignments are rejected rather than widened or recreated. The result shows the customer share first and **Open review** for the native player, feedback, seeking and version history.
+
+Legacy Worker `/u` and `/d` links are migrated only by explicit service-authenticated `POST /api/v1/editor-links`. Both the original live scope and native assignment must match exactly. FreeFrame's private `POST /internal/review/editor-bindings` serializes claims in PostgreSQL and retains original identity after revocation. Its private GET is authoritative on every legacy visit: only an explicit never-mapped response permits the old flow; a revoked/changed mapping returns 410 and an unavailable read returns 503. KV is a cache, never permission to reopen a mapped capability. No production mappings were created during qualification.
+
+The production Celery worker/email-worker/beat commands use `exec` so Celery receives SIGTERM as PID 1, with 5-minute/90-second/30-second grace periods respectively. The qualification report records isolated real signal/drain evidence and separate production-acceptance limits.
