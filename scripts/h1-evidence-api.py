@@ -30,15 +30,17 @@ from apps.api.services.checklists import snapshot_digest
 def snapshot(intent):
     text=intent.get('brief_text') or 'Show the product. Keep captions readable. Deliver three variants.'
     value={'schema_version':'autoreview.plan-request.v1','tenant_id':intent['tenant_id'],'request_id':intent['binding_id'],'idempotency_key':f"checklist:{intent['tenant_id']}:{intent['binding_id']}",
-        'briefing':{'text':text,'version':'fixture','sources':[{'layer':'briefing','reference_id':'synthetic-brief','source_version':'fixture-v1'}]},'rules':[],'brand_context':{'brand':'synthetic','text':'','sources':[]},'limitations':[]}
+        'briefing':{'text':text,'version':'fixture','sources':[{'layer':'briefing','reference_id':'synthetic-brief','source_version':'fixture-v1'}]},'rules':[{'id':'synthetic-rule','scope':'brand','ref':'synthetic','active':True,'sources':[{'layer':'brand','reference_id':'synthetic-rule','source_version':'fixture-v1'}]},{'id':'synthetic-basics','scope':'global','active':True,'sources':[{'layer':'basics','reference_id':'synthetic-basics','source_version':'fixture-v1'}]}],'brand_context':{'brand':'synthetic','text':'','sources':[]},'limitations':[]}
     return {'snapshot':value,'context_sha256':snapshot_digest(value)}
 
 def plan(snapshot, digest, plan_id=None):
+    if snapshot['briefing']['text'].startswith('UNAVAILABLE_FIXTURE'):
+        return {'error':'plan-api-unavailable'}
     return {'schema_version':'autoreview.plan.v1','status':'ready','context_sha256':digest,'plan_id':'synthetic-plan-'+snapshot['request_id'],'content_sha256':'a'*64,'version':1,'compiler_version':'synthetic-fixture',
         'requirements':[{'id':'synthetic-product','text':'Keep the product visible during the demonstration.','severity':'warning','applicability':'video','sources':[{'layer':'brand','reference_id':'synthetic-rule','source_version':'fixture-v1'}]},
             {'id':'synthetic-captions','text':'Keep spoken words readable in captions.','severity':'warning','applicability':'video','sources':[{'layer':'basics','reference_id':'synthetic-basics','source_version':'fixture-v1'}]},
             {'id':'synthetic-variants','text':'Deliver all three requested variants.','severity':'warning','applicability':'submission','sources':[{'layer':'briefing','reference_id':'synthetic-brief','source_version':'fixture-v1'}]}], 'limitations':[]}
-review_bridge.checklist_card=lambda url:{'card_id':'0123456789abcdef01234567','title':'Synthetic launch'}
+review_bridge.checklist_card=lambda url:{'card_id':'0123456789abcdef01234567','title':'Synthetic launch','short_link':'AbCd1234'}
 review_bridge.checklist_snapshot=snapshot
 review_bridge.checklist_plan=plan
 review_bridge.register_request=lambda *a,**kw:{'ok':True}

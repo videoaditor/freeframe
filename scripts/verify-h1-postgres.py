@@ -90,6 +90,45 @@ with Session(engine) as db:
     assert db.query(Folder).filter(Folder.project_id==project_id).count()==1
 print('PASS: failed request rolls back intent and folder')
 
+# Execute the real task using a real Session; only remote bridge calls are fixtures.
+from datetime import datetime, timedelta, timezone
+from apps.api.tasks.checklist_tasks import prepare_checklist, resume_checklists
+bound_id=uuid.UUID(requests[0]['checklist_binding_id'])
+with Session(engine) as db:
+    bound=db.get(ChecklistBinding,bound_id)
+    bound.snapshot={'briefing':{'text':'Frozen instructions'}}
+    bound.context_sha256='a'*64;bound.plan_id='fixture-plan';bound.status='running'
+    bound.registered_at=datetime.now(timezone.utc);db.commit()
+ready={'status':'ready','plan_id':'fixture-plan','context_sha256':'a'*64,'content_sha256':'b'*64,'requirements':[{'id':'fixture'}]}
+with patch('apps.api.tasks.checklist_tasks.SessionLocal',side_effect=lambda:Session(engine)), patch('apps.api.services.checklists.review_bridge.checklist_plan',return_value=ready), patch('apps.api.tasks.checklist_tasks.review_bridge.register_request',return_value=None):
+    prepare_checklist.run(str(bound_id))
+with Session(engine) as db:
+    bound=db.get(ChecklistBinding,bound_id)
+    assert bound.status=='ready' and bound.content_sha256=='b'*64 and bound.registered_at is None
+    assert bound.registration_attempts==1 and bound.next_registration_at>datetime.now(timezone.utc)
+    bound.next_registration_at=datetime.now(timezone.utc)-timedelta(seconds=1);db.commit()
+with patch('apps.api.tasks.checklist_tasks.SessionLocal',side_effect=lambda:Session(engine)), patch('apps.api.tasks.checklist_tasks.review_bridge.register_request',return_value={'ok':True}) as register:
+    prepare_checklist.run(str(bound_id))
+    assert register.call_args.kwargs['checklist']['content_sha256']=='b'*64
+with Session(engine) as db:
+    assert db.get(ChecklistBinding,bound_id).registered_at is not None
+print('PASS: ready reference delivery failure stays committed; restart retransmits the final hash')
+
+# Exhausted/retired rows must not occupy the recovery window forever.
+with Session(engine) as db:
+    for n in range(50):
+        db.add(ChecklistBinding(project_id=project_id,created_by=user_id,source_key=f'exhausted:{n}',intent=intent,intent_sha256='c'*64,status='failed',review_share_token=f'exhausted-{n}',registration_attempts=3,registration_error='registration-unavailable'))
+    fresh=reserve_binding(db,project_id,user_id,'fresh-recovery',intent)
+    fresh_id=fresh.id;db.commit()
+with patch('apps.api.tasks.checklist_tasks.SessionLocal',side_effect=lambda:Session(engine)),patch('apps.api.tasks.checklist_tasks.prepare_checklist.delay') as dispatch:
+    resume_checklists.run()
+    dispatched={call.args[0] for call in dispatch.call_args_list}
+    assert str(fresh_id) in dispatched
+    with Session(engine) as db:
+        exhausted=db.query(ChecklistBinding.id).filter(ChecklistBinding.project_id==project_id,ChecklistBinding.registration_attempts>=3).all()
+        assert not dispatched.intersection(str(key) for (key,) in exhausted)
+print('PASS: fifty exhausted registration rows do not starve a later committed intent')
+
 migrate('downgrade','e4f5a6b7c8d9')
 with engine.connect() as c:
     assert c.execute(text("select to_regclass('public.checklist_bindings')")).scalar() is None

@@ -54,3 +54,16 @@ Task 3 complete: e0ac6b7; API 470 passed, 51 skipped. Real disposable Postgres v
 Task 4 complete: 620057f; two additional UI regressions observed RED then GREEN (new assignment after reopen, caught failed retry). Unique workspace matching regression observed RED then GREEN. Browser confirms persisted reload and no folder/request from paste, synthetic data only.
 Task 4 ruling: screenshots use a synthetic bridge harness because the Engine API is not available/confirmed. They establish UI behavior only; cost if wrong: integration must still fail closed and pass real Engine evidence before live activation.
 Browser limitation: browser zoom shortcuts have no effect and no reduced-motion emulation API is exposed. No false 200%/reduced-motion verification claim. Native disclosure adds no animation.
+
+Final review: one fresh gpt-6-astra reviewer inspected both complete branches, found one Critical and five Important issues, no minors. All six entered one regression-led fix pass.
+Final: fixed credential-backed customer Trello reads — Worker untrusted snapshot/registration tests RED→GREEN, FreeFrame registration strips Trello URL.
+Final: fixed lost registration invalidation — task regression RED→GREEN plus real Postgres ready/failure/restart retransmission proof.
+Final: fixed incomplete briefing freezing — long/oversized direct docs, two attached scripts/two comments, and Notion pagination/nested read failure RED→GREEN; strict readers never truncate.
+Final: fixed registration starvation — bounded separate attempts/backoff and invalid-parent retirement RED→GREEN; Postgres sweep gets new work past fifty exhausted rows.
+Final: fixed offline legacy adoption — verified short mapping and local same-project/card matching RED→GREEN; no fresh provider read required.
+Final: fixed former-member checklist listing — revoked membership/deleted project regressions RED→GREEN; current project role checked before adding private responses.
+Final: Ruling: Engine compilation/durable dedup/review reuse remain the Engine owner's dependency — no substitute compiler or readiness claim — cost if wrong: live activation stays blocked until integrated tests.
+Final: Ruling: no production activation/delivery verification — user authorized Draft PRs only — cost if wrong: rollout remains a later explicit step.
+Final: Ruling: 200% zoom/reduced-motion acceptance remains unverified — exposed browser controls cannot provide it — cost if wrong: a human/browser acceptance check remains before merge.
+Final: Ruling: existing broad staff policy and legacy brand matching remain platform policy — H1 adds current-role checks and ambiguity guard without redesigning permissions — cost if wrong: a separately scoped permission/brand policy change is required.
+No deferred minors.

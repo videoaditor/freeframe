@@ -185,10 +185,7 @@ def create_folder(
         folder = _get_folder(db, body.existing_folder_id)
         if folder.project_id != project_id:
             raise HTTPException(404, 'Folder not found')
-        from ..services import review_bridge
-        card = review_bridge.checklist_card(folder.description or '')
-        if not card or card.get('card_id') != binding.trello_card_id:
-            raise HTTPException(409, 'Folder card differs from checklist')
+        binding_for_folder(db, binding.id, project_id, folder.description)
         binding.folder_id = folder.id
         existing_link = db.query(ShareLink).filter(ShareLink.folder_id == folder.id, ShareLink.deleted_at.is_(None),
             ShareLink.title == 'Auto Review').first()

@@ -205,8 +205,15 @@ def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = D
             ProjectMember.user_id == current_user.id, ProjectMember.deleted_at.is_(None)).all()]
         q = q.filter((UploadRequest.created_by == current_user.id) | (UploadRequest.project_id.in_(member_projects or [uuid.uuid4()])))
     reqs = q.order_by(UploadRequest.created_at.desc()).limit(100).all()
+    projects = {}
+    for project in db.query(Project).filter(Project.id.in_({r.project_id for r in reqs} or {uuid.uuid4()}), Project.deleted_at.is_(None)).all():
+        try:
+            require_project_role(db, project.id, current_user, ProjectRole.viewer)
+        except HTTPException:
+            continue
+        projects[project.id] = project
+    reqs = [r for r in reqs if r.project_id in projects]
     statuses = review_bridge.request_status([r.review_share_token for r in reqs])
-    projects = {p.id: p for p in db.query(Project).filter(Project.id.in_({r.project_id for r in reqs} or {uuid.uuid4()})).all()}
     assets = {r.id: _submitted_assets(db, r) for r in reqs}
     stats = review_bridge.asset_stats([str(a.id) for items in assets.values() for a in items])
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()

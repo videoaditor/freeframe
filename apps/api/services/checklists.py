@@ -61,6 +61,7 @@ def binding_out(row):
     plan = row.plan or {}
     return {'id': str(row.id), 'status': row.status, 'error_code': row.error_code,
         'plan_id': row.plan_id, 'content_sha256': row.content_sha256,
+        'registration_error': getattr(row, 'registration_error', None),
         'requirements': plan.get('requirements', []) if row.status == 'ready' else [],
         'limitations': plan.get('limitations', []), 'trello_card_id': getattr(row, 'trello_card_id', None), 'attempts': row.attempts}
 
@@ -76,7 +77,7 @@ def binding_for_folder(db, binding_id, project_id, description):
     import re
     cards = re.findall(r'https://(?:www\.)?trello\.com/c/([A-Za-z0-9]+)', description or '')
     original = re.search(r'/c/([A-Za-z0-9]+)', row.intent.get('brief_url', ''))
-    if not cards or any(c not in {row.trello_card_id, original.group(1) if original else ''} for c in cards):
+    if not cards or any(c not in {row.trello_card_id, row.intent.get('trello_short_link', ''), original.group(1) if original else ''} for c in cards):
         raise HTTPException(409, 'Folder card differs from checklist')
     return row
 
@@ -87,13 +88,20 @@ def _failed_attempt(row, code):
     row.next_attempt_at = None if row.status == 'failed' else datetime.now(timezone.utc) + timedelta(seconds=30 * row.attempts)
 
 
+def pending_registration(row):
+    row.registered_at = None
+    row.registration_attempts = 0
+    row.registration_error = None
+    row.next_registration_at = None
+
+
 def advance_binding(db, row):
     """Caller holds the binding row lock. Snapshot commit precedes all paid preparation.
 
     After snapshot commit, next delivery may submit concurrently: identical canonical payload and
     engine idempotency make this safe. No input is reread after the freeze succeeds.
     """
-    if row.status in ('ready', 'failed'):
+    if row.status in ('ready', 'failed') or (row.next_attempt_at and row.next_attempt_at > datetime.now(timezone.utc)):
         return
     row.attempts += 1
     if row.snapshot is None:
@@ -106,6 +114,7 @@ def advance_binding(db, row):
             _failed_attempt(row, 'snapshot-identity-invalid'); db.commit(); return
         row.context_sha256 = response['context_sha256']
         row.status = 'preparing'
+        pending_registration(row)
         db.commit()  # This is the freeze; a retry must never reload live rules/briefing.
         db.refresh(row, with_for_update=True)
         if row.status in ('ready', 'failed'):
@@ -117,6 +126,8 @@ def advance_binding(db, row):
         _failed_attempt(row, 'plan-contract-invalid'); db.commit(); return
     if response['status'] == 'ready' and (not response.get('requirements') or not response.get('content_sha256')):
         _failed_attempt(row, 'plan-contract-invalid'); db.commit(); return
+    if (row.plan_id, row.content_sha256) != (response['plan_id'], response.get('content_sha256')):
+        pending_registration(row)
     row.plan_id = response['plan_id']
     row.status = 'ready' if response['status'] == 'ready' else 'failed' if response['status'] == 'failed' else 'running'
     row.error_code = 'plan-failed' if row.status == 'failed' else None

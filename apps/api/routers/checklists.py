@@ -45,7 +45,8 @@ def prepare_checklist(body: ChecklistPrepare, db: Session = Depends(get_db), cur
     from .requests import project_brand
     # Canonical URL ensures short/full links deduplicate against the same immutable intent.
     intent = {'brand': project_brand(db, project), 'title': '', 'brief_text': '',
-        'brief_url': f"https://trello.com/c/{card['card_id']}", 'brief_pdf_base64': ''}
+        'brief_url': f"https://trello.com/c/{card['card_id']}", 'brief_pdf_base64': '',
+        'trello_short_link': card.get('short_link', '')}
     binding = reserve_binding(db, body.project_id, current_user.id, f"trello:{card['card_id']}", intent, card['card_id'])
     db.commit()
     dispatch_binding(binding.id)
@@ -72,8 +73,10 @@ def read_checklist(binding_id: uuid.UUID, db: Session = Depends(get_db), current
 def retry_checklist(binding_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     row = _authorized(db, binding_id, current_user, ProjectRole.editor)
     row = db.query(ChecklistBinding).filter(ChecklistBinding.id == row.id).with_for_update().one()
-    if row.status == 'failed':
-        row.status = 'queued'; row.error_code = None; row.attempts = 0; row.next_attempt_at = datetime.now(timezone.utc)
+    if row.status == 'failed' or getattr(row, 'registration_error', None):
+        if row.status == 'failed':
+            row.status = 'queued'; row.error_code = None; row.attempts = 0; row.next_attempt_at = datetime.now(timezone.utc)
+        row.registration_attempts = 0; row.registration_error = None; row.next_registration_at = None
         db.commit()
         dispatch_binding(row.id)
     return binding_out(row)
