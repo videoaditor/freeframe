@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Link-sharing dialogs focus on copying/sending the link; review checklists and logo editing no longer appear there. Logo editing remains in Brand rules.
+- Review waiting time survives reloads from the committed submission clock. Offline and failed reviews stop activity while retaining the source frame; time ranges distinguish analysis from total wait and calibrated remaining time.
 - Whop sign-in returns a valid Hub hand-in link to the selected card instead of Home.
 - Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
 - The review timeline now supports native touch dragging and keyboard seeking, with a larger hit area, visible thumb and spaced second labels.
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - A service-authenticated read exposes the saved review context only for the matching assignment, project, asset and media version, so review integrations can reuse frozen inputs without exposing private rule text to guests.
+- Verified AutoReview requirement sources appear as small Basics, Brand and Briefing labels beside comments, including the private editor review. Trusted sources survive reload and CSV export; editing the text removes the source labels.
 - Saved review plans for file requests and Trello hand-ins, with one frozen briefing/rule snapshot shared across versions and a private checklist in Handin. Share dialogs stay focused on copying/sending links. Optional Engine preparation can be unavailable while upload links remain usable.
 - Hub current-card links prefill Handin and preserve the selected Trello card through sign-in.
 - Telehealth October preview with server-attested campaign identity, one brand per preview owner, a fixed November 1 Eastern cutoff and a recoverable plan-selection screen. Existing paid AutoReview access remains separate.

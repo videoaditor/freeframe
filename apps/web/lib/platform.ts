@@ -59,7 +59,7 @@ export function editorAccuracy(editors: EditorStats[]) {
   return { average, count: rated.length, outliers }
 }
 
-export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional' }
+export interface ReviewComment { id?: string; t: number | null; body: string; must_fix?: boolean; weight?: 'must_fix' | 'optional'; review_source?: import('@/types').ReviewSource | null }
 
 export interface TimeSaved {
   days: number
@@ -255,7 +255,17 @@ export interface RequestView {
   expires_at: string | null
 }
 
+export interface ReviewTimeRange {
+  lowerSeconds: number; upperSeconds: number; sampleCount: number
+  scope: 'submission-to-publication' | 'phase-conditioned-remaining' | 'analysis'
+}
+export interface ReviewTiming {
+  schema_version: 'autoreview.timing.v1'; calibration: 'measured' | 'collecting'
+  started_at?: number; server_now?: number; phase_started_at?: number; phase?: string
+  total?: ReviewTimeRange; remaining?: ReviewTimeRange; analysis?: ReviewTimeRange
+}
 export interface ReviewProgress {
+  elapsedSeconds?: number; timing?: ReviewTiming
   stage: 'waiting' | 'reading' | 'failed' | 'skipped' | 'done'
   step?: 'preparing' | 'measuring' | 'analysing' | 'finishing'
   version_id?: string; queued_at?: string

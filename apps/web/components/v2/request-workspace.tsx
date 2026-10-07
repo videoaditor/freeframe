@@ -7,6 +7,7 @@ import { VideoPlayer } from '@/components/review/video-player'
 import { CommentItem } from '@/components/review/comment-panel'
 import { Dispute } from './review-list'
 import { requestVersion, type RequestAsset, type ReviewComment, type ReviewProgress } from '@/lib/platform'
+import { serverElapsed, waitExpectation } from '@/lib/review-wait'
 import { downloadFeedback, feedbackSrt } from '@/lib/request-feedback'
 import { useReviewStore } from '@/stores/review-store'
 import type { CommentWithReplies } from '@/hooks/use-comments'
@@ -43,30 +44,37 @@ export function SubmissionSuccess({ token, brand }: { token: string; brand: stri
 }
 function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, processingText, progress, processing }: { mediaUrl?: string; thumbnailUrl?: string | null; unavailable?: boolean; onRefresh: () => void | Promise<void>; processingText?: string; progress?: ReviewProgress | null; processing?: string }) {
   const [paused, setPaused] = React.useState(false)
+  const [offline, setOffline] = React.useState(false)
+  React.useEffect(() => {
+    const update = () => { setOffline(!navigator.onLine) }
+    update()
+    window.addEventListener('offline',update); window.addEventListener('online',update)
+    return () => { window.removeEventListener('offline',update); window.removeEventListener('online',update) }
+  }, [])
+  unavailable = unavailable || offline || progress?.stage === 'failed'
   const [scanning, setScanning] = React.useState(true)
-  const [clock, setClock] = React.useState(() => ({ at: Date.now(), now: Date.now(), base: progress?.startedAgoSeconds || 0 }))
+  const serverAge = serverElapsed(progress)
+  const [clock, setClock] = React.useState(() => ({ at: Date.now(), now: Date.now(), base: serverAge }))
   React.useEffect(() => {
     const park = setTimeout(() => setScanning(false), 3600)
     return () => clearTimeout(park)
   }, [])
   React.useEffect(() => {
     const at = Date.now()
-    const queued = progress?.queued_at ? Date.parse(progress.queued_at) : NaN
-    setClock({ at, now: at, base: progress?.stage === 'waiting' && Number.isFinite(queued) ? Math.max(0, (at - queued) / 1000) : progress?.startedAgoSeconds || 0 })
+    setClock({ at, now: at, base: serverAge })
     if (unavailable) return
     const tick = setInterval(() => setClock(c => ({ ...c, now: Date.now() })), 1000)
     return () => clearInterval(tick)
-  }, [progress?.startedAgoSeconds, progress?.queued_at, progress?.stage, unavailable])
-  const elapsed = Math.max(0, Math.floor(clock.base + (clock.now - clock.at) / 1000))
+  }, [serverAge, unavailable])
+  const elapsed = clock.base === undefined ? undefined : Math.max(0, Math.floor(clock.base + (clock.now - clock.at) / 1000))
   const preparing = processing && processing !== 'ready'
   const step = preparing ? 'Preparing video' : progress?.stage === 'waiting' ? 'Waiting for review' : ({ preparing: 'Reading the brief', measuring: 'Measuring the video', analysing: 'Checking the video', finishing: 'Preparing feedback' }[progress?.step || 'preparing'])
-  const phases = ['preparing', 'measuring', 'analysing', 'finishing']
-  const phase = preparing || progress?.stage === 'waiting' ? 0 : Math.max(0, phases.indexOf(progress?.step || 'preparing'))
-  const estimate = progress?.estimate
-  const overrun = !preparing && progress?.stage === 'reading' && progress.step !== 'finishing' && !!estimate && elapsed > estimate.upperSeconds
-  const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} elapsed`
-  const minutes = (seconds: number) => seconds / 60
-  const expectation = estimate ? `Analysis usually ${minutes(estimate.lowerSeconds)}${estimate.lowerSeconds === estimate.upperSeconds ? '' : `–${minutes(estimate.upperSeconds)}`} min` : 'Learning typical review time'
+  const expectation = waitExpectation(progress)
+  const timing = progress?.timing
+  const analysisElapsed = timing?.phase === 'analysing' && timing.phase_started_at && timing.server_now ? (timing.server_now - timing.phase_started_at) / 1000 : progress?.startedAgoSeconds
+  const comparableElapsed = expectation.scope === 'total' ? elapsed : analysisElapsed
+  const overrun = !preparing && progress?.stage === 'reading' && progress.step !== 'finishing' && expectation.upper !== undefined && comparableElapsed !== undefined && comparableElapsed > expectation.upper
+  const elapsedLabel = elapsed === undefined ? 'Waiting time will appear when confirmed' : `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} elapsed`
   const [ratio, setRatio] = React.useState(9 / 16)
   const [failedThumbnail, setFailedThumbnail] = React.useState(false)
   const [failed, setFailed] = React.useState(false)
@@ -77,16 +85,16 @@ function ReviewAnalysis({ mediaUrl, thumbnailUrl, unavailable, onRefresh, proces
       {thumbnail ? /* eslint-disable-next-line @next/next/no-img-element */ <img key={attempt} src={thumbnailUrl} alt="Still frame of your submitted video" className="h-full w-full object-contain" onLoad={e => setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight || 9 / 16)} onError={() => setFailedThumbnail(true)} /> : mediaUrl && !failed ? <video key={attempt} src={mediaUrl} aria-label="Still frame of your submitted video" role="img" muted playsInline preload="metadata" disablePictureInPicture disableRemotePlayback tabIndex={-1} className="pointer-events-none h-full w-full object-contain" onContextMenu={e => e.preventDefault()} onPlay={e => e.currentTarget.pause()} onLoadedMetadata={e => { const video = e.currentTarget; setRatio(video.videoWidth / video.videoHeight || 9 / 16); video.currentTime = Number.isFinite(video.duration) ? Math.min(1, video.duration / 2) : 0 }} onError={() => setFailed(true)} /> : <div className="grid h-full place-content-center gap-3 p-4 text-xs text-text-tertiary"><Film className="mx-auto" size={24} />{failed ? 'Preview unavailable' : 'Preparing preview'}</div>}
       {!unavailable && <div aria-hidden="true" className="review-frame-overlay pointer-events-none absolute inset-0"><div className="review-frame-grid absolute inset-0" /><div className="review-analysis-scan absolute inset-x-0 top-0 h-full" /><div className="review-frame-target absolute inset-x-[20%] inset-y-[30%] rounded-md border"><i /><i /><i /><i /></div></div>}
     </div>
-    <h3 className="mt-5 text-lg font-semibold">{unavailable ? 'Review unavailable' : 'Review in progress'}</h3>
-    <p role="status" className="mx-auto mt-2 min-h-6 max-w-xs text-base leading-relaxed text-text-secondary">{unavailable ? 'Your file is safe. We cannot confirm the review yet.' : <span key={step} className="review-step-text inline-block">{progress?.retrying ? 'Retrying the review' : preparing && processingText ? processingText : step}</span>}</p>
+    <h3 className="mt-5 text-lg font-semibold">{offline ? 'Connection paused' : unavailable ? 'Review unavailable' : 'Review in progress'}</h3>
+    <p role="status" className="mx-auto mt-2 min-h-6 max-w-xs text-base leading-relaxed text-text-secondary">{unavailable ? offline ? 'Your file is safe. Reconnect to check the review.' : 'Your file is safe. We cannot confirm the review yet.' : <span key={step} className="review-step-text inline-block">{progress?.retrying ? 'Retrying the review' : preparing && processingText ? processingText : step}</span>}</p>
     {!unavailable && <>
       <div role="progressbar" aria-label="Review steps" aria-valuetext={step} className="review-progress-track relative mt-5 h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
-        <div className="review-progress-fill h-full rounded-full bg-accent/60" style={{ width: `${8 + phase * 27}%` }}><span className="review-progress-activity block h-full w-12 bg-accent" /></div>
+        <div className="review-progress-fill h-full rounded-full" ><span className="review-progress-activity block h-full w-12 bg-accent" /></div>
       </div>
       <div className="mt-4 space-y-1 text-sm leading-relaxed">
-        <p className="font-medium text-text-primary">{expectation}</p>
+        <p className="font-medium text-text-primary">{expectation.label}</p>
         <p className="tabular-nums text-text-secondary">{elapsedLabel}</p>
-        <p className="text-text-tertiary">{estimate ? `Based on ${estimate.sampleCount} recent similar videos. Queue time is additional.` : 'The first few reviews help measure this. Feedback appears automatically.'}</p>
+        <p className="text-text-tertiary">{expectation.detail}</p>
         {overrun && <p className="pt-2 text-text-secondary">Taking longer than usual. Your review is still running.</p>}
       </div>
     </>}
@@ -114,7 +122,7 @@ export function RequestWorkspace({ token, brand, assets, activeId, onSelect, onR
   if (asset?.media_url && source.current?.key !== sourceKey) source.current = { key: sourceKey, url: asset.media_url }
   const refreshMedia = async () => { await onRefresh(); source.current = undefined; redraw() }
   const focused = useReviewStore(s => s.focusedCommentId)
-  const native: CommentWithReplies[] = (asset?.comments || []).map((c, i) => ({ id: c.id || `note-${i}`, asset_id: latest.asset_id, version_id: asset?.version_id || '', parent_id: null, author_id: 'review-agent', guest_author_id: null, author: { id: 'review-agent', name: brand?.trim() || 'Review team', avatar_url: null }, timecode_start: c.t, timecode_end: null, body: c.body, resolved: false, visibility: 'public', created_at: '', updated_at: '', deleted_at: null, replies: [], reactions: [], annotation: null, guest_author: null }))
+  const native: CommentWithReplies[] = (asset?.comments || []).map((c, i) => ({ id: c.id || `note-${i}`, asset_id: latest.asset_id, version_id: asset?.version_id || '', parent_id: null, author_id: 'review-agent', guest_author_id: null, author: { id: 'review-agent', name: brand?.trim() || 'Review team', avatar_url: null }, timecode_start: c.t, timecode_end: null, body: c.body, review_source: c.review_source, resolved: false, visibility: 'public', created_at: '', updated_at: '', deleted_at: null, replies: [], reactions: [], annotation: null, guest_author: null }))
   const pending = !asset || asset.processing !== 'ready' || (!historic && asset.review_state !== 'held' && asset.review_state !== 'clear')
   const unavailable = asset && (!asset.review_state || asset.review_state === 'unavailable')
   return <section className={`request-workspace ${pending ? 'mx-auto max-w-lg' : ''}`}>

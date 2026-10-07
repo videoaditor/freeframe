@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 import sqlalchemy
 from sqlalchemy import func as sa_func, case
 from sqlalchemy.orm import Session
@@ -1350,6 +1350,7 @@ def get_share_stream_url(
     version_id: Optional[uuid.UUID] = Query(default=None),
     share_session: Optional[str] = Query(None, alias="share_session"),
     download: bool = Query(default=False),
+    x_api_key: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
@@ -1417,7 +1418,10 @@ def get_share_stream_url(
     if media_file.s3_key_thumbnail:
         thumb_url = generate_presigned_get_url(media_file.s3_key_thumbnail)
 
+    from ..services.review_timing import private_timing_context
+    timing = private_timing_context(db, x_api_key, token, asset.id, media_file.version_id, asset.project_id, service_user=current_user)
     return {
+        **timing,
         "url": url,
         "asset_type": asset.asset_type.value,
         "name": asset.name,

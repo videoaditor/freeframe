@@ -37,6 +37,7 @@ import {
   type ExportFormat,
 } from "@/lib/export-comments";
 import { FpsPromptDialog } from "@/components/review/fps-prompt-dialog";
+import { CommentSourceBadges } from "./comment-source-badges";
 
 // Guest identities that are automations rather than people, comma-separated. Empty by default,
 // so an instance that runs no automation behaves exactly as it did.
@@ -567,6 +568,7 @@ export function CommentItem({
 
           {/* Timecode badge + annotation indicator */}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <CommentSourceBadges source={comment.review_source} />
             {comment.timecode_start !== null &&
               comment.timecode_start !== undefined && (
                 <button

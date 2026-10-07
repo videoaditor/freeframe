@@ -1,0 +1,62 @@
+{
+  "light": {
+    "background": "oklch(1 0 0)",
+    "overflow": false,
+    "reduceMotion": false,
+    "rules": [
+      "@media (prefers-reduced-motion: reduce) {\n  .page-in, .route-in, .stagger > *, .sheet-in { animation: 200ms ease 0s 1 normal both running v2-fade !important; }\n  .press:active, .drop-hot, .drop-hot .folder-lift { transform: none !important; }\n  .scan::after { animation: auto ease 0s 1 normal none running none; }\n  .icon-swap { animation: auto ease 0s 1 normal none running none; }\n  .link-fill { transition: none; }\n  ::view-transition-old(root), ::view-transition-new(root) { animation: auto ease 0s 1 normal none running none; }\n}",
+      "@media (prefers-reduced-motion: reduce) {\n  .review-flipbook *, .animate-spin, .animate-shimmer { animation: auto ease 0s 1 normal none running none !important; }\n  .motion-toggle { display: none; }\n  .progress-fill { transition: none; }\n}",
+      "@media (prefers-reduced-motion: reduce) {\n  .kanban-art * { animation: auto ease 0s 1 normal none running none !important; }\n  .kanban-motion { display: none; }\n}",
+      "@media (prefers-reduced-motion: reduce) {\n  .review-robot-dance, .review-analysis-scan, .review-progress-activity, .review-step-text { animation: auto ease 0s 1 normal none running none; }\n  .review-progress-fill, .review-frame-grid, .review-frame-target { transition: none; }\n  .request-motion { display: none; }\n}",
+      "@media (prefers-reduced-motion: reduce) {\n  .request-confetti { display: none; }\n  .review-note .report-bug-trigger { transition: none; }\n}"
+    ],
+    "text": [
+      {
+        "color": "rgb(29, 29, 31)",
+        "text": "Review in progress"
+      },
+      {
+        "color": "oklch(0.47 0.01 285)",
+        "text": "Waiting for review"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "text": "Measuring typical wait time"
+      },
+      {
+        "color": "oklch(0.47 0.01 285)",
+        "text": "1:03 elapsed"
+      },
+      {
+        "color": "oklch(0.49 0.008 285)",
+        "text": "Not enough matching reviews to give a reliable time range yet. Feedback appears automatically."
+      }
+    ]
+  },
+  "dark": {
+    "background": "rgb(24, 24, 27)",
+    "overflow": false,
+    "text": [
+      {
+        "color": "rgb(245, 245, 247)",
+        "text": "Review in progress"
+      },
+      {
+        "color": "rgb(179, 179, 184)",
+        "text": "Checking the video"
+      },
+      {
+        "color": "rgb(245, 245, 247)",
+        "text": "About 1–2 min remaining"
+      },
+      {
+        "color": "rgb(179, 179, 184)",
+        "text": "4:03 elapsed"
+      },
+      {
+        "color": "oklch(0.7 0.008 285)",
+        "text": "Measured from similar reviews still in this phase. Updated when status is checked."
+      }
+    ]
+  }
+}

@@ -19,3 +19,11 @@ A frozen snapshot is readable when optional plan preparation failed, including `
 - `git diff --check` passed. Local disposable PostgreSQL was stopped after verification. No browser rerun is needed for this server-only addendum; the Share UI remains at its visually verified base.
 
 Logs are in `/Users/alansimon/Downloads/autoreview-handoffs-2026-10-05/sessions/H1/snapshot-read-*.log`. Release compatibility and H1/H2 merge-migration guidance are recorded separately in `sessions/H1/release-compatibility.md` and `sessions/H1.json`. Only the release coordinator deploys after combined customer-flow acceptance.
+
+## PR qualification against current main
+
+Synced with `main` at `01654a20e35dcce6d9f32d392f4cdce51a5834d4` after the first H4 release. The producer route is byte-for-byte unchanged from `9f72d7ba4784df169df41e638b599601811933a7`; the PR diff remains the same seven backend/test/documentation files, with no UI or migration diff. The only merge conflict was the two additive Changelog entries; both were retained. Documentation now names the existing merge revision `c4d7e10b2026`.
+
+Fresh checks on this combined tree: local dedicated PostgreSQL upgraded from H1 to the existing combined migration head; full API **592 passed, 12 skipped, 3 existing warnings**, including all 13 snapshot SQL regressions. Node 22.22.3 Web **564 passed /84 files**; build, TypeScript and lint passed with existing warnings. The first full Web run had one timeout in `share-mobile-review.test.tsx` while the lazy viewer was still loading. The isolated case passed, then the unchanged full suite passed; no source/test timeout was changed. Logs: `snapshot-pr-migration.log`, `snapshot-pr-api-full.log`, `snapshot-pr-web-build.log`, `snapshot-pr-web-test.log`, `snapshot-pr-web-mobile-probe.log`, `snapshot-pr-web-test-retry.log`, `snapshot-pr-web-types.log`, `snapshot-pr-web-lint.log` in the existing H1 evidence folder.
+
+The shared H2 consumer contract now matches the actual H1 route, mandatory registered tenant/project and exact asset/version identities (`sessions/H2-SNAPSHOT-INPUT.md`). H2 owns consumer qualification and H4 the next integrated release; this PR does not deploy either side.
