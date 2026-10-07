@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Server-controlled project opt-in for bound AutoReview on new assignments, with frozen review selection and unchanged legacy defaults.
 
 ### Fixed
+- Production API containers receive shutdown signals directly and have time to finish Gunicorn's graceful shutdown, avoiding forced termination during deployment. Database migrations still complete before the API starts.
 - Deleted request folders disappear from the owner overview without hiding active deliveries. Public share links respect deleted targets and projects; restoring a folder preserves its original request and share links.
 - The trial notice uses a calm blue style and can be dismissed per account/campaign in this browser. Feedback remains accessible and trial expiry still applies.
 - Parts reviews reuse the assignment's saved briefing, brand context and rules, including after restarts. Retry preserves the original hand-in identity, and private original downloads retain their filename and video container.
