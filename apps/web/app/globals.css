@@ -620,3 +620,121 @@ button:not(:disabled), summary { cursor: pointer; }
   100% { transform: translate(var(--confetti-x), 180px) rotate(var(--confetti-turn)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .request-confetti { display: none; } .review-note .report-bug-trigger { transition: none; } }
+
+/* Hand-in uses the public AutoReview orange in both owner and editor contexts. */
+.handin-workspace {
+  background: var(--bg-primary);
+  --folder-back-top: oklch(0.75 0.16 34);
+  --folder-back-bottom: oklch(0.62 0.205 33);
+  --folder-front-top: oklch(0.85 0.09 34);
+  --folder-front-bottom: oklch(0.72 0.17 34);
+  --accent: oklch(0.69 0.205 33);
+  --accent-hover: oklch(0.74 0.18 33);
+  --accent-muted: oklch(0.69 0.205 33 / 0.14);
+  --text-inverse: oklch(0.15 0.004 285);
+  --bg-primary: oklch(0.146 0.004 285);
+  --bg-secondary: oklch(0.185 0.006 285);
+  --text-primary: oklch(0.97 0.003 285);
+  --text-secondary: oklch(0.74 0.006 285);
+}
+[data-theme="light"] .handin-workspace {
+  --accent: oklch(0.56 0.195 33);
+  --accent-hover: oklch(0.51 0.185 33);
+  --accent-muted: oklch(0.56 0.195 33 / 0.1);
+  --text-inverse: oklch(1 0 0);
+  --bg-primary: oklch(0.99 0.002 285);
+  --bg-secondary: oklch(0.96 0.003 285);
+  --text-primary: oklch(0.22 0.006 285);
+  --text-secondary: oklch(0.44 0.008 285);
+}
+
+/* The compact raised upload controls used by AdMixer, within Hand-in's palette. */
+.parts-drop {
+  background-image: linear-gradient(145deg, color-mix(in oklch, var(--text-primary) 4%, transparent), transparent 45%, oklch(0 0 0 / 0.04));
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--text-primary) 8%, transparent), 0 2px 4px oklch(0 0 0 / 0.06), 0 8px 24px oklch(0 0 0 / 0.08);
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 180ms ease;
+}
+.parts-upload-symbol {
+  position: relative;
+  isolation: isolate;
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--text-primary) 12%, transparent), 0 2px 5px oklch(0 0 0 / 0.04);
+  transition: transform 180ms var(--ease-out);
+}
+.parts-upload-symbol::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid color-mix(in oklch, var(--accent) 16%, transparent);
+  border-radius: inherit;
+  transform: rotate(-8deg);
+}
+.parts-drop[data-dragging="true"] { border-color: var(--accent); background-color: var(--accent-muted); }
+@media (hover: hover) and (pointer: fine) {
+  .parts-drop:hover { border-color: var(--accent); }
+  .parts-drop:hover:not(:focus-within) .parts-upload-symbol { transform: translateY(-2px) rotate(-4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .parts-drop, .parts-upload-symbol { transition: none; }
+  .parts-drop:hover .parts-upload-symbol { transform: none; }
+}
+
+/* Public file requests follow OS appearance without changing account preferences. */
+.handin-workspace[data-system-appearance] {
+  color-scheme: light;
+  --accent: oklch(0.56 0.195 33);
+  --accent-hover: oklch(0.51 0.185 33);
+  --accent-muted: oklch(0.56 0.195 33 / 0.1);
+  --text-inverse: oklch(1 0 0);
+  --bg-primary: oklch(0.99 0.002 285);
+  --bg-secondary: oklch(0.96 0.003 285);
+  --bg-tertiary: oklch(0.94 0.004 285);
+  --bg-elevated: oklch(1 0 0);
+  --bg-hover: oklch(0.925 0.006 285);
+  --text-primary: oklch(0.22 0.006 285);
+  --text-secondary: oklch(0.44 0.008 285);
+  --text-tertiary: oklch(0.48 0.008 285);
+  --border-primary: oklch(0 0 0 / 0.1);
+  --border-secondary: oklch(0 0 0 / 0.06);
+  --border-focus: var(--accent);
+  --drop-border: oklch(0 0 0 / 0.2);
+  --glass-bg: oklch(1 0 0 / 0.72);
+  --glass-border: oklch(0 0 0 / 0.08);
+  --glass-highlight: oklch(1 0 0 / 0.6);
+  --shadow-lift: 0 24px 60px -28px oklch(0 0 0 / 0.25);
+  --status-error: oklch(0.55 0.22 25);
+  --status-success: oklch(0.55 0.14 145);
+}
+@media (prefers-color-scheme: dark) {
+  .handin-workspace[data-system-appearance] {
+    color-scheme: dark;
+    --accent: oklch(0.69 0.205 33);
+    --accent-hover: oklch(0.74 0.18 33);
+    --accent-muted: oklch(0.69 0.205 33 / 0.14);
+    --text-inverse: oklch(0.15 0.004 285);
+    --bg-primary: oklch(0.146 0.004 285);
+    --bg-secondary: oklch(0.185 0.006 285);
+    --bg-tertiary: oklch(0.23 0.006 285);
+    --bg-elevated: oklch(0.28 0.006 285);
+    --bg-hover: oklch(0.3 0.006 285);
+    --text-primary: oklch(0.97 0.003 285);
+    --text-secondary: oklch(0.74 0.006 285);
+    --text-tertiary: oklch(0.64 0.006 285);
+    --border-primary: oklch(1 0 0 / 0.12);
+    --border-secondary: oklch(1 0 0 / 0.08);
+    --drop-border: oklch(1 0 0 / 0.2);
+    --glass-bg: oklch(0.24 0.006 285 / 0.78);
+    --glass-border: oklch(1 0 0 / 0.14);
+    --glass-highlight: oklch(1 0 0 / 0.06);
+    --shadow-lift: 0 24px 60px -24px oklch(0 0 0 / 0.9);
+    --status-error: oklch(0.7 0.2 25);
+    --status-success: oklch(0.75 0.19 145);
+  }
+}
+
+/* A centered public request keeps expanded part fields readable in two columns. */
+@media (min-width: 640px) {
+  .handin-workspace[data-system-appearance] .parts-flow-expanded {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

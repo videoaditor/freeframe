@@ -141,6 +141,13 @@ def _process_video(db, asset, version, media_file, s3, output_prefix) -> bool:
         output_s3_prefix=f"{output_prefix}/{QUICK_SUFFIX}",
         qualities=QUICK_QUALITIES,
     )
+    if getattr(asset,'iteration_source',False) is True:
+        # Trusted server probe of the stored original permits review before playback renditions.
+        meta=_run_async(transcoder.get_video_metadata(media_file.s3_key_raw))
+        if not meta or not (0 < meta.duration_seconds <= 600) or meta.width<=0 or meta.height<=0:
+            raise RuntimeError('Source video is invalid or exceeds 600 seconds.')
+        media_file.duration_seconds=meta.duration_seconds;media_file.width=meta.width;media_file.height=meta.height
+        media_file.fps=meta.fps;version.iteration_review_ready=True;db.commit()
     result = _run_async(transcoder.transcode(job))
     if not result.success:
         raise RuntimeError(f"Transcode failed: {result.error}")

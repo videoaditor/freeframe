@@ -60,6 +60,7 @@ class CommentCreate(HumanCommentPayload):
     mention_user_ids: list[uuid.UUID] = []  # Explicit mention IDs from frontend
 
 class GuestCommentCreate(HumanCommentPayload):
+    idempotency_key: Optional[str] = Field(default=None, min_length=1, max_length=128)
     asset_id: Optional[uuid.UUID] = None  # Required for folder/project shares
     version_id: Optional[uuid.UUID] = None  # Auto-resolved if not provided
     parent_id: Optional[uuid.UUID] = None

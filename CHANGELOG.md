@@ -8,8 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Parts reviews reuse the assignment's saved briefing, brand context and rules, including after restarts. Retry preserves the original hand-in identity, and private original downloads retain their filename and video container.
+- Explicit legacy editor-link migrations retain their assignment and revocation state when the redirect cache is lost; unavailable verification stops the redirect safely.
+- Staff file requests with Trello briefings verify their canonical card before freezing review inputs; preparation retries preserve the original request and frozen context.
 - Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Link-sharing dialogs focus on copying/sending the link; review checklists and logo editing no longer appear there. Logo editing remains in Brand rules.
+- Parts and final-ad review views now show confirmed version-specific waiting state, preserve source upload elapsed time across reloads, and stop activity during status outages. Missing timing data does not prevent review or invent a time estimate.
 - Review waiting time survives reloads from the committed submission clock. Offline and failed reviews stop activity while retaining the source frame; time ranges distinguish analysis from total wait and calibrated remaining time.
 - Whop sign-in returns a valid Hub hand-in link to the selected card instead of Home.
 - Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
@@ -18,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Added
+- Internal complete-ad hand-ins open the native editor review alongside the customer share link, reusing the existing folder and exact uploaded versions.
 - A service-authenticated read exposes the saved review context only for the matching assignment, project, asset and media version, so review integrations can reuse frozen inputs without exposing private rule text to guests.
 - Verified AutoReview requirement sources appear as small Basics, Brand and Briefing labels beside comments, including the private editor review. Trusted sources survive reload and CSV export; editing the text removes the source labels.
 - Saved review plans for file requests and Trello hand-ins, with one frozen briefing/rule snapshot shared across versions and a private checklist in Handin. Share dialogs stay focused on copying/sending links. Optional Engine preparation can be unavailable while upload links remain usable.
@@ -27,10 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plan recommendations based on distinct successfully reviewed preview ads, with Team highlighted from 20 ads.
 - Review step progress, elapsed time and measured analysis-duration ranges for comparable videos. The introductory scan parks after one cycle, with subtle status motion and explicit longer-than-usual handling.
 - Editor requests now support explicit asset revisions, version-specific media and feedback, and durable completion tied to the reviewed versions.
+- Optional parts-based hand-in: upload hooks and bodies once, review each exact version, and assemble, check and deliver final ads in the background. Existing complete-ad uploads remain available.
+- Private reusable originals in the workspace owner's account, separate from editor attribution.
 
 ### Fixed
 - Keep invited editors in the real review state while their first version is queued or analysed, and retain upload access on review-service outages.
 - File-request uploads complete successfully when the editor supplies their name and email at submission, instead of failing before processing starts.
+- Parts uploads now complete when editors add their name and email after the transfer has started.
+- Editor navigation and direct management routes now show submission work instead of owner tools; brand-rule APIs require workspace ownership.
 - Dashboard root toolbars show the app name instead of duplicating the page heading; overview and brand rules use direct copy without decorative slogans.
 - Customer Projects uses file requests and lists all accessible brand projects; customer folders no longer require or announce an internal Trello card. Staff hand-in behavior is unchanged.
 - Production containers provide the non-root user home required by Gunicorn's control socket.
@@ -63,6 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The realtime event stream now renews its token instead of retrying a dead one** - `EventSource` cannot send an `Authorization` header, so the token rides in the query string, and `/events/{project_id}` answers an expired one with 403. Nothing in the reconnect loop renewed it, so a lapsed session turned into an open-ended 403 retry: production logs showed hours of reconnects all carrying a token that had expired that morning. Each attempt now renews first, and gives up after a few consecutive failures rather than reconnecting forever with nothing to authenticate.
 
 ### Changed
+- Center external parts submissions with more side space, aligned contact and Submit, and a stronger title; show a short brief preview with access to the actual stored full text or source link.
+- Parts hand-in now shows upload, part checks and final delivery as clearly labeled phases, with guidance for hooks and reusable bodies.
+- Parts hand-in matches the existing AutoReview identity and folder upload design, with a branded customer request and consistent internal setup form.
+- Parts upload targets use AdMixer's compact raised panels, upload symbols and heading count badges.
+- Parts hand-in uses aligned upload targets, compact progress and centered optional-part controls. Guest contact saves on field blur and submission, without a separate save step.
+- Optional parts follow assembly order in Hand-in: Hook, Bridge, Body, then CTA, for both add controls and expanded fields.
+- External submissions follow system appearance, show the title above briefing, use compact contact and visual progress, and follow the configured request format without an editor switch; generated ads appear when available.
 - Compact brand rules are grouped into alphabetically sorted Must follow and Guidance columns, with subtle definition access and one quiet quick-input focus indicator.
 - Video cards default to 9:16 fit thumbnails; card grids adapt to the available panel width. Existing appearance preferences remain available.
 - Autoreview app identity with a dedicated icon and subtle Aditor footer; brand quick rules regain the playbook artwork and use a brand-specific logo example. Existing custom branding is preserved.

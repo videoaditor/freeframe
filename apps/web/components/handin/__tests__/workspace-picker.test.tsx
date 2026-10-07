@@ -12,7 +12,7 @@ describe("WorkspacePicker", () => {
   it("opens, searches, and selects an existing workspace", async () => {
     const onChange = vi.fn();
     render(<WorkspacePicker projects={PROJECTS} value={null} onChange={onChange} />);
-    fireEvent.click(screen.getByRole("button", { name: /select or create a workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /select (or create )?a workspace/i }));
     const search = await screen.findByLabelText("Search workspaces");
     fireEvent.change(search, { target: { value: "forward" } });
     // Only the matching workspace is shown, and picking it reports an existing choice.
@@ -24,7 +24,7 @@ describe("WorkspacePicker", () => {
   it("offers to create a workspace when the search has no exact match (admin)", async () => {
     const onChange = vi.fn();
     render(<WorkspacePicker projects={PROJECTS} value={null} onChange={onChange} allowCreate />);
-    fireEvent.click(screen.getByRole("button", { name: /select or create a workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /select (or create )?a workspace/i }));
     const search = await screen.findByLabelText("Search workspaces");
     fireEvent.change(search, { target: { value: "Bawldy - Workspace" } });
     const create = await screen.findByText(/Create workspace/i);
@@ -36,7 +36,7 @@ describe("WorkspacePicker", () => {
     // A per-card 'workspace' typed by an editor is exactly what left share links pointing at
     // nothing. Without create rights, an unknown name offers no create - only 'ask an admin'.
     render(<WorkspacePicker projects={PROJECTS} value={null} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /select or create a workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /select (or create )?a workspace/i }));
     const search = await screen.findByLabelText("Search workspaces");
     fireEvent.change(search, { target: { value: "Do not buy the levide knee - Week 6" } });
     expect(await screen.findByText(/Ask an admin to add this brand/i)).toBeTruthy();
@@ -50,7 +50,7 @@ describe("WorkspacePicker", () => {
 
   it("does not offer create when the query exactly matches an existing workspace", async () => {
     render(<WorkspacePicker projects={PROJECTS} value={null} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /select or create a workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /select (or create )?a workspace/i }));
     const search = await screen.findByLabelText("Search workspaces");
     fireEvent.change(search, { target: { value: "Levide - Workspace" } });
     await waitFor(() => expect(screen.getByText("Levide - Workspace")).toBeTruthy());

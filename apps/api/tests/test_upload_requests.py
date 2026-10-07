@@ -4,6 +4,7 @@ Spec: docs/superpowers/specs/2026-09-28-review-platform-v2-design.md.
 """
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -59,6 +60,108 @@ def test_an_unknown_link_answers_404():
     with pytest.raises(HTTPException) as exc:
         _live_request(db, "nope")
     assert exc.value.status_code == 404
+
+
+@pytest.fixture
+def public_request():
+    from apps.api.models.asset import Asset
+    from apps.api.models.branding import ProjectBranding
+    from apps.api.models.folder import Folder
+    from apps.api.models.project import Project
+    from apps.api.models.upload_request import UploadRequest
+    req = _req(brief_excerpt="Short preview", iteration_brief="", iteration_state={})
+    folder = SimpleNamespace(id=req.folder_id, project_id=req.project_id, description="File request")
+    rows = {UploadRequest: req, Project: SimpleNamespace(id=req.project_id, name="ClearDay", created_by=req.created_by),
+            Folder: folder, ProjectBranding: None, Asset: None}
+    queries = {}
+    for model, row in rows.items():
+        query = MagicMock()
+        query.filter.return_value = query
+        query.first.side_effect = lambda model=model: rows[model]
+        query.order_by.return_value.all.return_value = []
+        queries[model] = query
+    db = MagicMock()
+    db.query.side_effect = lambda model: queries[model]
+    return req, folder, db, rows
+
+
+def test_public_request_exposes_full_supplied_brief_without_expanding_its_excerpt(public_request):
+    from apps.api.routers.requests import view_request
+    req, _, db, _ = public_request
+    req.iteration_brief = "Full script line\n" * 100
+    out = view_request("t", db)
+    assert out["brief_text"] == req.iteration_brief
+    assert len(out["brief_text"]) > 500
+    assert out["brief_excerpt"] == "Short preview"
+
+
+@pytest.mark.parametrize("source", ["folder", "internal", "pending"])
+def test_public_request_returns_the_actual_available_source_link(public_request, source):
+    from apps.api.routers.requests import view_request
+    req, folder, db, _ = public_request
+    url = "https://trello.com/c/AbCd1234"
+    req.iteration_state = {"brief_resolved": True}
+    if source == "folder":
+        folder.description = url
+    elif source == "internal":
+        req.iteration_state["internal_handin"] = {"card_url": url}
+    else:
+        req.iteration_state = {"brief_input": {"url": url}}
+    if source != "pending":
+        assert req.iteration_state["brief_resolved"] is True
+        assert "brief_input" not in req.iteration_state
+    assert view_request("t", db)["brief_url"] == url
+
+
+def test_public_request_prefers_its_durable_source_over_pending_input(public_request):
+    from apps.api.routers.requests import view_request
+    req, folder, db, _ = public_request
+    folder.description = "https://example.test/original-brief"
+    req.iteration_state = {"brief_input": {"url": "https://example.test/pending"}}
+    assert view_request("t", db)["brief_url"] == folder.description
+
+
+@pytest.mark.parametrize("source", [
+    "javascript:alert(1)", "https://", "https://user:secret@example.test/brief",
+    "https://example.test/brief with spaces", "https://example.test/brief\nnext",
+    "https://example.test/brief\x00", "PDF briefing",
+    "https://example.test/" + "a" * 1980,
+])
+def test_public_request_filters_unsafe_or_possibly_truncated_source_links(public_request, source):
+    from apps.api.routers.requests import view_request
+    _, folder, db, _ = public_request
+    folder.description = source
+    assert view_request("t", db)["brief_url"] is None
+
+
+def test_public_pdf_hint_is_not_a_full_brief_or_source_link(public_request):
+    from apps.api.routers.requests import view_request
+    req, _, db, _ = public_request
+    req.brief_excerpt = "PDF briefing"
+    req.iteration_brief = None
+    req.iteration_state = {"brief_input": {"pdf": "private-pdf-bytes"}}
+    out = view_request("t", db)
+    assert out["brief_text"] is None
+    assert out["brief_url"] is None
+    assert "private-pdf-bytes" not in str(out)
+
+
+@pytest.mark.parametrize("closed", ["expired", "revoked", "deleted_folder", "deleted_project"])
+def test_public_full_brief_still_requires_a_live_request_in_its_bound_scope(public_request, closed):
+    from apps.api.models.folder import Folder
+    from apps.api.models.project import Project
+    from apps.api.routers.requests import view_request
+    req, _, db, rows = public_request
+    req.iteration_brief = "Private full briefing"
+    if closed == "expired":
+        req.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    elif closed == "revoked":
+        req.revoked_at = datetime.now(timezone.utc)
+    else:
+        rows[Folder if closed == "deleted_folder" else Project] = None
+    with pytest.raises(HTTPException) as exc:
+        view_request("t", db)
+    assert exc.value.status_code == 410
 
 
 # ── Versions: the same file twice is a V2, never a stray copy ─────────────────

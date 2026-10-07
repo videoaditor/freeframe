@@ -75,6 +75,15 @@ def publish(pg, payload=None):
                        headers={'Authorization': 'Bearer local-h2-test-secret'})
 
 
+@pytest.mark.parametrize('validated_original,expected', [(True,201),(False,404)])
+def test_trusted_parts_finding_can_publish_only_after_original_validation(pg,validated_original,expected):
+    _,db,_,_,version,_,_=pg
+    version.processing_status=ProcessingStatus.processing
+    version.iteration_review_ready=validated_original
+    db.commit()
+    assert publish(pg).status_code==expected
+
+
 def test_postgres_concurrent_replay_readback_and_human_edit(pg):
     client, db, user, asset, version, link, payload = pg
     with ThreadPoolExecutor(max_workers=2) as pool:

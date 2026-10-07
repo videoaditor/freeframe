@@ -2,8 +2,10 @@
 
 import * as React from 'react'
 import useSWR from 'swr'
+import { PartsWorkspace } from '@/components/v2/parts-workspace'
+import { requestIterations } from '@/lib/iterations'
 import { ArrowLeft } from 'lucide-react'
-import { finishRequest, objectToNote, requestReview, uploadToRequest, viewRequest, type RequestAsset } from '@/lib/platform'
+import { finishRequest, objectToNote, requestReview, uploadToRequest, viewRequest, type RequestAsset, type RequestView } from '@/lib/platform'
 import { DropZone } from '@/components/v2/drop-zone'
 import { UploadCard, type UploadPhase } from '@/components/v2/upload-card'
 import { RequestWorkspace, SubmissionSuccess } from '@/components/v2/request-workspace'
@@ -13,7 +15,7 @@ interface Job { id: string; file: File; progress: number; phase: UploadPhase; er
 const WHO_KEY = 'aditor-request-who'
 const validWho = (who: Who) => !!who.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(who.email)
 
-export default function RequestPage({ params: { token } }: { params: { token: string } }) {
+function CompleteRequestPage({ params: { token }, onActivity }: { params: { token: string }; onActivity?: () => void }) {
   const { data: view, error: viewError, mutate: refreshView } = useSWR(`/r/${token}`, () => viewRequest(token), { shouldRetryOnError: false, refreshInterval: d => d?.completed_at ? 0 : 60000 })
   const { data: review, error: reviewError, mutate: refreshReview } = useSWR(view?.assets.length ? `/r/${token}/review` : null, () => requestReview(token), { refreshInterval: d => d?.completed_at || view?.completed_at ? 0 : 10000 })
   const [jobs, setJobs] = React.useState<Job[]>([])
@@ -70,6 +72,7 @@ export default function RequestPage({ params: { token } }: { params: { token: st
   const onFiles = async (files: File[]) => {
     if (complete) return
     if (files.some(file => !file.type.startsWith('video/') && !/\.(mp4|mov|webm|m4v)$/i.test(file.name))) { setError('Choose a video file for this review.'); return }
+    onActivity?.()
     const chosen = revision ? files.slice(0, 1) : files
     const fresh = chosen.map(file => ({ id: crypto.randomUUID(), file, assetId: revision?.asset_id, progress: 0, phase: 'uploading' as UploadPhase }))
     setJobs(js => [...js, ...fresh])
@@ -81,7 +84,7 @@ export default function RequestPage({ params: { token } }: { params: { token: st
 
   </form>
   const jobCard = (job: Job) => <div key={job.id} className="mt-3"><UploadCard file={job.file} name={job.file.name} size={job.file.size} phase={job.phase} progress={job.progress} error={job.error} onRetry={() => upload(job)} onRemove={job.phase === 'error' ? () => setJobs(js => js.filter(j => j.id !== job.id)) : undefined} />{job.progress === 1 && job.phase === 'uploading' && <p className="mt-2 text-xs text-text-secondary">{waitingIdentity ? 'Uploaded · waiting for your details' : 'Submitting your file…'}</p>}</div>
-  return <div className="owner-workspace min-h-screen bg-bg-primary text-text-primary">
+  return <div data-system-appearance className="owner-workspace handin-workspace min-h-screen bg-bg-primary text-text-primary">
     <header className={`relative mx-auto flex h-20 max-w-[1120px] items-center border-b border-border px-5 sm:px-8 ${complete ? 'justify-center' : 'justify-between'}`}>{view?.logo_url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={view.logo_url} alt={view.brand} className="h-8 max-w-40 object-contain" /> : <span className="text-lg font-semibold tracking-tight">{view?.brand || 'File request'}</span>}<span className={`text-xs text-text-tertiary ${complete ? 'absolute right-5 sm:right-8' : ''}`}>{complete ? 'Completed' : showUpload ? 'Editor upload' : 'Editor review'}</span></header>
     <main className={`mx-auto px-5 pb-16 pt-8 sm:px-8 sm:pt-10 ${showUpload ? 'max-w-3xl' : 'max-w-[1120px]'}`}>
       {viewError && (!view || [401, 403, 404, 410].includes(viewError.status)) ? <div className="py-20 text-center"><h1 className="text-2xl font-semibold">{viewError.status === 410 ? 'This link is closed' : 'This link could not be opened'}</h1><p className="mt-3 text-text-secondary">{viewError.message}</p></div> : !view ? <p role="status">Opening your project…</p> : <>
@@ -98,6 +101,35 @@ export default function RequestPage({ params: { token } }: { params: { token: st
       </>}
       </>}
       </>}
+    </main>
+  </div>
+}
+
+function RequestBrief({ view }: { view: RequestView }) {
+  const full = view.brief_text?.trim()
+  const brief = full || view.brief_excerpt?.trim()
+  const preview = brief && brief !== view.brief_url ? (brief.length > 120 ? brief.slice(0, 120).replace(/\s+\S*$/, '') + '…' : brief) : null
+  const linkClass = 'press inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-medium text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+  return <section aria-label="Briefing" className="mb-8 text-center">
+    <h1 className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight sm:text-[2.75rem]">{view.title}</h1>
+    {preview && <p aria-label="Briefing preview" className="mx-auto mt-4 max-w-xl line-clamp-2 text-base leading-relaxed text-text-secondary">{preview}</p>}
+    {full || (brief && !view.brief_url) ? <details className="mt-1">
+      <summary className={`${linkClass} cursor-pointer list-none`}>{full ? 'View full brief' : 'View briefing preview'}</summary>
+      <div className="mt-3 rounded-xl bg-bg-secondary p-5 text-left"><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">{full || brief}</p>{view.brief_url && <a className={`${linkClass} mt-3`} href={view.brief_url} target="_blank" rel="noopener noreferrer">Open briefing source</a>}</div>
+    </details> : view.brief_url ? <a className={`${linkClass} mt-1`} href={view.brief_url} target="_blank" rel="noopener noreferrer">View full brief</a> : null}
+  </section>
+}
+
+export default function RequestPage({ params }: { params: { token: string } }) {
+  const { data: view } = useSWR(`/r/${params.token}`, () => viewRequest(params.token), { shouldRetryOnError: false })
+  const { data: progress } = useSWR(view?.receive_iterations ? ['parts', params.token] : null, () => requestIterations(params.token), { refreshInterval: 4000 })
+  if (!view?.receive_iterations || progress?.mode === 'complete') return <CompleteRequestPage params={params} />
+  return <div data-system-appearance className="owner-workspace handin-workspace relative min-h-screen bg-bg-primary text-text-primary">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_50%_at_50%_0%,var(--accent-muted),transparent_70%)]" />
+    <header className="relative mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-5 py-2 sm:px-8"><div className="flex shrink-0 items-center gap-2.5">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/autoreview-icon.png" alt="" className="h-7 w-7" /><span className="text-[15px] font-semibold tracking-tight">Autoreview</span></div><div className="min-w-0 text-right"><p className="text-xs text-text-secondary">Submitting to</p><span className="block break-words text-sm font-medium">{view.brand}</span></div></header>
+    <main className="relative mx-auto max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
+      <RequestBrief view={view} />
+      <PartsWorkspace token={params.token} brand={view.brand} />
     </main>
   </div>
 }

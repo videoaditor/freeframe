@@ -421,6 +421,9 @@ def move_asset(
         if target.project_id != asset.project_id:
             raise HTTPException(status_code=400, detail="Target folder not in same project")
 
+    from ..services.iteration_requests import require_unmanaged, require_unmanaged_destination
+    require_unmanaged(asset)
+    require_unmanaged_destination(db,body.folder_id)
     asset.folder_id = body.folder_id
     db.commit()
     return {"ok": True}
@@ -441,6 +444,8 @@ def bulk_move(
         if target.project_id != project_id:
             raise HTTPException(status_code=400, detail="Target folder not in this project")
 
+    from ..services.iteration_requests import require_unmanaged, require_unmanaged_destination
+    require_unmanaged_destination(db,body.target_folder_id)
     # Move assets
     if body.asset_ids:
         assets = (
@@ -455,6 +460,7 @@ def bulk_move(
         if len(assets) != len(body.asset_ids):
             raise HTTPException(status_code=400, detail="Some assets not found in this project")
         for a in assets:
+            require_unmanaged(a)
             a.folder_id = body.target_folder_id
 
     # Move folders

@@ -159,6 +159,7 @@ def real_db():
 # clean clone/sandbox with no test database, they must skip cleanly instead of
 # erroring, while still running unchanged wherever Postgres is reachable.
 _REAL_DB_ONLY_FILES = {
+    "test_iteration_snapshot_postgres.py",
     "test_checklist_snapshot_postgres.py",
     "test_backfill_media_metadata.py",
     "test_cleanup_soft_deleted.py",

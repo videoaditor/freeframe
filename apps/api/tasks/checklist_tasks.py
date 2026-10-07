@@ -23,7 +23,7 @@ def _retire(db, row):
     db.commit()
 
 
-def _register(db, row):
+def _register(db, row, request=None):
     if row.registered_at or not row.review_share_token or getattr(row, 'registration_attempts', 0) >= 3:
         return
     if getattr(row, 'next_registration_at', None) and row.next_registration_at > datetime.now(timezone.utc):
@@ -36,8 +36,11 @@ def _register(db, row):
     # Internal Trello input is resolved only by the verified snapshot path.
     if urlparse(url).hostname in {'trello.com', 'www.trello.com'}:
         url = ''
+    receives_parts = (getattr(request, 'receive_iterations', False) is True
+        and getattr(request, 'iteration_mode', 'components') == 'components') if request is not None else row.intent.get('receive_iterations') is True
     result = review_bridge.register_request(row.review_share_token, row.intent['brand'], row.intent.get('title', ''),
-        brief, url, '' if row.snapshot else row.intent.get('brief_pdf_base64', ''), checklist=ref)
+        brief, url, '' if row.snapshot else row.intent.get('brief_pdf_base64', ''),
+        receive_iterations=receives_parts, checklist=ref)
     if result and result.get('ok'):
         row.registered_at = datetime.now(timezone.utc)
         row.registration_attempts = 0
@@ -65,11 +68,11 @@ def prepare_checklist(binding_id):
             _retire(db, row)
             return
         # Ordinary registration and paid preparation have independent retry budgets.
-        _register(db, row)
+        _register(db, row, request if request is not True else None)
         db.refresh(row, with_for_update=True)
         advance_binding(db, row)  # Commits pending registration with every changed reference.
         db.refresh(row, with_for_update=True)
-        _register(db, row)
+        _register(db, row, request if request is not True else None)
     finally:
         db.close()
 

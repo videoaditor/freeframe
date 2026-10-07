@@ -164,6 +164,8 @@ def announce_asset_ready(db: Session, asset, version_id) -> None:
     that opted in by configuring the webhook. Best effort, never raises: a missed call costs the
     ten-minute poll, which is exactly where we were before.
     """
+    if getattr(asset, "iteration_pending", False) is True or getattr(asset, "iteration_source", False) is True or getattr(asset,"iteration_derived",False) is True:
+        return
     url = (getattr(settings, "automation_share_webhook_url", "") or "").strip()
     if not url:
         return

@@ -216,6 +216,9 @@ class Settings(BaseSettings):
     # preserved with review unavailable; missing evidence never claims Ready or completion.
     review_bridge_url: str = ""
     review_bridge_secret: str = ""
+    mixer_iterations_url: str = ""
+    mixer_iterations_secret: str = ""
+    iterations_enabled: bool = False
 
     # Machine access. A caller presenting SERVICE_API_KEY in X-API-Key is treated
     # as the user named by SERVICE_API_KEY_EMAIL, so every existing per-project

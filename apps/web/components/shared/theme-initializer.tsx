@@ -12,7 +12,7 @@ export function ThemeInitializer() {
 
   // Apply saved theme on mount (local only, no server save)
   useEffect(() => {
-    applyTheme(theme)
+    applyTheme(useThemeStore.getState().theme)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync from server when user loads (server wins if it has a value)

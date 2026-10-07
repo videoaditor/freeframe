@@ -28,3 +28,8 @@ Browser evidence is in [the verification report](../reviews/h3/README.md). Deskt
 | Activity during uncertain status → stopped activity with frame | Honest offline/failure recovery | offline/error mobile screenshots |
 
 Self-critique: retained the existing hierarchy and tokens; removed the solid fill that could imply completion. Support text wraps at375px. The fixture is synthetic and proves layout/state handling, not a real four-minute review duration. CSS zoom200% is a reflow stress test, not browser zoom emulation. Runtime Reduce Motion still needs a manual preference check.
+
+## Parts adapter addendum
+The existing PartsWorkspace opens the same RequestWorkspace for a source part or current generated ad. No new player, controls, styling, navigation or motion is added. Its poll error now reaches the existing unavailable state. Exact AssetVersion processing and the runner's durable source-only `iteration_review_ready` flag determine viewer readiness; a raw URL alone cannot override a supplied processing state. Existing held/clear feedback stays viewable during early source readiness.
+
+Source elapsed uses only the matching request/asset/version-number RequestUpload.submitted_at. A generated ad has its own exact identity but no invented upload clock. Pending output identity allows opening the wait view; preview remains limited to held/delivered, downloads to delivered. Missing phase clocks use the existing waiting/calibrating/unknown-time copy and do not block review. Natural ETA calibration remains separate from release acceptance.
