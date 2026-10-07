@@ -231,6 +231,9 @@ def owner_parts(project_id:uuid.UUID,db:Session=Depends(get_db),current_user:Use
 @router.get('/projects/{project_id}/iteration-parts/{part_id}/file')
 def owner_part_file(project_id:uuid.UUID,part_id:uuid.UUID,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     import httpx
+    import re
+    from email.message import Message
+    from urllib.parse import quote
     from fastapi.responses import StreamingResponse
     scope=project_scope(project_id,db,current_user)
     try:url,headers=iteration_mixer.connection(f'/parts/{part_id}/file')
@@ -247,12 +250,18 @@ def owner_part_file(project_id:uuid.UUID,part_id:uuid.UUID,db:Session=Depends(ge
     def chunks():
         try:yield from response.iter_bytes(1024*1024)
         finally:response.close();client.close()
-    return StreamingResponse(chunks(),media_type='video/mp4',headers={'Content-Disposition':f'attachment; filename="{part_id}.mp4"','Cache-Control':'private, no-store'})
+    metadata=Message();metadata['Content-Disposition']=response.headers.get('content-disposition','')
+    filename=metadata.get_filename() or str(part_id)
+    filename=re.sub(r'[\x00-\x1f\x7f]', '', filename.replace('\\','/').rsplit('/',1)[-1])[:255] or str(part_id)
+    mime=response.headers.get('content-type','').split(';',1)[0].strip().lower()
+    if not re.fullmatch(r'video/[a-z0-9.+-]+',mime):mime='application/octet-stream'
+    return StreamingResponse(chunks(),media_type=mime,headers={'Content-Disposition':f"attachment; filename*=UTF-8''{quote(filename,safe='')}",'Cache-Control':'private, no-store'})
 
 
 class Handin(BaseModel):
     project_id: uuid.UUID
     card_url: str = Field(min_length=1,max_length=2048)
+    idempotency_key: uuid.UUID
 
 
 @router.post('/handins',status_code=201)
@@ -269,10 +278,20 @@ def create_handin(body:Handin,db:Session=Depends(get_db),current_user:User=Depen
     if parsed.scheme!='https' or parsed.netloc!='trello.com' or not card or parsed.query or parsed.fragment:
         raise HTTPException(422,'Paste an https://trello.com/c/... card link.')
     card_url=f'https://trello.com/c/{card.group(1)}'
-    resolved=review_bridge._call('POST','/api/gate/card',json={'url':card_url}) or {}
-    title=str(resolved.get('name') or f'Hand-in {card.group(1)}')[:255]
-    result=create_request(RequestCreate(project_id=body.project_id,title=title,brief_url=card_url,receive_iterations=True),db,current_user)
-    req=db.query(UploadRequest).filter(UploadRequest.id==uuid.UUID(result['id'])).first()
+    from sqlalchemy import text
+    from ..models.checklist_binding import ChecklistBinding
+    source_key=f'request:{body.idempotency_key}'
+    db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:ref, 0))'),
+        {'ref':f'autoreview.handin:{body.project_id}:{source_key}'})
+    previous=db.query(ChecklistBinding).filter(ChecklistBinding.project_id==body.project_id,
+        ChecklistBinding.source_key==source_key).with_for_update().first()
+    if previous:
+        title=previous.intent['title']
+    else:
+        resolved=review_bridge._call('POST','/api/gate/card',json={'url':card_url}) or {}
+        title=str(resolved.get('name') or f'Hand-in {card.group(1)}')[:255]
+    result=create_request(RequestCreate(project_id=body.project_id,title=title,brief_url=card_url,receive_iterations=True,idempotency_key=body.idempotency_key),db,current_user)
+    req=locked_request(db,uuid.UUID(result['id']))
     state=deepcopy(req.iteration_state or {})
     state['internal_handin']={'card_url':card_url,'editor_name':current_user.name,'editor_id':str(current_user.id)}
     req.iteration_state=state;req.last_uploader_name=current_user.name;req.last_uploader_email=current_user.email;db.commit()

@@ -83,15 +83,17 @@ def identity(req):
     return {'owner_id':f'freeframe:{owner}','brand_id':f'freeframe:{req.project_id}'}
 
 
-def register(req, share_token):
-    state=req.iteration_state or {}
-    if state.get('brief_resolved'):
-        r=review_bridge.register_request(req.review_share_token,req.brand_slug,req.title,receive_iterations=True,
-            brief_source_token=req.review_share_token)
-    else:
-        pending=state.get('brief_input',{})
-        r=review_bridge.register_request(req.review_share_token,req.brand_slug,req.title,req.iteration_brief or '',
-            pending.get('url',''),pending.get('pdf',''),receive_iterations=True)
+def register(db, req, share_token):
+    from ..models.checklist_binding import ChecklistBinding
+    binding=db.query(ChecklistBinding).filter(ChecklistBinding.request_id==req.id,
+        ChecklistBinding.project_id==req.project_id,ChecklistBinding.folder_id==req.folder_id,
+        ChecklistBinding.deleted_at.is_(None)).first()
+    if binding is None or not isinstance(binding.context_sha256,str) or not binding.snapshot or binding.review_share_token!=req.review_share_token:
+        raise RuntimeError('The saved checklist is not available yet. Your files are saved; retry shortly.')
+    ref={'tenant_id':str(binding.project_id),'binding_id':str(binding.id),'context_sha256':binding.context_sha256,
+        'plan_id':binding.plan_id,'content_sha256':binding.content_sha256}
+    r=review_bridge.register_request(req.review_share_token,req.brand_slug,req.title,
+        binding.snapshot['briefing']['text'],receive_iterations=True,checklist=ref)
     if not r or not r.get('ok') or r.get('brief_status')!='ready':
         raise RuntimeError('The briefing is not available yet. Your files are saved; retry its resolution.')
     if share_token!=req.review_share_token:
@@ -124,14 +126,14 @@ def perform(db, req, action):
         return {'status':'delivered'}
     if action['kind']=='review_part':
         slot=action['slot']; source=slots[slot['id']]
-        brand=register(req,req.review_share_token)
+        brand=register(db,req,req.review_share_token)
         context={'summary':manifest['summary'],'brief':req.iteration_brief or '', 'slot_id':slot['id'],'group':slot['group'],
             'recipes':[r for r in manifest['recipes'] if slot['id'] in r['slots']] if state.get('structured') else []}
         key=digest({'request':str(req.id),'slot':slot,'version':source['version_id'],'context':context,'brand':brand,'policy':1,'generation':source.get('review_generation',0)})
         result=review_bridge.review_iteration({'share_token':req.review_share_token,'brand':brand,
             'asset_id':source['asset_id'],'version_id':source['version_id'],'version_number':source['version_number'],
             'role':slot['role'],'script':slot['script'],
-            'context':context,'review_key':key})
+            'context':context,'review_key':key,'require_saved_context':True})
         return {**review_result(result,source['version_id'],key),'brief_resolved':True}
     recipe=action['recipe']; key=action['key']; out=state.get('outputs',{}).get(key,{})
     if action['kind']=='render':
@@ -175,13 +177,13 @@ def perform(db, req, action):
             raise RuntimeError('The assembled video could not be processed.')
         if version.processing_status!=ProcessingStatus.ready:
             return {'status':'reviewing','next_attempt_at':time.time()+20,'requeue_processing':version.created_at.timestamp()<time.time()-600 and transcode_missing(version.id)}
-        brand=register(req,out['share_token'])
+        brand=register(db,req,out['share_token'])
         by_id={s['id']:s for s in manifest['slots']}
         key_review=digest({'output':key,'version':out['version_id'],'generation':out.get('review_generation',0)})
         context=out['review_context']
         result=review_bridge.review_iteration({'share_token':out['share_token'],'brand':brand,
             'asset_id':out['asset_id'],'version_id':out['version_id'],'version_number':1,'role':'full',
-            'script':'\n\n'.join(by_id[s]['script'] for s in recipe['slots']),'context':context,'review_key':key_review})
+            'script':'\n\n'.join(by_id[s]['script'] for s in recipe['slots']),'context':context,'review_key':key_review,'require_saved_context':True})
         effect=review_result(result,out['version_id'],key_review)
         effect['review_key']=key_review
         effect['brief_resolved']=True

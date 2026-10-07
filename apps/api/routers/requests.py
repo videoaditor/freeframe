@@ -239,6 +239,8 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
         raise HTTPException(409, 'This hand-in has conflicting assignments.')
     req = requests[0] if requests else None
     binding = bindings[0] if bindings else None
+    if req and req.project_id != project.id:
+        raise HTTPException(409, 'This hand-in belongs to another project.')
     if req and request_state(req, datetime.now(timezone.utc)) != 'live':
         raise HTTPException(410, 'The editor link was closed by its owner.')
     if binding and binding.request_id and (not req or binding.request_id != req.id):
@@ -247,7 +249,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
         ShareLink.title == 'Auto Review', ShareLink.permission == SharePermission.comment).all()
     wanted = req.review_share_token if req else binding.review_share_token if binding else None
     share = next((s for s in shares if s.token == wanted), None) if wanted else shares[0] if len(shares) == 1 else None
-    if not share or not share.is_enabled or (share.expires_at and share.expires_at <= datetime.now(timezone.utc)):
+    if not share or not share.is_enabled or share.password_hash or share.visibility != 'public' or (share.expires_at and share.expires_at <= datetime.now(timezone.utc)):
         raise HTTPException(409, 'The review share link is unavailable. Open the project to check its sharing settings.')
     if req is None:
         req = UploadRequest(token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,

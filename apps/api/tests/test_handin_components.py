@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 
 def request():
-    return SimpleNamespace(id=uuid.uuid4(),project_id=uuid.uuid4(),created_by=uuid.uuid4(),iteration_owner_id=uuid.uuid4(),
+    return SimpleNamespace(id=uuid.uuid4(),project_id=uuid.uuid4(),folder_id=uuid.uuid4(),created_by=uuid.uuid4(),iteration_owner_id=uuid.uuid4(),
         receive_iterations=True,iteration_mode='components',iteration_manifest={'schema_version':1,'summary':'All combinations','slots':[],'recipes':[]},
         iteration_state={},iteration_ratio='9:16')
 
@@ -300,8 +300,12 @@ def test_every_iteration_registration_inherits_original_brief(monkeypatch):
     req=request();req.iteration_state={'brief_resolved':True};req.review_share_token='original';req.brand_slug='brand';req.title='Title';req.iteration_brief=''
     calls=[]
     monkeypatch.setattr(review_bridge,'register_request',lambda *a,**kw:calls.append(kw) or {'ok':True,'brand':'brand','brief_status':'ready'})
-    iteration_runner.register(req,'original');iteration_runner.register(req,'final')
-    assert all(c['brief_source_token']=='original' for c in calls)
+    db=MagicMock();db.query.return_value.filter.return_value.first.return_value=SimpleNamespace(
+        id=uuid.uuid4(),project_id=req.project_id,review_share_token='original',context_sha256='a'*64,
+        plan_id=None,content_sha256=None,snapshot={'briefing':{'text':'Frozen original'}})
+    iteration_runner.register(db,req,'original');iteration_runner.register(db,req,'final')
+    assert calls[-1]['brief_source_token']=='original'
+    assert all(c['checklist']['context_sha256']=='a'*64 for c in calls[:-1])
 
 
 def test_pending_brief_inputs_retry_privately_and_are_not_in_progress(monkeypatch):
@@ -311,8 +315,9 @@ def test_pending_brief_inputs_retry_privately_and_are_not_in_progress(monkeypatc
     req.iteration_state={'brief_input':{'url':'https://example.com/brief','pdf':'private-pdf'},'slots':{}}
     calls=[]
     monkeypatch.setattr(review_bridge,'register_request',lambda *a,**kw:calls.append((a,kw)) or {'ok':True,'brand':'brand','brief_status':'ready'})
-    iteration_runner.register(req,'original')
-    assert calls[0][0][4:6]==('https://example.com/brief','private-pdf')
+    db=MagicMock();db.query.return_value.filter.return_value.first.return_value=None
+    with pytest.raises(RuntimeError,match='saved checklist'):iteration_runner.register(db,req,'original')
+    assert calls==[]
     assert 'private-pdf' not in str(snapshot(req)) and 'private-pdf' not in str(request_fields(req))
 
 

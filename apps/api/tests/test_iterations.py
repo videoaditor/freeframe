@@ -205,10 +205,11 @@ def test_runner_performs_real_adapter_sequence_with_mocked_external_services(mon
     from apps.api.services import iteration_runner as runner
     from types import SimpleNamespace
     from unittest.mock import MagicMock
-    req=SimpleNamespace(id=uuid.uuid4(),created_by=uuid.uuid4(),iteration_owner_id=uuid.uuid4(),project_id=uuid.uuid4(),brand_slug='cust-test',title='Test',
+    req=SimpleNamespace(id=uuid.uuid4(),created_by=uuid.uuid4(),iteration_owner_id=uuid.uuid4(),project_id=uuid.uuid4(),folder_id=uuid.uuid4(),brand_slug='cust-test',title='Test',
         iteration_brief='Brief',review_share_token='source',iteration_manifest=manifest(),iteration_ratio='9:16',
         iteration_state={'submitted':True,'slots':{s['id']:{'asset_id':str(uuid.uuid4()),'version_id':str(uuid.uuid4()),'version_number':1,'status':'ready'} for s in manifest()['slots']}})
     db=MagicMock(); calls=[]
+    db.query.return_value.filter.return_value.first.return_value=SimpleNamespace(id=uuid.uuid4(),project_id=req.project_id,review_share_token='source',context_sha256='a'*64,plan_id=None,content_sha256=None,snapshot={'briefing':{'text':'Frozen brief'}})
     monkeypatch.setattr(runner.review_bridge,'register_request',lambda *args,**kw:{'ok':True,'brand':'cust-test','brief_status':'ready'})
     def review(payload):
         calls.append(payload)

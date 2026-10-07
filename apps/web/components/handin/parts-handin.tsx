@@ -19,6 +19,7 @@ export function PartsHandin({ onStarted }: { onStarted?: () => void }) {
   const { data: requestView } = useSWR(token ? `/r/${token}` : null, () => viewRequest(token))
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
+  const operation = React.useRef<{intent:string;key:string}>()
   React.useEffect(() => { const saved = new URLSearchParams(window.location.search).get('submission'); if (saved) { setToken(saved); onStarted?.() } }, [onStarted])
   const options = (projects || []).filter(p => (p.is_workspace || user?.is_staff === false) && (p.role === 'owner' || p.role === 'editor' || user?.is_superadmin)).map(p => ({ id: p.id, name: p.name }))
   const open = async (e: React.FormEvent) => {
@@ -26,7 +27,9 @@ export function PartsHandin({ onStarted }: { onStarted?: () => void }) {
     if (workspace?.kind !== 'existing' || busy) return
     setBusy(true); setError('')
     try {
-      const request = await createPartHandin(workspace.id, cardUrl.trim())
+      const intent = JSON.stringify([workspace.id,cardUrl.trim()])
+      if (operation.current?.intent !== intent) operation.current = {intent,key:crypto.randomUUID()}
+      const request = await createPartHandin(workspace.id, cardUrl.trim(), operation.current.key)
       setToken(request.token); onStarted?.()
       const url = new URL(window.location.href); url.searchParams.set('submission', request.token)
       window.history.replaceState(null, '', url)

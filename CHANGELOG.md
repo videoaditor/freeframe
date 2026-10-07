@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Parts reviews reuse the assignment's saved briefing, brand context and rules, including after restarts. Retry preserves the original hand-in identity, and private original downloads retain their filename and video container.
+- Explicit legacy editor-link migrations retain their assignment and revocation state when the redirect cache is lost; unavailable verification stops the redirect safely.
 - Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Link-sharing dialogs focus on copying/sending the link; review checklists and logo editing no longer appear there. Logo editing remains in Brand rules.
 - Parts and final-ad review views now show confirmed version-specific waiting state, preserve source upload elapsed time across reloads, and stop activity during status outages. Missing timing data does not prevent review or invent a time estimate.
@@ -19,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Added
+- Internal complete-ad hand-ins open the native editor review alongside the customer share link, reusing the existing folder and exact uploaded versions.
 - A service-authenticated read exposes the saved review context only for the matching assignment, project, asset and media version, so review integrations can reuse frozen inputs without exposing private rule text to guests.
 - Verified AutoReview requirement sources appear as small Basics, Brand and Briefing labels beside comments, including the private editor review. Trusted sources survive reload and CSV export; editing the text removes the source labels.
 - Saved review plans for file requests and Trello hand-ins, with one frozen briefing/rule snapshot shared across versions and a private checklist in Handin. Share dialogs stay focused on copying/sending links. Optional Engine preparation can be unavailable while upload links remain usable.

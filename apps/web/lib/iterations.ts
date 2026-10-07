@@ -26,7 +26,7 @@ export const submitParts = (token: string) => pub<IterationProgress>('POST', `/r
 export const retryParts = (token: string) => pub<IterationProgress>('POST', `/r/${token}/iterations/retry`, {})
 export const setSubmissionMode = (token: string, mode: 'complete' | 'components') => pub<IterationProgress>('POST', `/r/${token}/submission-mode`, { mode })
 export const objectToOutputNote = (token: string, id: string, body: { comment_id?: string; body: string; text: string; who?: string }) => pub<{ withdrawn: boolean; why: string }>('POST', `/r/${token}/iterations/outputs/${encodeURIComponent(id)}/object`, body)
-export const createPartHandin = (project_id: string, card_url: string) => api.post<{ token: string; url?: string; upload_url?: string }>('/handins', { project_id, card_url })
+export const createPartHandin = (project_id: string, card_url: string, idempotency_key: string) => api.post<{ token: string; url?: string; upload_url?: string }>('/handins', { project_id, card_url, idempotency_key })
 export interface PrivatePart { id: string; source_id: string; version_id: string; role: PartRole; name: string; size_bytes: number; created_at: number }
 export const listPrivateParts = (projectId: string) => api.get<{ parts: PrivatePart[] }>(`/projects/${projectId}/iteration-parts`)
 

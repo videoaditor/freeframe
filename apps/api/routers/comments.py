@@ -13,7 +13,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import text
+from sqlalchemy import text, and_, or_
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -850,7 +850,9 @@ def publish_review_comment(
     version = db.query(AssetVersion).filter(
         AssetVersion.id == body.version_id, AssetVersion.asset_id == asset.id,
         AssetVersion.deleted_at.is_(None),
-        AssetVersion.processing_status == ProcessingStatus.ready,
+        or_(AssetVersion.processing_status == ProcessingStatus.ready,
+            and_(AssetVersion.processing_status == ProcessingStatus.processing,
+                 AssetVersion.iteration_review_ready.is_(True))),
     ).with_for_update().first()
     if not version:
         raise HTTPException(status_code=404, detail="Ready version not found for this asset")

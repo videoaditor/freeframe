@@ -184,7 +184,7 @@ describe('hand-in - the stage strip never touches the link', () => {
 
 describe("native internal hand-in", () => {
   it("opens the canonical editor and keeps the customer link available without a duplicate HTML review", () => {
-    render(<HandinResult editorUrl="https://feedback.example.test/r/editor" shareUrl="https://feedback.example.test/share/customer" reviews={[{ review: { state: "done", worthFixing: ["Old HTML finding"], niceToHave: [] } as GateReview }]} />);
+    render(<HandinResult editorUrl="https://feedback.example.test/r/editor" shareUrl="https://feedback.example.test/share/customer" reviews={[{ review: { state: "ready", worthFixing: ["Old HTML finding"], niceToHave: [] } }]} />);
     expect(screen.getByRole("link", { name: "Open review" })).toHaveAttribute("href", "https://feedback.example.test/r/editor");
     expect(screen.getByRole("textbox", { name: "Share link" })).toHaveValue("https://feedback.example.test/share/customer");
     expect(screen.queryByText("Old HTML finding")).not.toBeInTheDocument();
