@@ -4,6 +4,8 @@ Base: `2e720a39f66142533e2b2de70894cd8ada89bcec`; branch `codex/autoreview-h3-wa
 
 The existing RequestWorkspace now distinguishes analysis, total and conditional remaining time, retains server elapsed time after reload, uses indeterminate activity, and stops motion on offline/failure while keeping the source frame. No second waiting component or database model is introduced.
 
+Verified code/test head: `4d334db00f088e899c3f2d1276836cd9e64e1425`. Later evidence edits are documentation only. [Draft PR62](https://github.com/videoaditor/freeframe/pull/62); [Worker PR82](https://github.com/videoaditor/feedback-agent/pull/82).
+
 ## Verification
 
 Backend:466 passed,51 skipped,2 warnings. Frontend:81 files,540 passed. Next production build, TypeScript and lint passed; existing lint warnings remain. Regression coverage checks private exact-version timing, rejected service principals, committed elapsed time, scope gates, reload/version reset and offline/failure frame retention.
