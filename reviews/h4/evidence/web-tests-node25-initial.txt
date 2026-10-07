@@ -1,0 +1,738 @@
+ WARN  The "workspaces" field in package.json is not supported by pnpm. Create a "pnpm-workspace.yaml" file instead.
+
+> web@0.1.0 test /Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web
+> vitest run
+
+
+ RUN  v4.1.10 /Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web
+
+(node:86544) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ lib/__tests__/auth.test.ts (25 tests | 25 failed) 73ms
+     × setTokens stores access and refresh tokens in localStorage 9ms
+     × getAccessToken retrieves access token from localStorage 0ms
+     × getAccessToken returns null when no token stored 0ms
+     × getRefreshToken retrieves refresh token from localStorage 0ms
+     × getRefreshToken returns null when no token stored 0ms
+     × clearTokens removes both tokens from localStorage 1ms
+     × clearTokens redirects to /login 0ms
+     × returns the token while it is still valid 28ms
+     × returns null for an expired token rather than the token 4ms
+     × treats a token expiring within the leeway as already dead 0ms
+     × returns null when nothing is stored 1ms
+     × returns null for a token that is not a JWT 1ms
+     × returns null for a JWT carrying no exp claim 0ms
+     × decodes base64url payloads that use - and _ 1ms
+     × returns a live token without going to the network 1ms
+     × renews a lapsed token and returns the new one 4ms
+     × gives up silently when there is nothing to renew 1ms
+     × leaves a viewer on the page when the refresh itself is refused 11ms
+     × still sends the dashboard to /login when its refresh is refused 1ms
+     × runs one refresh for concurrent callers 4ms
+   × Whop entry clears tokens and customer-specific persisted data before exchanging identity 1ms
+   × a successful ordinary login replaces a previous Whop sign-in method 1ms
+   × refresh keeps a successful Whop session in the Whop sign-in lane 0ms
+   × a pending refresh cannot restore the previous owner after Whop entry clears it 1ms
+   × a stale refresh never supplies the new owner token for retrying an old mutation 0ms
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+(node:86552) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+(node:86547) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ components/v2/__tests__/request-workspace.test.tsx (10 tests | 1 failed) 1014ms
+   × celebrates only the first completed visit and keeps a video completion cue 7ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ❯ app/r/__tests__/request-journey.test.tsx (6 tests | 1 failed) 1350ms
+   × replaces a failed V2 on its own asset and completes only the reviewed V3 17ms
+(node:86609) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86689) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86706) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86711) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ lib/__tests__/api-session.test.ts (3 tests | 3 failed) 9ms
+   × does not replay patch under a replacement owner after a delayed 401 7ms
+   × does not replay upload under a replacement owner after a delayed 401 0ms
+   × still renews a late request after a concurrent token rotation for the same staff account 0ms
+(node:86710) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86713) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ components/layout/__tests__/header.test.tsx (7 tests | 7 failed) 11ms
+   × shows app identity instead of repeating the root page name on /home 5ms
+   × shows app identity instead of repeating the root page name on /rules 0ms
+   × shows app identity instead of repeating the root page name on /insights 0ms
+   × shows app identity instead of repeating the root page name on /projects 0ms
+   × uses custom branding for the root toolbar 0ms
+   × preserves named project breadcrumbs and their parent navigation 0ms
+   × preserves a folder breadcrumb attached to a root page 0ms
+ ❯ components/share/__tests__/share-no-internal-toggle.test.tsx (1 test | 1 failed) 3212ms
+     × offers no visibility selector on a link that does allow comments 3209ms
+(node:86717) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ components/share/__tests__/share-mobile-review.test.tsx (1 test | 1 failed) 1230ms
+     × lets a mobile reviewer reveal and hide feedback using named controls 1219ms
+ ❯ components/share/__tests__/share-review-mount.test.tsx (1 test | 1 failed) 3221ms
+     × renders the review panel tabs after double-clicking an asset 3218ms
+ ❯ components/share/__tests__/share-view-only-notice.test.tsx (2 tests | 2 failed) 6270ms
+     × explains the missing composer instead of pointing at it 3223ms
+     × stays out of the way when the link does allow comments 3044ms
+(node:86793) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ lib/__tests__/handin-redirect.test.ts (4 tests | 2 failed) 13ms
+   × preserves the card after an expired email session 3ms
+   × preserves the card after an expired whop session 0ms
+(node:86800) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 44 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/__tests__/api-session.test.ts > does not replay patch under a replacement owner after a delayed 401
+ FAIL  lib/__tests__/api-session.test.ts > does not replay upload under a replacement owner after a delayed 401
+TypeError: localStorage.setItem is not a function
+ ❯ setTokens lib/auth.ts:59:16
+     57| export function setTokens(access: string, refresh: string, provider: '…
+     58|   if (typeof window === 'undefined') return
+     59|   localStorage.setItem(ACCESS_TOKEN_KEY, access)
+       |                ^
+     60|   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+     61|   if (provider === 'whop') {
+ ❯ lib/__tests__/api-session.test.ts:9:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/47]⎯
+
+ FAIL  lib/__tests__/api-session.test.ts > does not replay patch under a replacement owner after a delayed 401
+ FAIL  lib/__tests__/api-session.test.ts > does not replay upload under a replacement owner after a delayed 401
+ FAIL  lib/__tests__/api-session.test.ts > still renews a late request after a concurrent token rotation for the same staff account
+TypeError: localStorage.clear is not a function
+ ❯ lib/__tests__/api-session.test.ts:6:32
+      4|
+      5| const token = (sub: string, revision = 0) => `header.${btoa(JSON.strin…
+      6| afterEach(() => { localStorage.clear(); vi.unstubAllGlobals() })
+       |                                ^
+      7|
+      8| it.each(['patch', 'upload'] as const)('does not replay %s under a repl…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/47]⎯
+
+ FAIL  lib/__tests__/api-session.test.ts > still renews a late request after a concurrent token rotation for the same staff account
+TypeError: localStorage.setItem is not a function
+ ❯ setTokens lib/auth.ts:59:16
+     57| export function setTokens(access: string, refresh: string, provider: '…
+     58|   if (typeof window === 'undefined') return
+     59|   localStorage.setItem(ACCESS_TOKEN_KEY, access)
+       |                ^
+     60|   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+     61|   if (provider === 'whop') {
+ ❯ lib/__tests__/api-session.test.ts:27:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > Token management > setTokens stores access and refresh tokens in localStorage
+ FAIL  lib/__tests__/auth.test.ts > Token management > getAccessToken retrieves access token from localStorage
+ FAIL  lib/__tests__/auth.test.ts > Token management > getAccessToken returns null when no token stored
+ FAIL  lib/__tests__/auth.test.ts > Token management > getRefreshToken retrieves refresh token from localStorage
+ FAIL  lib/__tests__/auth.test.ts > Token management > getRefreshToken returns null when no token stored
+ FAIL  lib/__tests__/auth.test.ts > Token management > clearTokens removes both tokens from localStorage
+ FAIL  lib/__tests__/auth.test.ts > Token management > clearTokens redirects to /login
+TypeError: localStorage.clear is not a function
+ ❯ lib/__tests__/auth.test.ts:15:18
+     13| describe('Token management', () => {
+     14|   beforeEach(() => {
+     15|     localStorage.clear()
+       |                  ^
+     16|     vi.clearAllMocks()
+     17|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > returns the token while it is still valid
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > returns null for an expired token rather than the token
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > treats a token expiring within the leeway as already dead
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > returns null when nothing is stored
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > returns null for a token that is not a JWT
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > returns null for a JWT carrying no exp claim
+ FAIL  lib/__tests__/auth.test.ts > getLiveAccessToken > decodes base64url payloads that use - and _
+TypeError: localStorage.clear is not a function
+ ❯ lib/__tests__/auth.test.ts:82:18
+     80| describe('getLiveAccessToken', () => {
+     81|   beforeEach(() => {
+     82|     localStorage.clear()
+       |                  ^
+     83|   })
+     84|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > renewing a lapsed session > returns a live token without going to the network
+ FAIL  lib/__tests__/auth.test.ts > renewing a lapsed session > renews a lapsed token and returns the new one
+ FAIL  lib/__tests__/auth.test.ts > renewing a lapsed session > gives up silently when there is nothing to renew
+ FAIL  lib/__tests__/auth.test.ts > renewing a lapsed session > leaves a viewer on the page when the refresh itself is refused
+ FAIL  lib/__tests__/auth.test.ts > renewing a lapsed session > still sends the dashboard to /login when its refresh is refused
+ FAIL  lib/__tests__/auth.test.ts > renewing a lapsed session > runs one refresh for concurrent callers
+TypeError: localStorage.clear is not a function
+ ❯ lib/__tests__/auth.test.ts:133:18
+    131| describe('renewing a lapsed session', () => {
+    132|   beforeEach(() => {
+    133|     localStorage.clear()
+       |                  ^
+    134|     vi.unstubAllGlobals()
+    135|     // Navigation is how the loud path reports failure, so every test …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > Whop entry clears tokens and customer-specific persisted data before exchanging identity
+TypeError: localStorage.setItem is not a function
+ ❯ lib/__tests__/auth.test.ts:215:16
+    213| it('Whop entry clears tokens and customer-specific persisted data befo…
+    214|   const { resetWhopEntry } = await import('../auth')
+    215|   localStorage.setItem('ff_access_token', 'old-owner')
+       |                ^
+    216|   localStorage.setItem('ff_refresh_token', 'old-refresh')
+    217|   localStorage.setItem('ff-uploads', 'old-private-files')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > a successful ordinary login replaces a previous Whop sign-in method
+TypeError: localStorage.setItem is not a function
+ ❯ lib/__tests__/auth.test.ts:228:16
+    226|
+    227| it('a successful ordinary login replaces a previous Whop sign-in metho…
+    228|   localStorage.setItem('ff_auth_provider', 'whop')
+       |                ^
+    229|   document.cookie = 'ff_auth_provider=whop; path=/'
+    230|   setTokens('staff-access', 'staff-refresh')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > refresh keeps a successful Whop session in the Whop sign-in lane
+TypeError: localStorage.setItem is not a function
+ ❯ lib/__tests__/auth.test.ts:236:16
+    234|
+    235| it('refresh keeps a successful Whop session in the Whop sign-in lane',…
+    236|   localStorage.setItem('ff_auth_provider', 'whop')
+       |                ^
+    237|   localStorage.setItem('ff_refresh_token', 'whop-refresh')
+    238|   const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnc…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > a pending refresh cannot restore the previous owner after Whop entry clears it
+TypeError: localStorage.setItem is not a function
+ ❯ setTokens lib/auth.ts:59:16
+     57| export function setTokens(access: string, refresh: string, provider: '…
+     58|   if (typeof window === 'undefined') return
+     59|   localStorage.setItem(ACCESS_TOKEN_KEY, access)
+       |                ^
+     60|   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+     61|   if (provider === 'whop') {
+ ❯ lib/__tests__/auth.test.ts:248:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/47]⎯
+
+ FAIL  lib/__tests__/auth.test.ts > a stale refresh never supplies the new owner token for retrying an old mutation
+TypeError: localStorage.setItem is not a function
+ ❯ setTokens lib/auth.ts:59:16
+     57| export function setTokens(access: string, refresh: string, provider: '…
+     58|   if (typeof window === 'undefined') return
+     59|   localStorage.setItem(ACCESS_TOKEN_KEY, access)
+       |                ^
+     60|   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+     61|   if (provider === 'whop') {
+ ❯ lib/__tests__/auth.test.ts:261:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/47]⎯
+
+ FAIL  lib/__tests__/handin-redirect.test.ts > preserves the card after an expired email session
+ FAIL  lib/__tests__/handin-redirect.test.ts > preserves the card after an expired whop session
+TypeError: localStorage.setItem is not a function
+ ❯ lib/__tests__/handin-redirect.test.ts:14:16
+     12| })
+     13| it.each(['email', 'whop'])('preserves the card after an expired %s ses…
+     14|   localStorage.setItem('ff_auth_provider', provider)
+       |                ^
+     15|   Object.defineProperty(window, 'location', { value: { pathname: '/han…
+     16|   clearTokens()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/47]⎯
+
+ FAIL  app/r/__tests__/request-journey.test.tsx > replaces a failed V2 on its own asset and completes only the reviewed V3
+TypeError: localStorage.setItem is not a function
+ ❯ app/r/__tests__/request-journey.test.tsx:75:16
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/47]⎯
+
+ FAIL  components/layout/__tests__/header.test.tsx > shows app identity instead of repeating the root page name on /home
+ FAIL  components/layout/__tests__/header.test.tsx > shows app identity instead of repeating the root page name on /rules
+ FAIL  components/layout/__tests__/header.test.tsx > shows app identity instead of repeating the root page name on /insights
+ FAIL  components/layout/__tests__/header.test.tsx > shows app identity instead of repeating the root page name on /projects
+ FAIL  components/layout/__tests__/header.test.tsx > uses custom branding for the root toolbar
+ FAIL  components/layout/__tests__/header.test.tsx > preserves named project breadcrumbs and their parent navigation
+ FAIL  components/layout/__tests__/header.test.tsx > preserves a folder breadcrumb attached to a root page
+TypeError: storage.setItem is not a function
+ ❯ Object.setItem node_modules/.pnpm/zustand@5.0.14_@types+react@18.3.28_react@18.3.1_use-sync-external-store@1.6.0_react@18.3.1_/node_modules/zustand/esm/middleware.mjs:300:42
+ ❯ setItem node_modules/.pnpm/zustand@5.0.14_@types+react@18.3.28_react@18.3.1_use-sync-external-store@1.6.0_react@18.3.1_/node_modules/zustand/esm/middleware.mjs:360:20
+ ❯ node_modules/.pnpm/zustand@5.0.14_@types+react@18.3.28_react@18.3.1_use-sync-external-store@1.6.0_react@18.3.1_/node_modules/zustand/esm/middleware.mjs:373:14
+ ❯ Object.resetAll stores/branding-store.ts:25:23
+     23|       setOrgLogoDark: (url) => set({ orgLogoDark: url }),
+     24|       setOrgLogoLight: (url) => set({ orgLogoLight: url }),
+     25|       resetAll: () => set({ orgName: 'Autoreview', orgLogoDark: null, …
+       |                       ^
+     26|     }),
+     27|     {
+ ❯ components/layout/__tests__/header.test.tsx:11:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/47]⎯
+
+ FAIL  components/share/__tests__/share-mobile-review.test.tsx > mobile share review comment controls > lets a mobile reviewer reveal and hide feedback using named controls
+TestingLibraryElementError: Unable to find role="button" and name "Show comments"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="flex items-center justify-center h-screen bg-bg-primary"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M21 12a9 9 0 1 1-6.219-8.56"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="flex items-center justify-center h-screen bg-bg-primary"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M21 12a9 9 0 1 1-6.219-8.56"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ components/share/__tests__/share-mobile-review.test.tsx:23:31
+     21|     await waitFor(() => expect(screen.getByText('Clip.mp4')).toBeInThe…
+     22|     fireEvent.doubleClick(screen.getByText('Clip.mp4'))
+     23|     const show = await screen.findByRole('button', { name: 'Show comme…
+       |                               ^
+     24|     expect(show).toHaveAttribute('aria-expanded', 'false')
+     25|     fireEvent.click(show)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/47]⎯
+
+ FAIL  components/share/__tests__/share-no-internal-toggle.test.tsx > folder share - no internal-comment control for guests > offers no visibility selector on a link that does allow comments
+TestingLibraryElementError: Unable to find an element with the placeholder text of: /comment/i
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="flex items-center justify-center h-screen bg-bg-primary"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M21 12a9 9 0 1 1-6.219-8.56"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<html
+  data-theme="dark"
+>
+  <head>
+    <title>
+      T – Autoreview
+    </title>
+  </head>
+  <body>
+    <div>
+      <div
+        class="fixed inset-0 z-50"
+      >
+        <div
+          class="flex items-center justify-center h-screen bg-bg-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-6.219-8.56"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ components/share/__tests__/share-no-internal-toggle.test.tsx:45:11
+     43|     // Wait for the composer itself, so absence below is a real absenc…
+     44|     // an assertion that ran before the dynamic import resolved.
+     45|     await waitFor(
+       |           ^
+     46|       () => expect(screen.getByPlaceholderText(/comment/i)).toBeInTheD…
+     47|       { timeout: 3000 },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/47]⎯
+
+ FAIL  components/share/__tests__/share-review-mount.test.tsx > folder share — opening an asset mounts the review UI (#192) > renders the review panel tabs after double-clicking an asset
+TestingLibraryElementError: Unable to find an element with the text: Fields. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="flex items-center justify-center h-screen bg-bg-primary"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M21 12a9 9 0 1 1-6.219-8.56"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<html
+  data-theme="dark"
+>
+  <head>
+    <title>
+      T – Autoreview
+    </title>
+  </head>
+  <body>
+    <div>
+      <div
+        class="fixed inset-0 z-50"
+      >
+        <div
+          class="flex items-center justify-center h-screen bg-bg-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-6.219-8.56"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ components/share/__tests__/share-review-mount.test.tsx:45:11
+     43|     // These tabs live inside ShareReviewInner, so they only appear if…
+     44|     // subtree mounted — i.e. if its hook imports resolved.
+     45|     await waitFor(() => expect(screen.getByText('Fields')).toBeInTheDo…
+       |           ^
+     46|     expect(screen.getByText('Comments')).toBeInTheDocument()
+     47|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/47]⎯
+
+ FAIL  components/share/__tests__/share-view-only-notice.test.tsx > folder share - a view-only link says so > explains the missing composer instead of pointing at it
+TestingLibraryElementError: Unable to find an element with the text: Fields. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="flex items-center justify-center h-screen bg-bg-primary"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M21 12a9 9 0 1 1-6.219-8.56"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<html
+  data-theme="dark"
+>
+  <head>
+    <title>
+      T – Autoreview
+    </title>
+  </head>
+  <body>
+    <div>
+      <div
+        class="fixed inset-0 z-50"
+      >
+        <div
+          class="flex items-center justify-center h-screen bg-bg-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-6.219-8.56"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ openAsset components/share/__tests__/share-view-only-notice.test.tsx:41:11
+     39|     await waitFor(() => expect(screen.getByText('Clip.mp4')).toBeInThe…
+     40|     fireEvent.doubleClick(screen.getByText('Clip.mp4'))
+     41|     await waitFor(() => expect(screen.getByText('Fields')).toBeInTheDo…
+       |           ^
+     42|   }
+     43|
+ ❯ components/share/__tests__/share-view-only-notice.test.tsx:45:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/47]⎯
+
+ FAIL  components/share/__tests__/share-view-only-notice.test.tsx > folder share - a view-only link says so > stays out of the way when the link does allow comments
+TestingLibraryElementError: Unable to find an element with the text: Fields. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="flex items-center justify-center h-screen bg-bg-primary"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M21 12a9 9 0 1 1-6.219-8.56"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<html
+  data-theme="dark"
+>
+  <head>
+    <title>
+      T – Autoreview
+    </title>
+  </head>
+  <body>
+    <div>
+      <div
+        class="fixed inset-0 z-50"
+      >
+        <div
+          class="flex items-center justify-center h-screen bg-bg-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-loader-circle h-8 w-8 animate-spin text-text-tertiary"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-6.219-8.56"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ openAsset components/share/__tests__/share-view-only-notice.test.tsx:41:11
+     39|     await waitFor(() => expect(screen.getByText('Clip.mp4')).toBeInThe…
+     40|     fireEvent.doubleClick(screen.getByText('Clip.mp4'))
+     41|     await waitFor(() => expect(screen.getByText('Fields')).toBeInTheDo…
+       |           ^
+     42|   }
+     43|
+ ❯ components/share/__tests__/share-view-only-notice.test.tsx:55:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/47]⎯
+
+ FAIL  components/v2/__tests__/request-workspace.test.tsx > celebrates only the first completed visit and keeps a video completion cue
+TypeError: localStorage.removeItem is not a function
+ ❯ components/v2/__tests__/request-workspace.test.tsx:28:16
+     26|
+     27| it('celebrates only the first completed visit and keeps a video comple…
+     28|   localStorage.removeItem('request-celebrated:completion-test')
+       |                ^
+     29|   const { unmount } = render(<SubmissionSuccess token="completion-test…
+     30|   expect(document.querySelector('.request-confetti')).not.toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/47]⎯
+
+
+ Test Files  10 failed | 70 passed (80)
+      Tests  44 failed | 491 passed (535)
+   Start at  12:23:07
+   Duration  26.40s (transform 10.48s, setup 15.48s, import 40.94s, tests 49.26s, environment 179.69s)
+
+/Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  web@0.1.0 test: `vitest run`
+Exit status 1

@@ -1,0 +1,57 @@
+ WARN  The "workspaces" field in package.json is not supported by pnpm. Create a "pnpm-workspace.yaml" file instead.
+
+> web@0.1.0 lint /Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web
+> next lint
+
+
+./app/(dashboard)/handin/page.tsx
+219:35  Warning: The ref value 'lookupSequence.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'lookupSequence.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+
+./app/(dashboard)/projects/[id]/assets/[assetId]/page.tsx
+99:6  Warning: React Hook useEffect has a missing dependency: 'projectId'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+203:6  Warning: React Hook useEffect has a missing dependency: 'navigateAsset'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./app/r/[token]/page.tsx
+85:244  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/share/[token]/page.tsx
+448:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+663:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/projects/project-members-dialog.tsx
+153:6  Warning: React Hook React.useEffect has a missing dependency: 'membersList'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/projects/share-create-dialog.tsx
+75:14  Warning: Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images.  jsx-a11y/alt-text
+539:17  Warning: Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images.  jsx-a11y/alt-text
+723:83  Warning: Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images.  jsx-a11y/alt-text
+786:19  Warning: Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images.  jsx-a11y/alt-text
+1061:6  Warning: React Hook React.useEffect has missing dependencies: 'computeDefaultTitle' and 'initialResult'. Either include them or remove the dependency array. If 'setPhase' needs the current value of 'initialResult', you can also switch to useReducer instead of useState and read 'initialResult' in the reducer.  react-hooks/exhaustive-deps
+
+./components/projects/share-link-detail.tsx
+73:9  Warning: The 'appearance' logical expression could make the dependencies of useCallback Hook (at line 90) change on every render. To fix this, wrap the initialization of 'appearance' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+642:6  Warning: React Hook React.useEffect has a missing dependency: 'token'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/review/audio-player.tsx
+119:6  Warning: React Hook React.useEffect has a missing dependency: 'shareSession'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/review/image-viewer.tsx
+242:6  Warning: React Hook React.useEffect has a missing dependency: 'shareSession'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/review/review-provider.tsx
+236:6  Warning: React Hook useCallback has a missing dependency: 'shareSessionParam'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+348:5  Warning: React Hook useCallback has missing dependencies: 'shareSessionParam' and 'shareToken'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+398:5  Warning: React Hook useMemo has missing dependencies: 'shareSession' and 'shareToken'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/settings/instance-settings-tab.tsx
+27:6  Warning: React Hook React.useEffect has a missing dependency: 'data'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/share/folder-share-viewer.tsx
+435:6  Warning: React Hook React.useEffect has a missing dependency: 'selectedAsset'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1081:6  Warning: React Hook React.useEffect has a missing dependency: 'sessionParam'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/v2/request-workspace.tsx
+77:77  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+128:117  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules

@@ -1,0 +1,70 @@
+{
+  "transform": "strip ANSI, normalize terminal CR to lines, trim trailing whitespace; original /tmp logs unchanged",
+  "files": [
+    {
+      "file": "web-tests-final.txt",
+      "raw_sha256": "ea06a235e3a3b0f2e71900fcdb7ffc8ecb6dbc02ba67b54e881235acfba4f124",
+      "normalized_sha256": "923bf945286ef94dd5f273e17d2e0b25cef27987924598d7320ad43c283b7d83"
+    },
+    {
+      "file": "web-tests-node25-initial.txt",
+      "raw_sha256": "90b63432785a539cd14e8baa0b3a77c869a6e61f718e90b011d716611be53804",
+      "normalized_sha256": "6916719258e668e0b056ac6fb0e113eff4d485ada922277e373907918436be38"
+    },
+    {
+      "file": "web-build.txt",
+      "raw_sha256": "ca9329a6a60d5ca2f9d1e06c716deb29df8ef25e5c27f27328b051f5d6f7c18d",
+      "normalized_sha256": "e5649faa03316c21ec427f6cd1d825237be068776aae12ca59ff6d060adf4239"
+    },
+    {
+      "file": "web-mobile-targeted.txt",
+      "raw_sha256": "fcaac382970acb70a8bc31a7a23129cd4f30a6e4ca323c00b9fabb1fc51ba5be",
+      "normalized_sha256": "e03da7a8d43f145c689a0bd6ad320bf2e542bb733dab091a84c10b89871af5c8"
+    },
+    {
+      "file": "web-typecheck.txt",
+      "raw_sha256": "8840018c8a92dd6b93f37a1b43898dd0b3a69c6898bdda811c4ecd7fd3c0d88c",
+      "normalized_sha256": "8840018c8a92dd6b93f37a1b43898dd0b3a69c6898bdda811c4ecd7fd3c0d88c"
+    },
+    {
+      "file": "docker-build-failed.txt",
+      "raw_sha256": "f7990415d9b56f056b72ce68c2c6ad22539b9036fad6852c344553a97ae8f89e",
+      "normalized_sha256": "9633552fe10716f44c380dd97d4a5ef072970318b335d106ba605eff1beae61e"
+    },
+    {
+      "file": "compose-config.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "bridge-smoke.txt",
+      "raw_sha256": "6d6822924f39b41c86ecc44bbbb28a71e2c2b64d781ed48355987f6590978715",
+      "normalized_sha256": "3bad7d5d9a1b0fc07ec2f4147dda63e9ab41e2d2a40dac8cee8778d852a84dc8"
+    },
+    {
+      "file": "web-lint.txt",
+      "raw_sha256": "64d77933c7a7f5ee453526aac867afa5e2583747f7c77e4f1268d0809c1f92e5",
+      "normalized_sha256": "64d77933c7a7f5ee453526aac867afa5e2583747f7c77e4f1268d0809c1f92e5"
+    },
+    {
+      "file": "api-tests.txt",
+      "raw_sha256": "436b9e599291c934232eeb13f9f1f8776db686882bbe28c66393ae6cb8f41026",
+      "normalized_sha256": "436b9e599291c934232eeb13f9f1f8776db686882bbe28c66393ae6cb8f41026"
+    },
+    {
+      "file": "worker-tests.txt",
+      "raw_sha256": "a5596ed24f456d3f15f994458963816f0777d38b57946ab3cd5bacd959d46e18",
+      "normalized_sha256": "a68d27a5b7d81ce2f67b1323464316694b4de92d75153a9a1a41f297c94bc69c"
+    },
+    {
+      "file": "web-tests-node22-initial.txt",
+      "raw_sha256": "81316bb37cb7faccdf1dd3f6a627be96bd335ccfcb59ec316803b9436d1294f2",
+      "normalized_sha256": "97f80af5500216b05191d6a0db994f023acf361bb8df6b7c71e377c110ac518c"
+    },
+    {
+      "file": "compose-start-failed.txt",
+      "raw_sha256": "593e3c7f6d2c17266c7063b3f69523e2fe462598a3d0afc2c00007397d56e361",
+      "normalized_sha256": "593e3c7f6d2c17266c7063b3f69523e2fe462598a3d0afc2c00007397d56e361"
+    }
+  ]
+}
