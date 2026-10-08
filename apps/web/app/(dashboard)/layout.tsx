@@ -16,6 +16,8 @@ import { UploadsPanel } from "@/components/layout/uploads-panel";
 import { UploadSSEBridge } from "@/components/layout/upload-sse-bridge";
 import { cn } from "@/lib/utils";
 import { CampaignBoundary } from "@/components/campaign-boundary";
+import { CustomerEntry } from "@/components/v2/customer-entry";
+import { canSetUpAutoReview } from "@/lib/onboarding";
 
 export default function DashboardLayout({
   children,
@@ -26,10 +28,11 @@ export default function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [commandOpen, setCommandOpen] = React.useState(false);
   const { user, fetchUser } = useAuthStore();
-  const managementRoute = ["/home", "/rules", "/insights"].includes(pathname);
-  const { data: projects } = useSWR<Project[]>(managementRoute ? '/projects' : null, () => api.get<Project[]>('/projects'));
-  const managementLoading = managementRoute && (!user || !projects);
-  const editorRoute = managementRoute && !canManageWorkspace(user, projects);
+  const setupRoute = pathname === '/start';
+  const managementRoute = ["/home", "/rules", "/insights", "/start"].includes(pathname);
+  const { data: projects, error: projectsError, mutate: retryProjects } = useSWR<Project[]>(managementRoute ? '/projects' : null, () => api.get<Project[]>('/projects'));
+  const managementLoading = managementRoute && !projectsError && (!user || !projects);
+  const editorRoute = managementRoute && !canManageWorkspace(user, projects) && !canSetUpAutoReview(user, projects);
   const { fetchHistory } = useUploadStore();
 
   // Hide header on asset viewer pages — the viewer has its own top bar
@@ -52,6 +55,9 @@ export default function DashboardLayout({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const content = projectsError ? <div role="alert" className="p-8">Could not open your workspace. <button className="min-h-11 px-3 text-accent" onClick={() => void retryProjects()}>Try again</button></div> : managementLoading ? <p role="status" className="p-8 text-text-secondary">Opening your workspace…</p> : editorRoute ? <EditorSubmissions /> : children;
+  if (setupRoute) return <main className="owner-workspace min-h-screen bg-bg-primary"><CampaignBoundary>{content}</CampaignBoundary></main>;
+
   return (
     <div className={cn("flex h-screen overflow-hidden bg-bg-primary", ["/home", "/rules", "/handin"].includes(pathname) && "owner-workspace")}>
       <Sidebar
@@ -68,7 +74,7 @@ export default function DashboardLayout({
       >
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
 
-        <div className="relative flex-1 overflow-y-auto"><CampaignBoundary>{managementLoading ? <p role="status" className="p-8 text-text-secondary">Opening your workspace…</p> : editorRoute ? <EditorSubmissions /> : children}</CampaignBoundary></div>
+        <div className="relative flex-1 overflow-y-auto"><CampaignBoundary>{pathname === '/home' ? <CustomerEntry projects={projects}>{content}</CustomerEntry> : content}</CampaignBoundary></div>
       </main>
 
       <UploadsPanel />
