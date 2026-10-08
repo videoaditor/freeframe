@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import logging
 import uuid
 import secrets
+from redis.exceptions import RedisError
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
@@ -314,18 +315,22 @@ def oidc_login(from_: Optional[str] = Query(default=None, alias="from")):
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     verifier, challenge = oidc_auth.new_pkce_pair()
-    store_oidc_state(state, {
-        "verifier": verifier,
-        "nonce": nonce,
-        "from": _safe_relative_path(from_),
-    })
-    url = oidc_auth.authorize_url(
-        redirect_uri=_oidc_redirect_uri(),
-        state=state,
-        nonce=nonce,
-        code_challenge=challenge,
-        resource=settings.frontend_url,
-    )
+    try:
+        store_oidc_state(state, {
+            "verifier": verifier,
+            "nonce": nonce,
+            "from": _safe_relative_path(from_),
+        })
+        url = oidc_auth.authorize_url(
+            redirect_uri=_oidc_redirect_uri(),
+            state=state,
+            nonce=nonce,
+            code_challenge=challenge,
+            resource=settings.frontend_url,
+        )
+    except (oidc_auth.OIDCError, RedisError):
+        logger.warning("Gate OIDC login could not reach the gate or Redis")
+        return _login_redirect("gate_sign_in_failed")
     return RedirectResponse(url, status_code=302)
 
 
@@ -343,7 +348,11 @@ def oidc_callback(
     if error or not code or not state:
         return _login_redirect("gate_sign_in_failed")
 
-    saved = consume_oidc_state(state)
+    try:
+        saved = consume_oidc_state(state)
+    except RedisError:
+        logger.warning("Gate OIDC callback could not reach Redis")
+        return _login_redirect("gate_sign_in_failed")
     if not saved:
         return _login_redirect("gate_sign_in_expired")
 
@@ -355,11 +364,11 @@ def oidc_callback(
         if not isinstance(id_token, str):
             raise oidc_auth.OIDCError("gate token response had no id_token")
         claims = oidc_auth.verify_id_token(id_token, nonce=saved["nonce"])
-    except oidc_auth.OIDCError:
+    except (oidc_auth.OIDCError, RedisError):
         logger.warning("Gate OIDC callback rejected a token")
         return _login_redirect("gate_sign_in_failed")
 
-    email = claims["email"].strip().lower()
+    email = claims["email"].strip()
     existing = get_user_by_email(db, email)
     user = existing
     if directory_service.is_configured():
