@@ -111,6 +111,8 @@ def brand_http(monkeypatch):
 
 def bind(fixture, *, actor='owner', apply=False, project='project', **extra):
     client,_,ids,headers,_=fixture
+    if apply:
+        extra={'expected':{'card_id':CARD,'board_id':BOARD,'brand_slug':'forward-health-gmbh'},**extra}
     return client.post(f'/projects/{ids[project]}/review-brand',headers=headers[actor],
                        json={'trello_url':f'https://trello.com/c/{CARD}','apply':apply,**extra})
 
@@ -121,10 +123,11 @@ def test_owner_dry_run_does_not_write_and_apply_is_idempotent(brand_http):
     first=bind(brand_http)
     assert first.status_code==200
     assert first.json()['brand_slug']=='forward-health-gmbh'
+    assert first.json()['card_id']==CARD
     assert first.json()['applied'] is False
     _,Session,ids,_,_=brand_http
     with Session() as db: assert db.get(Project,ids['project']).review_brand_binding is None
-    applied=bind(brand_http,apply=True)
+    applied=bind(brand_http,apply=True,expected={key:first.json()[key] for key in ('card_id','board_id','brand_slug')})
     again=bind(brand_http,apply=True)
     assert applied.status_code==again.status_code==200
     assert applied.json()['binding']==again.json()['binding']
@@ -366,3 +369,68 @@ def test_operator_dry_run_for_both_concrete_staff_workspace_ids(brand_http):
         assert response.json()['brand_slug']==brand and response.json()['applied'] is False
     with Session() as db:
         assert all(db.get(Project,ids[key]).review_brand_binding is None for key in ('project','audibene'))
+
+
+def test_apply_requires_the_reviewed_identity_tuple(brand_http):
+    from apps.api.models.project import Project
+    client,Session,ids,headers,_=brand_http
+    proposal=bind(brand_http)
+    assert proposal.status_code==200
+    response=client.post(f'/projects/{ids["project"]}/review-brand',headers=headers['owner'],
+        json={'trello_url':f'https://trello.com/c/{CARD}','apply':True})
+    assert response.status_code==409
+    with Session() as db: assert db.get(Project,ids['project']).review_brand_binding is None
+
+
+def test_apply_rejects_card_moved_after_the_reviewed_proposal(brand_http):
+    from apps.api.models.project import Project
+    client,Session,ids,headers,cards=brand_http
+    proposal=bind(brand_http)
+    assert proposal.status_code==200 and proposal.json()['brand_slug']=='forward-health-gmbh'
+    cards[CARD].update(board_id=OTHER_BOARD,brand_slug='audibene-gmbh')
+    response=bind(brand_http,apply=True,expected={'card_id':CARD,'board_id':BOARD,'brand_slug':proposal.json()['brand_slug']})
+    assert response.status_code==409
+    with Session() as db: assert db.get(Project,ids['project']).review_brand_binding is None
+
+
+@pytest.mark.parametrize('changed',[
+    {'card_id':OTHER_CARD}, {'board_id':OTHER_BOARD}, {'brand_slug':'audibene-gmbh'},
+])
+def test_expected_fields_are_comparisons_not_identity_authority(brand_http,changed):
+    from apps.api.models.project import Project
+    _,Session,ids,_,_=brand_http
+    expected={'card_id':CARD,'board_id':BOARD,'brand_slug':'forward-health-gmbh',**changed}
+    assert bind(brand_http,apply=True,expected=expected).status_code==409
+    with Session() as db: assert db.get(Project,ids['project']).review_brand_binding is None
+
+
+@pytest.mark.parametrize('scope',['foreign','unavailable'])
+def test_preupload_assignment_check_refuses_unverified_scope_but_completed_work_remains_readable(brand_http,scope):
+    from apps.api.models.asset import Asset, AssetVersion, AssetType, ProcessingStatus
+    from apps.api.models.upload_request import UploadRequest, RequestUpload
+    from apps.api.models.share import ShareLink, SharePermission
+    client,Session,ids,headers,cards=brand_http
+    assert bind(brand_http,apply=True).status_code==200
+    with Session() as db:
+        share=ShareLink(folder_id=ids['folder'],created_by=ids['owner'],token='completed-share',
+            title='Auto Review',permission=SharePermission.comment)
+        db.add(share);db.flush()
+        req=UploadRequest(project_id=ids['project'],folder_id=ids['folder'],created_by=ids['owner'],
+            token='completed-editor',title='Finished cut',review_share_token=share.token,
+            brand_slug='legacy-label' if scope=='foreign' else 'forward-health-gmbh',
+            brief_excerpt='Frozen completed brief',completed_at=datetime.now(timezone.utc))
+        asset=Asset(project_id=ids['project'],folder_id=ids['folder'],name='Finished cut',
+            asset_type=AssetType.video,created_by=ids['owner'])
+        db.add_all([req,asset]);db.flush()
+        version=AssetVersion(asset_id=asset.id,version_number=1,created_by=ids['owner'],processing_status=ProcessingStatus.ready)
+        db.add(version);db.commit();asset_id=str(asset.id);request_id=req.id
+    if scope=='unavailable': cards.clear()
+    preflight=client.post(f'/folders/{ids["folder"]}/editor-request',headers=headers['owner'])
+    assert preflight.status_code==(409 if scope=='foreign' else 503),preflight.text
+    readable=client.get('/r/completed-editor')
+    assert readable.status_code==200,readable.text
+    assert readable.json()['completed_at'] and readable.json()['brief_excerpt']=='Frozen completed brief'
+    assert readable.json()['assets']==[{'id':asset_id,'name':'Finished cut'}]
+    with Session() as db:
+        assert db.query(UploadRequest).count()==1 and db.get(UploadRequest,request_id).completed_at
+        assert db.query(AssetVersion).count()==1 and db.query(RequestUpload).count()==0

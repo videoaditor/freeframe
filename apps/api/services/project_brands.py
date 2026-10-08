@@ -64,9 +64,12 @@ def require_card_reference(project, reference):
         require_project_card(project, attest_card(reference))
 
 
-def propose_brand(db, project, user, source_url, apply):
+def propose_brand(db, project, user, source_url, apply, expected=None):
     """Caller already checked active staff ownership and locks this one project row."""
     source = attest_card(source_url)
+    if apply and (expected is None or any(expected.get(key) != source[key]
+        for key in ('card_id', 'board_id', 'brand_slug'))):
+        raise HTTPException(409, 'Card identity changed or the exact proposal is missing; review a new proposal before confirming')
     prior = confirmed_brand(project)
     if prior and (prior['brand_slug'] != source['brand_slug'] or prior['board_id'] != source['board_id']):
         raise HTTPException(409, 'Workspace already has a confirmed brand; use a new workspace')
@@ -89,6 +92,6 @@ def propose_brand(db, project, user, source_url, apply):
     if apply and prior is None:
         project.review_brand_binding = value
         db.commit()
-    return {'project_id': str(project.id), 'brand_slug': source['brand_slug'], 'board_id': source['board_id'],
+    return {'project_id': str(project.id), 'card_id': source['card_id'], 'brand_slug': source['brand_slug'], 'board_id': source['board_id'],
         'applied': bool(apply), 'binding': value if apply or prior else None,
         'requires_new_assignment': requires_new}

@@ -386,6 +386,9 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
           ...(prepared ? { checklist_binding_id: prepared.id, ...(existingFolder ? { existing_folder_id: existingFolder.id } : {}) } : {}),
         }));
 
+      // Verify the assignment before any file side effect, including checklist outages.
+      await api.post(`/folders/${folder.id}/editor-request`, {});
+
       // 3. Every video goes INTO that one folder. They upload together; the
       //    reviewer picks up each asset on its own as it finishes transcoding,
       //    so all of them get reviewed, not just the first.
@@ -661,7 +664,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
                 ))}
               </ul>
             )}
-            {checklistConflict ? <ChecklistPanel uploadAllowed={false} error={checklistConflict.message} onRetry={() => checklist.mutate()} /> : checklist.data ? <SavedChecklist key={checklist.data.id} bindingId={checklist.data.id} initial={checklist.data} /> : checklist.isLoading ? <ChecklistPanel /> : checklist.error ? <ChecklistPanel error="The card could not be prepared. You can still upload." onRetry={() => checklist.mutate()} /> : null}
+            {checklistConflict ? <ChecklistPanel uploadAllowed={false} error={checklistConflict.message} onRetry={() => checklist.mutate()} /> : checklist.data ? <SavedChecklist key={checklist.data.id} bindingId={checklist.data.id} initial={checklist.data} /> : checklist.isLoading ? <ChecklistPanel /> : checklist.error ? <ChecklistPanel uploadAllowed={!error} error="The card could not be prepared." onRetry={() => checklist.mutate()} /> : null}
 
           <UploadZone className="mt-2" onFilesSelected={addFiles} />
           </div>

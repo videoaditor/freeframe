@@ -5,6 +5,8 @@ Staff editors submit a complete ad to an existing workspace. A confirmed assignm
 conflict must stop before any file is uploaded, and show the existing server recovery
 instruction. Platforms: mobile and desktop web. Success: 409 is visible with no upload;
 optional preparation outages retain the existing upload fallback.
+Fallback also requires the existing server editor-assignment check before upload;
+unverified or foreign folder scope stops with the existing inline recovery text.
 
 ## 2. Screen inventory and navigation
 | State | Entry | Presentation | Exit |
@@ -54,6 +56,7 @@ fallback and inline panel specifics are web choices, not HIG component prescript
 | --- | --- | --- |
 | Confirmed 409 is swallowed; upload can start | Existing inline error before upload | Prevent side effects after a known assignment conflict |
 | Preparation notice always says upload is available | Confirmed conflict shows its recovery instruction | Keep the status truthful |
+| First503 reuses an unchecked old folder | Existing editor-request validates before upload | An optional checklist outage cannot authorize an assignment |
 
 ## Visual evidence
 | Before | After |
@@ -68,3 +71,11 @@ no horizontal overflow. Desktop captures are 1600×900. This is component visual
 not an authenticated live end-to-end journey. Regressions verify no upload on 409,
 the existing upload fallback on 503, retained conflicts through retry outages,
 successful recovery, key isolation and conflict priority over cached checklist data.
+
+The review delta also checks an initial preparation503 followed by an unverified
+assignment. The existing error region preserves the card/file selection, returns
+the form to enabled, and withdraws the upload-allowed notice. Inspected with the
+same fixture/CSS method in desktop light and actual469px mobile light/dark; no
+horizontal overflow. This is visual component evidence, not a live browser journey.
+
+![Initial outage stops before upload when assignment scope is unverified](handin-assignment-preflight-after.png)

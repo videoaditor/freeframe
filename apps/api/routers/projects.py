@@ -22,10 +22,18 @@ from ..services import automation_share
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+class ReviewBrandIdentity(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    card_id: str = Field(pattern=r'^[a-f0-9]{24}$')
+    board_id: str = Field(pattern=r'^[a-f0-9]{24}$')
+    brand_slug: str = Field(min_length=1, max_length=255, pattern=r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
+
+
 class ReviewBrandConfirmation(BaseModel):
     model_config = ConfigDict(extra='forbid')
     trello_url: str = Field(min_length=1, max_length=2000)
     apply: bool = False
+    expected: ReviewBrandIdentity | None = None
 
 
 @router.post('/{project_id}/review-brand', include_in_schema=False)
@@ -42,7 +50,8 @@ def confirm_review_brand(project_id: uuid.UUID, body: ReviewBrandConfirmation,
     from ..services.permissions import require_project_role
     require_project_role(db, project.id, current_user, ProjectRole.owner)
     from ..services.project_brands import propose_brand
-    return propose_brand(db, project, current_user, body.trello_url, body.apply)
+    return propose_brand(db, project, current_user, body.trello_url, body.apply,
+                         body.expected.model_dump() if body.expected else None)
 
 def _get_project(db: Session, project_id: uuid.UUID) -> Project:
     project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()

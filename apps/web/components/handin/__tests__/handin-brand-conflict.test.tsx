@@ -36,8 +36,15 @@ it('shows a confirmed conflict before uploading to an existing legacy folder', a
 
 it('preserves upload fallback when optional preparation is unavailable', async () => {
   prepare(503)
+  vi.mocked(api.post).mockImplementation(async path => {
+    if (path === '/checklists') throw new ApiError(503, 'Preparation unavailable')
+    return { url: '/r/editor', share_url: '/share/review', review_share_token: 'review' } as never
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Hand in' }))
   await waitFor(() => expect(startUpload).toHaveBeenCalledOnce())
+  const preflight = vi.mocked(api.post).mock.calls.findIndex(([path]) => path === '/folders/old-folder/editor-request')
+  expect(preflight).toBeGreaterThanOrEqual(0)
+  expect(vi.mocked(api.post).mock.invocationCallOrder[preflight]).toBeLessThan(startUpload.mock.invocationCallOrder[0])
   expect(await screen.findByText('Checklist unavailable. You can still upload.')).toBeVisible()
 })
 
@@ -69,4 +76,17 @@ it('shows a new conflict even when an earlier prepared checklist is cached', asy
   } })
   expect(await screen.findByText('Assignment already has a different brief; create a new request')).toBeVisible()
   expect(screen.queryByText(/can still upload/i)).toBeNull()
+})
+
+it.each([409,503])('stops an initial preparation outage before uploading to an unverified folder (%s)', async status => {
+  prepare(503)
+  vi.mocked(api.post).mockImplementation(async path => {
+    throw new ApiError(path === '/checklists' ? 503 : status,
+      path === '/checklists' ? 'Preparation unavailable' : 'Folder assignment could not be verified')
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Hand in' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Hand in' })).toBeEnabled())
+  expect(screen.getByRole('alert')).toHaveTextContent('Folder assignment could not be verified')
+  expect(screen.queryByText(/can still upload/i)).toBeNull()
+  expect(startUpload).not.toHaveBeenCalled()
 })
