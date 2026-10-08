@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- AutoReview customer onboarding in Whop and standalone: optional brand guidelines with explicit rule approval, first briefing, editor upload link, and resumable setup. New customers enter setup automatically; existing work and editor links keep their current flow.
+
+### Added
 - Server-controlled project opt-in for bound AutoReview on new assignments, with frozen review selection and unchanged legacy defaults.
 
 ### Fixed

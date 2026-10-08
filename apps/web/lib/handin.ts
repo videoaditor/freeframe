@@ -46,6 +46,7 @@ export function handinCardFromSearch(search: string): string {
 /** Whop may return to a Hub hand-in, never to an arbitrary caller-supplied URL. */
 export function handinReturnPath(search: string): string {
   const from = new URLSearchParams(search).get('from') || ''
+  if (from === '/start') return '/start'
   if (!from.startsWith('/handin?')) return '/home'
   const card = handinCardFromSearch(from.slice('/handin'.length))
   return card ? '/handin?card=' + encodeURIComponent(card) : '/home'

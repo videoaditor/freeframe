@@ -6,6 +6,7 @@ import useSWR from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowUpRight, Plus, Timer, BookOpen, CheckCheck, Search, X, ArrowRight, Pause, Play, Trophy, Crown, ChevronDown } from 'lucide-react'
 import { usePageTitle } from '@/hooks/use-page-title'
+import { useAuthStore } from '@/stores/auth-store'
 import { editorAccuracy, getEditors, getTimeSaved, hours, listRequests, type FileRequest, type TimeSaved } from '@/lib/platform'
 import { RequestSheet } from '@/components/v2/request-sheet'
 import { ProjectKanban } from '@/components/v2/project-kanban'
@@ -17,6 +18,7 @@ type Filter = 'All' | 'Ready'
 
 export default function HomePage() {
   usePageTitle('Overview')
+  const user = useAuthStore(s => s.user)
   const [sheet, setSheet] = React.useState(false)
   const [sharing, setSharing] = React.useState<FileRequest | null>(null)
   const [filter, setFilter] = React.useState<Filter>('All')
@@ -96,6 +98,7 @@ export default function HomePage() {
           ) : filtered.length ? (
             <ProjectKanban requests={filtered} paused={motionPaused} onShare={setSharing} focusReady={filter === 'Ready'} />
           ) : !error && <div className="mt-5 rounded-2xl border border-border p-8 text-center"><p className="text-[0.9375rem] text-text-secondary">No matching requests</p><button onClick={() => { setQuery(''); setFilter('All') }} className="mt-2 min-h-11 text-[0.875rem] font-medium text-accent">Clear filters</button></div>}
+          {user?.is_staff === false && !requests?.length && !isLoading && !error && <Link href="/start" className="mt-3 inline-flex min-h-11 items-center text-sm text-accent">Set up your brand and first briefing <ArrowRight size={16} className="ml-2" /></Link>}
 
         </section>
 
