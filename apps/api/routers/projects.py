@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from ..database import get_db
 from ..middleware.auth import get_current_user
-from ..models.user import User
+from ..models.user import User, UserStatus
+from pydantic import BaseModel, ConfigDict, Field
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset, AssetType, AssetVersion, MediaFile, ProcessingStatus
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
@@ -19,6 +20,29 @@ from ..config import settings
 from ..services import automation_share
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+class ReviewBrandConfirmation(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    trello_url: str = Field(min_length=1, max_length=2000)
+    apply: bool = False
+
+
+@router.post('/{project_id}/review-brand', include_in_schema=False)
+def confirm_review_brand(project_id: uuid.UUID, body: ReviewBrandConfirmation,
+                         db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.is_staff is not True or current_user.status != UserStatus.active:
+        raise HTTPException(403, 'Active staff owner required')
+    project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first()
+    if project is None or not project.is_workspace:
+        raise HTTPException(404, 'Staff workspace not found')
+    creator = db.query(User).filter(User.id == project.created_by, User.deleted_at.is_(None)).first()
+    if creator is None or creator.is_staff is not True or creator.status != UserStatus.active:
+        raise HTTPException(403, 'Staff-owned workspace required')
+    from ..services.permissions import require_project_role
+    require_project_role(db, project.id, current_user, ProjectRole.owner)
+    from ..services.project_brands import propose_brand
+    return propose_brand(db, project, current_user, body.trello_url, body.apply)
 
 def _get_project(db: Session, project_id: uuid.UUID) -> Project:
     project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()

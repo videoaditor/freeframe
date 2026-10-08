@@ -274,6 +274,7 @@ def test_a_customer_sees_only_brands_of_its_own_projects():
     assert _brands_for(MagicMock(), staff) is None      # staff: unfiltered
     db = MagicMock()
     p = MagicMock()
+    p.review_brand_binding = None
     p.name = "Glow25 GmbH"
     db.query.return_value.filter.return_value.all.side_effect = [[MagicMock(project_id=uuid.uuid4())], [p]]
     assert _brands_for(db, _user(is_staff=False)) == ["glow25"]
@@ -358,6 +359,7 @@ def test_a_customer_brand_is_namespaced_never_its_typed_name():
 def test_a_staff_workspace_keeps_its_name_and_is_never_empty():
     from apps.api.routers.requests import project_brand
     project = MagicMock()
+    project.review_brand_binding = None
     project.id = uuid.uuid4()
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = MagicMock(is_staff=True)

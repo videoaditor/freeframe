@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Staff workspace owners can explicitly confirm a brand from a verified Trello board. Future assignments retain this identity across workspace renames; existing briefs stay frozen and conflicting reuse requires a new request.
 - AutoReview customer onboarding in Whop and standalone: optional brand guidelines with explicit rule approval, first briefing, editor upload link, and resumable setup. New customers enter setup automatically; existing work and editor links keep their current flow.
 
 ### Added

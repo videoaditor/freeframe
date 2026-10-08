@@ -101,12 +101,18 @@ def project_brand(db: Session, project: Project) -> str:
 
     A CUSTOMER's project is namespaced by its id - never by its name, which the customer types and
     which could otherwise resolve onto a real client's brand ("Freiheit" -> freiheit-media) and
-    reach that client's rules. A staff workspace keeps its name-derived slug, which Auto Review
-    resolves against the roster. Never empty.
+    reach that client's rules. Explicit staff bindings survive renames and apply only to future
+    assignments. Unbound workspaces retain their legacy behavior until an owner confirms identity.
     """
     creator = db.query(User).filter(User.id == project.created_by).first()
     if creator is not None and getattr(creator, "is_staff", True) is False:
         return f"cust-{project.id.hex[:16]}"
+    from ..services.project_brands import confirmed_brand
+    bound = confirmed_brand(project)
+    if bound:
+        if creator is None or getattr(creator, 'is_staff', None) is not True:
+            raise HTTPException(409, 'Staff workspace identity is unavailable')
+        return bound['brand_slug']
     return review_bridge.brand_slug(project.name) or f"cust-{project.id.hex[:16]}"
 
 
@@ -152,12 +158,14 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
 
 @router.post("/requests", status_code=status.HTTP_201_CREATED)
 def create_request(body: RequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).first()
+    project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
 
     brand = project_brand(db, project)
+    from ..services.project_brands import require_card_reference
+    require_card_reference(project, body.brief_url)
     intent = {'brand': brand, 'title': body.title.strip(), 'brief_text': body.brief_text,
         'brief_url': body.brief_url, 'brief_pdf_base64': body.brief_pdf_base64,
         'expires_in_days': body.expires_in_days,
@@ -226,7 +234,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
     if getattr(current_user, 'is_staff', False) is not True:
         raise HTTPException(403, 'Internal hand-in is available to staff.')
     folder = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).with_for_update().first()
-    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).first() if folder else None
+    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first() if folder else None
     if not project or not project.is_workspace:
         raise HTTPException(404, 'Workspace hand-in not found')
     require_project_role(db, project.id, current_user, ProjectRole.editor)
@@ -245,6 +253,12 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
         raise HTTPException(410, 'The editor link was closed by its owner.')
     if binding and binding.request_id and (not req or binding.request_id != req.id):
         raise HTTPException(409, 'The checklist belongs to another assignment.')
+    from ..services.project_brands import confirmed_brand, require_card_reference
+    if confirmed_brand(project):
+        brand = project_brand(db, project)
+        if (req and req.brand_slug != brand) or (binding and (binding.intent or {}).get('brand') != brand):
+            raise HTTPException(409, 'Workspace brand changed; create a new request. Existing assignment is unchanged.')
+        require_card_reference(project, folder.description)
     shares = db.query(ShareLink).filter(ShareLink.folder_id == folder.id, ShareLink.deleted_at.is_(None),
         ShareLink.title == 'Auto Review', ShareLink.permission == SharePermission.comment).all()
     wanted = req.review_share_token if req else binding.review_share_token if binding else None

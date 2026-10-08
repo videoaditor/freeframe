@@ -170,11 +170,18 @@ def editor_target(token: str, response: Response, db: Session = Depends(get_db))
     intent = row.intent if row else {}
     has_brief = bool(req.brief_excerpt or req.iteration_brief or any((intent or {}).get(k) for k in ('brief_text', 'brief_url', 'brief_pdf_base64')))
     scope = 'card' if card_id else 'brand' if not has_brief else 'unmappable'
+    # Existing assignments keep their frozen identity when an owner binds future workspace work.
+    from ..services.project_brands import confirmed_brand
+    brand = project_brand(db, project)
+    if not brand.startswith('cust-') and confirmed_brand(project):
+        if not req.brand_slug or (row and (row.intent or {}).get('brand') != req.brand_slug):
+            raise missing
+        brand = req.brand_slug
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Vary'] = 'Authorization'
     return {'request_id': str(req.id), 'project_id': str(project.id), 'folder_id': str(folder.id),
         'token': req.token, 'url': settings.frontend_url.rstrip('/') + '/r/' + req.token,
-        'brand': project_brand(db, project), 'card_id': card_id, 'scope': scope}
+        'brand': brand, 'card_id': card_id, 'scope': scope}
 
 
 class EditorBinding(BaseModel):
@@ -250,7 +257,7 @@ class ChecklistPrepare(BaseModel):
 def prepare_checklist(body: ChecklistPrepare, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if getattr(current_user, 'is_staff', True) is False:
         raise HTTPException(403, 'Staff only')
-    project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).first()
+    project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first()
     if project is None:
         raise HTTPException(404, 'Project not found')
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
@@ -259,6 +266,8 @@ def prepare_checklist(body: ChecklistPrepare, db: Session = Depends(get_db), cur
         raise HTTPException(503, 'Card could not be verified; upload remains available')
     if not re.fullmatch(r'[a-f0-9]{24}', str(card.get('card_id', ''))) or not re.fullmatch(r'[A-Za-z0-9]{8}', str(card.get('short_link', ''))):
         raise HTTPException(404, 'Card not found')
+    from ..services.project_brands import require_project_card
+    require_project_card(project, card)
     from .requests import project_brand
     # Canonical URL ensures short/full links deduplicate against the same immutable intent.
     intent = {'brand': project_brand(db, project), 'title': '', 'brief_text': '',

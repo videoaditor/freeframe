@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
 from sqlalchemy import String, Boolean, Enum, DateTime, ForeignKey, func, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 try:
     from ..database import Base
@@ -32,6 +32,8 @@ class Project(Base):
     # A brand workspace - the project editors file hand-ins into. Only these show in the hand-in
     # dropdown; per-card junk projects stay false and are hidden there. See the 2026-09-15 cleanup.
     is_workspace: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Explicit owner-confirmed identity for future staff assignments; never inferred or backfilled.
+    review_brand_binding: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

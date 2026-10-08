@@ -106,6 +106,7 @@ def test_selected_folder_adoption_conflicts_before_binding_mutation():
     b=row({'review_engine':'continuity-v1'}); b.folder_id=None; b.review_share_token=None
     folder=SimpleNamespace(id=uuid.uuid4(),project_id=b.project_id,description='https://trello.com/c/AbCd1234')
     db=MagicMock(); db.query.return_value.filter.return_value.first.return_value=SimpleNamespace(token='legacy')
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.first.return_value=SimpleNamespace(review_brand_binding=None)
     with patch('apps.api.routers.folders.require_project_role'), patch('apps.api.services.checklists.binding_for_folder',return_value=b), patch('apps.api.routers.folders._get_folder',return_value=folder):
         with pytest.raises(HTTPException) as error:
             create_folder(b.project_id,FolderCreate(name='Card',description=folder.description,checklist_binding_id=b.id,existing_folder_id=folder.id),db,SimpleNamespace(is_staff=True))
@@ -120,6 +121,7 @@ def test_new_folder_selected_uses_outbox_legacy_still_announces(selected):
     from apps.api.schemas.folder import FolderCreate
     b=row({'review_engine':'continuity-v1'} if selected else {}); b.folder_id=None
     db=MagicMock(); link=SimpleNamespace(token='new-share')
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.first.return_value=SimpleNamespace(review_brand_binding=None)
     with patch('apps.api.routers.folders.require_project_role'), patch('apps.api.services.checklists.binding_for_folder',return_value=b), patch('apps.api.routers.folders._check_folder_description_requirement'), patch('apps.api.routers.folders._folder_to_response',return_value={}), patch('apps.api.routers.folders.automation_share.create_standing_folder_link',return_value=link), patch('apps.api.routers.folders.automation_share.announce_folder') as announce, patch('apps.api.services.checklists.dispatch_binding') as dispatch:
         create_folder(b.project_id,FolderCreate(name='Card',checklist_binding_id=b.id,description='https://trello.com/c/AbCd1234'),db,SimpleNamespace(is_staff=True,id=uuid.uuid4()))
     assert announce.call_count == (0 if selected else 1)

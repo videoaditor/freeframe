@@ -167,12 +167,21 @@ def create_folder(
 ):
     require_project_role(db, project_id, current_user, ProjectRole.editor)
 
+    from ..services.project_brands import require_card_reference
+    project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first()
+    if project is not None:
+        require_card_reference(project, body.description)
+
     binding = None
     if body.checklist_binding_id:
         if getattr(current_user, 'is_staff', True) is False:
             raise HTTPException(403, 'Staff only')
         from ..services.checklists import binding_for_folder
         binding = binding_for_folder(db, body.checklist_binding_id, project_id, body.description)
+        from ..services.project_brands import confirmed_brand
+        bound = confirmed_brand(project) if project is not None else None
+        if bound and binding.intent.get('brand') != bound['brand_slug']:
+            raise HTTPException(409, 'Saved assignment belongs to a previous workspace brand; create a new request')
         if binding.folder_id:
             folder = _get_folder(db, binding.folder_id)
             if folder.project_id != project_id:
