@@ -15,6 +15,9 @@ it.each(['email', 'whop'])('preserves the card after an expired %s session', (pr
   Object.defineProperty(window, 'location', { value: { pathname: '/handin', search: from.slice(7), href: '' }, writable: true })
   clearTokens()
   const target = new URL(window.location.href, 'https://feedback.aditor.ai')
-  expect(target.pathname).toBe(provider === 'whop' ? '/whop' : '/login')
+  // Non-Whop sign-out now routes through the gate logout endpoint first - it
+  // forwards `from` and 302s to /login itself (ending any gate SSO session
+  // too), which this unit test can't follow across the network.
+  expect(target.pathname).toBe(provider === 'whop' ? '/whop' : '/auth/oidc/logout')
   expect(target.searchParams.get('from')).toBe(from)
 })

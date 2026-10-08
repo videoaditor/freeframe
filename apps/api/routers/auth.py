@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import logging
@@ -6,6 +7,7 @@ import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import quote
 from ..database import get_db
 from ..schemas.auth import (
     LoginRequest, TokenResponse,
@@ -23,10 +25,11 @@ from ..services.auth_service import (
     get_user_by_email, get_user_by_id,
 )
 from ..services import directory_service
+from ..services import oidc_auth
 from ..services.google_auth import google_enabled, email_from_code
 from ..services.redis_service import (
     generate_magic_code, store_magic_code, verify_magic_code as redis_verify_magic_code,
-    MAGIC_CODE_EXPIRY_SECONDS,
+    MAGIC_CODE_EXPIRY_SECONDS, store_oidc_state, consume_oidc_state,
 )
 from ..tasks.email_tasks import send_magic_code_email, send_invite_email
 from ..tasks.celery_app import send_task_safe
@@ -242,6 +245,169 @@ def google_sign_in(body: GoogleSignInRequest, db: Session = Depends(get_db)):
         refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
         needs_password=False,
     )
+
+
+
+# ── Central-gate (OIDC) sign-in ──────────────────────────────────────────────
+# Option B (spec #65): terminated here in the Python API, not a Next.js BFF.
+# These three endpoints are the entire gate integration; everything downstream
+# (session tokens, directory provisioning) reuses the magic-code machinery
+# above unchanged. Disabled as a group (404) whenever OIDC isn't configured, so
+# a self-hosted instance that hasn't registered with a gate is unaffected.
+
+ACCESS_TOKEN_COOKIE = "ff_access_token"
+REFRESH_TOKEN_COOKIE = "ff_refresh_token"
+# httpOnly: only this router's own /oidc/logout reads it back (as id_token_hint).
+# Unlike the two cookies above, no page JS ever needs to see it.
+OIDC_ID_TOKEN_COOKIE = "ff_oidc_id_token"
+# Matches the lifetime the web app already gives these cookies when it sets them
+# itself after a magic-code sign-in (lib/auth.ts setTokens) - they are a
+# presence flag for the Next.js middleware gate, not the credential itself.
+SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+
+
+def _safe_relative_path(value: str | None, default: str = "/home") -> str:
+    if value and value.startswith("/") and not value.startswith("//"):
+        return value
+    return default
+
+
+def _oidc_redirect_uri() -> str:
+    return f"{settings.frontend_url.rstrip('/')}/api/auth/oidc/callback"
+
+
+def _require_oidc_enabled() -> None:
+    if not oidc_auth.oidc_enabled():
+        raise HTTPException(status_code=404, detail="Gate sign-in is not configured")
+
+
+def _login_redirect(error: str) -> RedirectResponse:
+    return RedirectResponse(f"{settings.frontend_url.rstrip('/')}/login?error={error}", status_code=302)
+
+
+def _set_session_cookies(response: Response, access: str, refresh: str, id_token: Optional[str]) -> None:
+    secure = settings.frontend_url.startswith("https://")
+    response.set_cookie(ACCESS_TOKEN_COOKIE, access, max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+                         path="/", httponly=False, samesite="lax", secure=secure)
+    response.set_cookie(REFRESH_TOKEN_COOKIE, refresh, max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+                         path="/", httponly=False, samesite="lax", secure=secure)
+    if id_token:
+        response.set_cookie(OIDC_ID_TOKEN_COOKIE, id_token, max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+                             path="/", httponly=True, samesite="lax", secure=secure)
+
+
+def _clear_session_cookies(response: Response) -> None:
+    for name in (ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, OIDC_ID_TOKEN_COOKIE):
+        response.delete_cookie(name, path="/")
+
+
+@router.get("/oidc/config")
+def oidc_config():
+    """Whether /login shows "Sign in with Aditor". No secret is exposed."""
+    return {"enabled": oidc_auth.oidc_enabled()}
+
+
+@router.get("/oidc/login", dependencies=[Depends(rate_limit("oidc_login", 30, 600))])
+def oidc_login(from_: Optional[str] = Query(default=None, alias="from")):
+    """Build the gate authorize URL (PKCE S256) and 302 there."""
+    _require_oidc_enabled()
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    verifier, challenge = oidc_auth.new_pkce_pair()
+    store_oidc_state(state, {
+        "verifier": verifier,
+        "nonce": nonce,
+        "from": _safe_relative_path(from_),
+    })
+    url = oidc_auth.authorize_url(
+        redirect_uri=_oidc_redirect_uri(),
+        state=state,
+        nonce=nonce,
+        code_challenge=challenge,
+        resource=settings.frontend_url,
+    )
+    return RedirectResponse(url, status_code=302)
+
+
+@router.get("/oidc/callback")
+def oidc_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Verify state, exchange the code, verify the id_token against the gate's
+    JWKS, resolve the reviewer through the existing directory path, and mint
+    the existing HS256 session exactly like a verified magic code."""
+    _require_oidc_enabled()
+    if error or not code or not state:
+        return _login_redirect("gate_sign_in_failed")
+
+    saved = consume_oidc_state(state)
+    if not saved:
+        return _login_redirect("gate_sign_in_expired")
+
+    try:
+        tokens = oidc_auth.exchange_code(
+            code=code, redirect_uri=_oidc_redirect_uri(), code_verifier=saved["verifier"],
+        )
+        id_token = tokens.get("id_token")
+        if not isinstance(id_token, str):
+            raise oidc_auth.OIDCError("gate token response had no id_token")
+        claims = oidc_auth.verify_id_token(id_token, nonce=saved["nonce"])
+    except oidc_auth.OIDCError:
+        logger.warning("Gate OIDC callback rejected a token")
+        return _login_redirect("gate_sign_in_failed")
+
+    email = claims["email"].strip().lower()
+    existing = get_user_by_email(db, email)
+    user = existing
+    if directory_service.is_configured():
+        user = _resolve_against_directory(db, email, user)
+
+    # No self-signup here, unlike magic-code/Google: the gate is scoped to
+    # editor/team sign-in (access policy decided on the gate side), never an
+    # open customer-signup funnel.
+    if not user or user.status == UserStatus.deactivated:
+        return _login_redirect("not_registered")
+
+    user.email_verified = True
+    if user.status == UserStatus.pending_verification:
+        user.status = UserStatus.active
+    db.commit()
+
+    access = create_access_token(str(user.id), token_version=user.token_version)
+    refresh = create_refresh_token(str(user.id), token_version=user.token_version)
+
+    response = RedirectResponse(
+        f"{settings.frontend_url.rstrip('/')}{saved.get('from') or '/home'}", status_code=302,
+    )
+    _set_session_cookies(response, access, refresh, id_token)
+    return response
+
+
+@router.get("/oidc/logout")
+def oidc_logout(request: Request, from_: Optional[str] = Query(default=None, alias="from")):
+    """Clear the FreeFrame session cookies and end the gate's SSO session too.
+
+    Falls back to a plain /login redirect when OIDC isn't configured, so this
+    is also safe to use as the *only* sign-out destination regardless of which
+    method a given session actually signed in with.
+    """
+    if oidc_auth.oidc_enabled():
+        destination = oidc_auth.end_session_url(
+            post_logout_redirect_uri=oidc_auth.signed_out_redirect_uri(),
+            id_token_hint=request.cookies.get(OIDC_ID_TOKEN_COOKIE),
+        )
+    else:
+        # Mirrors the plain pre-gate logout redirect: back to /login, optionally
+        # remembering the page to return to once signed back in.
+        login = f"{settings.frontend_url.rstrip('/')}/login"
+        safe_from = from_ if (from_ and from_.startswith("/") and not from_.startswith("//")) else None
+        destination = f"{login}?from={quote(safe_from, safe='')}" if safe_from else login
+    response = RedirectResponse(destination, status_code=302)
+    _clear_session_cookies(response)
+    return response
 
 
 @router.post("/set-password", response_model=UserResponse)

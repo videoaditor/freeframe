@@ -87,6 +87,12 @@ services:
       - INSTANCE_WIDE_PROJECT_ACCESS=true
       - SHARE_COMMENT_DELETABLE_GUEST_EMAILS=review@aditor.ai
       - AUTOMATION_SHARE_WEBHOOK_URL=https://review.aditor.ai/api/freeframe/project-registered
+      # Central-gate (OIDC) sign-in for editors/team (spec #65). freeframe-web
+      # is registered on the gate; only the client secret is a credential, and
+      # that one lives in .env.prod (ADITOR_AUTH_FREEFRAME_CLIENT_SECRET), not
+      # here, since this file is checked into the repo.
+      - OIDC_ISSUER=https://auth.aditor.ai
+      - OIDC_CLIENT_ID=freeframe-web
     ports:
       - "127.0.0.1:3091:8000"
 

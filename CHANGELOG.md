@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Central-gate (OIDC) sign-in for editors/team: `/auth/oidc/{login,callback,logout}` in the FastAPI API let a reviewer sign in through `auth.aditor.ai` and reach the existing FreeFrame session; "Sign in with Aditor" is the primary option on `/login`. The gate is additive and off by default (no `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`ADITOR_AUTH_FREEFRAME_CLIENT_SECRET` configured); magic-code and password sign-in are unchanged and remain available as a rollback.
+
 ### Changed
 - Simplify AutoReview setup copy and brand selection: a single brand is shown directly, multiple brands use the styled picker, and briefing inputs retain only essential guidance.
 - AutoReview onboarding prioritizes pasted briefing links, tucks text behind a compact alternative, and suggests project names from briefing files and supported document links without overwriting manual edits.

@@ -1,3 +1,4 @@
+import json
 import redis
 import secrets
 from typing import Optional
@@ -136,6 +137,32 @@ def check_rate_limit(
     except Exception:
         # Fail open — allow the request if Redis is unavailable
         return True, 0
+
+
+# ── Gate (OIDC) sign-in handshake state ───────────────────────────────────────
+# The PKCE verifier/nonce minted at /auth/oidc/login must survive the round trip
+# through the gate to /auth/oidc/callback without living in a browser-readable
+# cookie (that would let the callback be replayed with an attacker-chosen
+# verifier). Redis, keyed by the opaque `state`, one-time-read on consume.
+
+OIDC_STATE_PREFIX = "oidc_state:"
+OIDC_STATE_EXPIRY_SECONDS = 600  # 10 minutes - generous for a gate sign-in redirect
+
+
+def store_oidc_state(state: str, data: dict) -> None:
+    r = get_redis()
+    r.setex(f"{OIDC_STATE_PREFIX}{state}", OIDC_STATE_EXPIRY_SECONDS, json.dumps(data))
+
+
+def consume_oidc_state(state: str) -> Optional[dict]:
+    """Fetch and delete in one go - a state is good for exactly one callback."""
+    r = get_redis()
+    key = f"{OIDC_STATE_PREFIX}{state}"
+    raw = r.get(key)
+    if raw is None:
+        return None
+    r.delete(key)
+    return json.loads(raw)
 
 
 # ── Share link password sessions ──────────────────────────────────────────────

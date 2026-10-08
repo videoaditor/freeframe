@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { GoogleButton } from '@/components/auth/google-button'
+import { AditorGateButton } from '@/components/auth/aditor-gate-button'
 import type { VerifyCodeResponse, AuthTokens } from '@/types'
 
 type Step = 'email' | 'code' | 'password' | 'classic'
@@ -42,6 +43,21 @@ export function LoginForm() {
   const [classicEmail, setClassicEmail] = useState('')
   const [classicPassword, setClassicPassword] = useState('')
   const [classicError, setClassicError] = useState('')
+
+  // Surfaced by a server redirect back from /auth/oidc/callback (apps/api/routers/auth.py)
+  // when the gate sign-in itself didn't go through - shown regardless of which
+  // step renders first, since which one that is depends on PASSWORD_LOGIN_ENABLED.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('error')
+    if (!code) return
+    const message = {
+      gate_sign_in_failed: 'Gate sign-in failed. Please try again.',
+      gate_sign_in_expired: 'Gate sign-in expired. Please try again.',
+      not_registered: 'This account is not registered for Aditor Review yet. Ask an admin to add you.',
+    }[code] || 'Sign-in failed. Please try again.'
+    setGeneralError(message)
+    setClassicError(message)
+  }, [])
 
   const codeRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -256,6 +272,7 @@ export function LoginForm() {
           <p className="text-sm text-text-secondary">Enter your email and password to continue.</p>
         </div>
 
+        <AditorGateButton />
         <GoogleButton />
 
         <form onSubmit={handleClassicLogin} className="flex flex-col gap-4">
@@ -422,6 +439,7 @@ export function LoginForm() {
         </p>
       </div>
 
+      <AditorGateButton />
       <GoogleButton />
 
       <form onSubmit={handleSendCode} className="flex flex-col gap-4">

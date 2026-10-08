@@ -10,9 +10,20 @@ import {
   refreshAccessTokenQuietly,
 } from '../auth'
 
+/** Expire every cookie the auth module could have set, so a previous test's
+ * `setTokens` (which mirrors into cookies for the gate-session adoption path)
+ * can't leak into a later "nothing stored" assertion. */
+function clearAllCookies() {
+  document.cookie.split(';').forEach((c) => {
+    const name = c.split('=')[0].trim()
+    if (name) document.cookie = `${name}=; path=/; max-age=0`
+  })
+}
+
 describe('Token management', () => {
   beforeEach(() => {
     localStorage.clear()
+    clearAllCookies()
     vi.clearAllMocks()
   })
 
@@ -57,7 +68,11 @@ describe('Token management', () => {
     expect(localStorage.getItem('ff_refresh_token')).toBeNull()
   })
 
-  it('clearTokens redirects to /login', () => {
+  it('clearTokens routes sign-out through the gate logout endpoint', () => {
+    // Every non-Whop sign-out goes through /auth/oidc/logout now, not straight
+    // to /login - it ends a gate (OIDC) SSO session when one is configured
+    // and falls back to a plain /login redirect server-side otherwise, so
+    // this one destination covers both cases.
     const locationMock = { href: '' }
     Object.defineProperty(window, 'location', {
       value: locationMock,
@@ -66,7 +81,7 @@ describe('Token management', () => {
 
     clearTokens()
 
-    expect(window.location.href).toBe('/login')
+    expect(window.location.href).toBe('http://localhost:8000/auth/oidc/logout')
   })
 })
 
@@ -187,14 +202,14 @@ describe('renewing a lapsed session', () => {
     expect(window.location.href).toBe('')
   })
 
-  it('still sends the dashboard to /login when its refresh is refused', async () => {
+  it('still sends the dashboard to sign-out when its refresh is refused', async () => {
     localStorage.setItem('ff_access_token', tokenExpiringIn(-1))
     localStorage.setItem('ff_refresh_token', 'expired-refresh')
     stubRefreshEndpoint({ ok: false })
 
     expect(await refreshAccessToken()).toBeNull()
     expect(localStorage.getItem('ff_refresh_token')).toBeNull()
-    expect(window.location.href).toBe('/login')
+    expect(window.location.href).toBe('http://localhost:8000/auth/oidc/logout')
   })
 
   it('runs one refresh for concurrent callers', async () => {

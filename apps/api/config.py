@@ -271,6 +271,21 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_use_tls: bool = True
 
+    # Central-gate (OIDC) sign-in for editors/team, terminated in this API rather
+    # than a Next.js BFF - see docs/architecture.md and spec #65. The magic-code
+    # and password endpoints are untouched and keep working; this is additive.
+    # All three empty (the default) disables /auth/oidc/* entirely (404), so an
+    # instance that hasn't registered with a gate loses nothing by upgrading.
+    oidc_issuer: str = ""
+    oidc_client_id: str = "freeframe-web"
+    # Named for the gate's own client registration, not this app's usual
+    # UPPER_SNAKE(field name) convention, because it was handed over under that
+    # exact name (already set in .env.prod).
+    oidc_client_secret: str = Field(default="", validation_alias="ADITOR_AUTH_FREEFRAME_CLIENT_SECRET")
+    # Extra scope beyond the standard "openid profile email offline_access" every
+    # gate login requests.
+    oidc_scope: str = "freeframe.read"
+
     @model_validator(mode="after")
     def _check_s3_endpoint_consistency(self):
         """Fail loud on `S3_STORAGE=s3` + a real custom (non-AWS) `S3_ENDPOINT`.

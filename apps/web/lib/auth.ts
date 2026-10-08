@@ -3,13 +3,37 @@ const REFRESH_TOKEN_KEY = 'ff_refresh_token'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+// A gate (OIDC) sign-in reaches the browser only as a server redirect that set
+// `ff_access_token`/`ff_refresh_token` cookies (apps/api/routers/auth.py's
+// /auth/oidc/callback) - there is no page JS in that flow to call setTokens().
+// Adopt them into localStorage once, on first read, so every call site below
+// can keep treating localStorage as the one source of truth, exactly as it
+// did for the magic-code and Google flows.
+function adoptCookieSessionIfNeeded(): void {
+  if (localStorage.getItem(ACCESS_TOKEN_KEY)) return
+  const access = readCookie(ACCESS_TOKEN_KEY)
+  const refresh = readCookie(REFRESH_TOKEN_KEY)
+  if (access && refresh) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, access)
+    localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+  }
+}
+
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null
+  adoptCookieSessionIfNeeded()
   return localStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null
+  adoptCookieSessionIfNeeded()
   return localStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
@@ -72,14 +96,23 @@ export function setTokens(access: string, refresh: string, provider: 'email' | '
 
 export function clearTokens(): void {
   if (typeof window === 'undefined') return
+  const isWhop = localStorage.getItem('ff_auth_provider') === 'whop'
   localStorage.removeItem(ACCESS_TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
   // Clear auth cookies
   document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
   document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
-  const login = localStorage.getItem('ff_auth_provider') === 'whop' ? '/whop' : '/login'
   const from = window.location.pathname === '/handin' ? window.location.pathname + window.location.search : ''
-  window.location.href = from ? login + '?from=' + encodeURIComponent(from) : login
+  if (isWhop) {
+    window.location.href = from ? '/whop?from=' + encodeURIComponent(from) : '/whop'
+    return
+  }
+  // Route every non-Whop sign-out through the gate logout endpoint so a gate
+  // (OIDC) session's SSO also ends, not just this app's own cookies - it
+  // falls back to a plain /login redirect when the gate isn't configured, so
+  // this is safe for magic-code/password/Google sessions too.
+  const params = from ? `?from=${encodeURIComponent(from)}` : ''
+  window.location.href = `${API_URL}/auth/oidc/logout${params}`
 }
 
 /** Start a Whop identity exchange without inheriting a previous owner's session. */
