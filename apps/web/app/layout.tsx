@@ -7,7 +7,7 @@ import "./globals.css";
 // Apple's HIG: native type, no download, Dynamic Type friendly.
 export const metadata: Metadata = {
   title: "Autoreview",
-  icons: { icon: "/autoreview-icon.png", apple: "/autoreview-icon.png" },
+  icons: { icon: "/autoreview-check-v2.png", apple: "/apple-icon.png" },
   description: "Request files, get instant feedback. Like WeTransfer, with a reviewer built in.",
 };
 
