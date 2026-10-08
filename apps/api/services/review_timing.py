@@ -177,6 +177,52 @@ def admit_timing(db, request_id, project_id, share_token, asset_id, version_id, 
     return {**frozen, 'schema_version': ADMISSION_SCHEMA, 'provenance': provenance}
 
 
+def admit_legacy_timing_exclusion(db, share_token, asset_id, version_id):
+    """Only durable non-natural proof permits a context-free legacy review."""
+    from ..models.asset import ProcessingStatus
+    from ..models.folder import Folder
+    from ..models.project import Project
+    from ..services.permissions import validate_share_link, validate_asset_in_share
+    share = validate_share_link(db, share_token)
+    if share.visibility != 'public' or share.password_hash:
+        raise HTTPException(404, 'Timing share not found')
+    pair = db.query(AssetVersion, Asset).join(Asset, Asset.id == AssetVersion.asset_id).join(Project, Project.id == Asset.project_id).filter(
+        AssetVersion.id == version_id, AssetVersion.asset_id == asset_id, AssetVersion.deleted_at.is_(None),
+        Asset.deleted_at.is_(None), Project.deleted_at.is_(None)).populate_existing().with_for_update(of=AssetVersion).first()
+    if not pair:
+        raise HTTPException(404, 'Timing version not found')
+    version, asset = pair
+    if asset.folder_id and not db.query(Folder).filter(Folder.id == asset.folder_id, Folder.deleted_at.is_(None)).first():
+        raise HTTPException(404, 'Timing version not found')
+    validate_asset_in_share(db, share, asset)
+    if version.timing_exclusion is None:
+        # V lock also serializes future U->V submission/adoption. No U lock is acquired here.
+        sources = db.query(RequestUpload).filter(RequestUpload.asset_id == asset.id,
+            RequestUpload.version_number == version.version_number).limit(2).all()
+        provenance = 'unknown'
+        if sources:
+            record = sources[0]
+            req = db.get(UploadRequest, record.request_id) if len(sources) == 1 else None
+            frozen = _frozen_source(req, record, version) if req and req.project_id == asset.project_id else None
+            if not frozen or frozen['provenance'] != 'unclassified':
+                raise HTTPException(409, 'Submission admission required')
+            provenance = 'unclassified'
+        elif version.processing_status != ProcessingStatus.ready:
+            raise HTTPException(409, 'Legacy version not committed ready')
+        version.timing_exclusion = dict(schema_version=EXCLUSION_SCHEMA, tenant_id=str(asset.project_id),
+            share_token=share_token, asset_id=str(asset.id), version_id=str(version.id), version_number=version.version_number,
+            upload_request_id=str(record.request_id) if sources else None,
+            submitted_at=record.submitted_at.isoformat() if sources else None,
+            provenance=provenance, reason='legacy-before-review', excluded_at=db.scalar(select(func.clock_timestamp())).isoformat())
+    db.flush()
+    negative = version.timing_exclusion
+    provenance = negative.get('provenance') if isinstance(negative, dict) else None
+    if provenance not in ('unknown', 'unclassified', 'operator-test', 'synthetic'):
+        provenance = 'unknown'
+    return dict(schema_version=ADMISSION_SCHEMA, tenant_id=str(asset.project_id), share_token=share_token,
+        asset_id=str(asset.id), version_id=str(version.id), version_number=version.version_number, provenance=provenance)
+
+
 def _frozen_source(req, record, version):
     if not record.submitted_at:
         return None

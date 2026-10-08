@@ -1,3 +1,5 @@
+> HISTORICAL — the [pre-dispatch follow-up](2026-10-08-h3-predispatch-guard.md) supersedes this report's remaining combined-failure gate and allow-media-on-authority-failure behavior. Preserve the evidence below as the earlier state; current integration/rollout qualifications are in the follow-up.
+
 # H3 durable PostgreSQL test exclusion — final local handoff, acceptance gate open
 
 The independent review has finished and its two Important findings received one author RED/GREEN fix pass. Root's additional native-Workers transport blocker is fixed in the same pass. This is a testable local source handoff, **not unconditional integration/release approval**: the stronger absolute no-promotion invariant still has the combined-failure gap described first below. No coordinator waiver is assumed.

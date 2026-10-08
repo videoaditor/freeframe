@@ -231,23 +231,13 @@ if(quiet==='partial'){
  assert.deepEqual(await setTimingPurpose(env,'share',{quiet:true,provenance:'synthetic'}),{quiet:true,provenance:'synthetic'});
  assert.deepEqual(await setTimingPurpose(env,'share',{quiet:false}),{quiet:false,provenance:'synthetic'});
 }
-if(quiet==='outage'){
- const first=await resolveTimingIntent(stale,{...input,quiet:true,admit:async()=>null});
- assert.equal(first.authoritative,false);assert.equal(first.provenance,'operator-test');
- // Explicit remaining gate: if this observation is lost, no durable record exists.
- const lost=await resolveTimingIntent(stale,{...input,quiet:false,previous:undefined});
- assert.equal(lost.provenance,'natural');
- console.log(JSON.stringify({remainingGate:'authority-outage-plus-lost-negative',first,lost,absoluteNoPromotion:false,providers:0}));
- previous={timingObservation:{version_id:p.version_id,provenance:first.provenance}};
-}
 const result=await resolveTimingIntent(stale,{...input,quiet:quiet==='true',previous});
 assert.equal(result.authoritative,true);assert.equal(result.provenance,want);
-if(quiet==='outage')assert.equal((await resolveTimingIntent(stale,{...input,quiet:false,previous:undefined})).provenance,'operator-test');
 if(quiet==='partial')assert.deepEqual(await setTimingPurpose(env,'share',{quiet:false,provenance:null}),{quiet:false,provenance:null});
 console.log(JSON.stringify({sameVersion:p.version_number===1,quiet,provenance:result.provenance,authority:'actual-local-PostgreSQL',providers:0}));
 ''')
     for upload, quiet, expected in [(v1, 'true', 'operator-test'), (v1, 'false', 'operator-test'),
-        (None, 'false', 'natural'), (None, 'partial', 'operator-test'), (None, 'outage', 'operator-test'), (None, 'false', 'natural')]:
+        (None, 'false', 'natural'), (None, 'partial', 'operator-test'), (None, 'false', 'natural')]:
         if upload is None:
             upload = initiate(a, v1['asset_id']); complete(a, upload)
         app = FastAPI(); app.include_router(router)

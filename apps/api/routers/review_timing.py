@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..services.review_timing import attest_request_timing, set_timing_purpose, admit_timing, timing_status
+from ..services.review_timing import attest_request_timing, set_timing_purpose, admit_timing, admit_legacy_timing_exclusion, timing_status
 from .checklists import require_review_bridge
 
 router = APIRouter(tags=['internal-review-timing'], dependencies=[Depends(require_review_bridge)])
@@ -72,6 +72,21 @@ class TimingAdmission(BaseModel):
 def apply_admission(request_id: uuid.UUID, body: TimingAdmission, response: Response, db: Session = Depends(get_db)):
     response.headers['Cache-Control'] = 'private, no-store'
     result = admit_timing(db, request_id, body.project_id, body.share_token, body.asset_id, body.version_id, body.exclusion)
+    db.commit()
+    return result
+
+
+class LegacyTimingExclusion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    share_token: str = Field(min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$')
+    asset_id: uuid.UUID
+    version_id: uuid.UUID
+
+
+@router.post('/internal/review/timing-legacy-exclusion', include_in_schema=False)
+def apply_legacy_exclusion(body: LegacyTimingExclusion, response: Response, db: Session = Depends(get_db)):
+    response.headers['Cache-Control'] = 'private, no-store'
+    result = admit_legacy_timing_exclusion(db, body.share_token, body.asset_id, body.version_id)
     db.commit()
     return result
 
