@@ -83,7 +83,8 @@ def test_duplicate_customer_create_returns_existing_link_without_new_folder():
     db=MagicMock(); project=SimpleNamespace(id=uuid.uuid4(),name='Demo')
     req=UploadRequest(id=uuid.uuid4(),token='existing',project_id=project.id,folder_id=uuid.uuid4(),created_by=uuid.uuid4(),title='Demo',review_share_token='share')
     row=SimpleNamespace(id=uuid.uuid4(),request_id=req.id,status='queued',error_code=None,plan_id=None,content_sha256=None,plan=None,attempts=0)
-    db.query.return_value.filter.return_value.first.side_effect=[project,req]
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.first.return_value=project
+    db.query.return_value.filter.return_value.first.return_value=req
     with patch('apps.api.routers.requests.require_project_role'), patch('apps.api.routers.requests.project_brand',return_value='demo'), patch('apps.api.routers.requests.reserve_binding',return_value=row), patch('apps.api.routers.requests.dispatch_binding'):
         result=create_request(RequestCreate(project_id=project.id,title='Demo',idempotency_key=uuid.uuid4()),db,SimpleNamespace(id=uuid.uuid4()))
     assert result['token']=='existing'
@@ -96,9 +97,11 @@ def test_adopting_existing_folder_requires_same_project_and_card():
     project_id=uuid.uuid4(); folder_id=uuid.uuid4()
     binding=SimpleNamespace(id=uuid.uuid4(), project_id=project_id, folder_id=None, review_share_token=None, intent={}, intent_sha256='44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a')
     folder=SimpleNamespace(id=folder_id,project_id=uuid.uuid4(),description='https://trello.com/c/abc')
+    db=MagicMock()
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.first.return_value=SimpleNamespace(review_brand_binding=None)
     with patch('apps.api.routers.folders.require_project_role'), patch('apps.api.services.checklists.binding_for_folder',return_value=binding), patch('apps.api.routers.folders._get_folder',return_value=folder):
         with pytest.raises(HTTPException) as e:
-            create_folder(project_id,FolderCreate(name='Card',checklist_binding_id=binding.id,existing_folder_id=folder_id,description='https://trello.com/c/abc'),MagicMock(),SimpleNamespace(is_staff=True))
+            create_folder(project_id,FolderCreate(name='Card',checklist_binding_id=binding.id,existing_folder_id=folder_id,description='https://trello.com/c/abc'),db,SimpleNamespace(is_staff=True))
     assert e.value.status_code==404
 
 
@@ -186,6 +189,7 @@ def test_legacy_adoption_uses_verified_card_mapping_without_provider_read():
     binding.intent_sha256=snapshot_digest(binding.intent)
     folder=SimpleNamespace(id=uuid.uuid4(),project_id=project_id,description='https://trello.com/c/AbCd1234/title')
     db=MagicMock();db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value=binding
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.first.return_value=SimpleNamespace(review_brand_binding=None)
     assert binding_for_folder(db,binding.id,project_id,folder.description) is binding
     with patch('apps.api.routers.folders.require_project_role'),patch('apps.api.routers.folders._get_folder',return_value=folder),patch('apps.api.routers.folders._folder_to_response',return_value={'id':str(folder.id)}),patch('apps.api.services.checklists.dispatch_binding'),patch('apps.api.services.review_bridge.checklist_card',return_value=None) as lookup:
         result=create_folder(project_id,FolderCreate(name='Card',checklist_binding_id=binding.id,existing_folder_id=folder.id,description=f'https://trello.com/c/{card}'),db,SimpleNamespace(is_staff=True))

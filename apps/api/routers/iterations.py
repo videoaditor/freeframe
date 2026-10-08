@@ -275,7 +275,7 @@ def create_handin(body:Handin,db:Session=Depends(get_db),current_user:User=Depen
     from urllib.parse import urlparse
     from .requests import create_request,RequestCreate
     if getattr(current_user,'is_staff',False) is not True:raise HTTPException(403,'Internal hand-in is available to staff.')
-    project=db.query(Project).filter(Project.id==body.project_id,Project.deleted_at.is_(None)).first()
+    project=db.query(Project).filter(Project.id==body.project_id,Project.deleted_at.is_(None)).populate_existing().with_for_update().first()
     if not project or not project.is_workspace:raise HTTPException(404,'Workspace not found')
     require_project_role(db,body.project_id,current_user,ProjectRole.editor)
     parsed=urlparse(body.card_url)

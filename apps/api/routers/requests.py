@@ -45,6 +45,7 @@ from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..models.checklist_binding import ChecklistBinding
 from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
+from ..services.review_timing import freeze_submission_timing
 from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
 from ..services.permissions import effective_project_role, require_project_role
 from ..services.s3_service import (
@@ -101,12 +102,18 @@ def project_brand(db: Session, project: Project) -> str:
 
     A CUSTOMER's project is namespaced by its id - never by its name, which the customer types and
     which could otherwise resolve onto a real client's brand ("Freiheit" -> freiheit-media) and
-    reach that client's rules. A staff workspace keeps its name-derived slug, which Auto Review
-    resolves against the roster. Never empty.
+    reach that client's rules. Explicit staff bindings survive renames and apply only to future
+    assignments. Unbound workspaces retain their legacy behavior until an owner confirms identity.
     """
     creator = db.query(User).filter(User.id == project.created_by).first()
     if creator is not None and getattr(creator, "is_staff", True) is False:
         return f"cust-{project.id.hex[:16]}"
+    from ..services.project_brands import confirmed_brand
+    bound = confirmed_brand(project)
+    if bound:
+        if creator is None or getattr(creator, 'is_staff', None) is not True:
+            raise HTTPException(409, 'Staff workspace identity is unavailable')
+        return bound['brand_slug']
     return review_bridge.brand_slug(project.name) or f"cust-{project.id.hex[:16]}"
 
 
@@ -152,12 +159,14 @@ def _request_out(req: UploadRequest, project: Optional[Project], st: Optional[di
 
 @router.post("/requests", status_code=status.HTTP_201_CREATED)
 def create_request(body: RequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).first()
+    project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
 
     brand = project_brand(db, project)
+    from ..services.project_brands import require_card_reference
+    require_card_reference(project, body.brief_url)
     intent = {'brand': brand, 'title': body.title.strip(), 'brief_text': body.brief_text,
         'brief_url': body.brief_url, 'brief_pdf_base64': body.brief_pdf_base64,
         'expires_in_days': body.expires_in_days,
@@ -226,7 +235,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
     if getattr(current_user, 'is_staff', False) is not True:
         raise HTTPException(403, 'Internal hand-in is available to staff.')
     folder = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).with_for_update().first()
-    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).first() if folder else None
+    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first() if folder else None
     if not project or not project.is_workspace:
         raise HTTPException(404, 'Workspace hand-in not found')
     require_project_role(db, project.id, current_user, ProjectRole.editor)
@@ -245,6 +254,12 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
         raise HTTPException(410, 'The editor link was closed by its owner.')
     if binding and binding.request_id and (not req or binding.request_id != req.id):
         raise HTTPException(409, 'The checklist belongs to another assignment.')
+    from ..services.project_brands import confirmed_brand, require_card_reference
+    if confirmed_brand(project):
+        brand = project_brand(db, project)
+        if (req and req.brand_slug != brand) or (binding and (binding.intent or {}).get('brand') != brand):
+            raise HTTPException(409, 'Workspace brand changed; create a new request. Existing assignment is unchanged.')
+        require_card_reference(project, folder.description)
     shares = db.query(ShareLink).filter(ShareLink.folder_id == folder.id, ShareLink.deleted_at.is_(None),
         ShareLink.title == 'Auto Review', ShareLink.permission == SharePermission.comment).all()
     wanted = req.review_share_token if req else binding.review_share_token if binding else None
@@ -260,7 +275,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
     if binding:
         binding.request_id = req.id
     if not components(req):
-        now = datetime.now(timezone.utc)
+        req = locked_request(db, req.id)
         for asset in _submitted_assets(db, req):
             versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id,
                 AssetVersion.deleted_at.is_(None)).all()
@@ -273,7 +288,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
                         uploader_name=author.name, uploader_email=author.email)
                     db.add(record)
                 if record.submitted_at is None and version.processing_status in (ProcessingStatus.processing, ProcessingStatus.ready):
-                    record.submitted_at = now  # Confirmed adoption time; never invent an earlier transfer clock.
+                    freeze_submission_timing(db, req, record, version, adopted=True)
                 if req.completion_versions and req.completion_versions.get(str(asset.id)) != str(version.id) and version == max(versions, key=lambda v: v.version_number):
                     req.completed_at = None
                     req.completion_versions = None
@@ -607,6 +622,7 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
 def guest_complete(token: str, body: GuestComplete, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     req = locked_request(db, _live_request(db, token, recovery=True).id)
     _, version = _owned_media(db, req, body.s3_key)
+    version = db.query(AssetVersion).filter(AssetVersion.id == version.id).populate_existing().with_for_update().one()
     # Completing twice (a retried request) must not re-trigger processing on a finished version.
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
@@ -636,7 +652,7 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
         version.processing_status = ProcessingStatus.failed
         db.commit()
         raise HTTPException(status_code=413, detail="The file is larger than announced. Upload it again.")
-    record.submitted_at = datetime.now(timezone.utc)
+    freeze_submission_timing(db, req, record, version)
     if components(req): stored_upload(req,version)
     version.processing_status = ProcessingStatus.processing
     db.commit()

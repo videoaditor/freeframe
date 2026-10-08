@@ -2,9 +2,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { SWRConfig } from 'swr'
 import { ChecklistPanel, SavedChecklist, useChecklistPreparation } from '../checklist'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('@/lib/api', async original => ({ ...await original<typeof import('@/lib/api')>(), api: { get: vi.fn(), post: vi.fn() } }))
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 const ready = { id: 'binding-a', status: 'ready' as const, requirements: [{ id:'r1', text:'Keep the product visible.', severity:'warning', applicability:'video', sources:[{layer:'brand' as const,reference_id:'r1',source_version:'v1'}] }], limitations:[] }
 const wrapper=({children}:{children:React.ReactNode})=><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0}}>{children}</SWRConfig>
@@ -40,6 +40,27 @@ it('prepares once for paste/blur and ignores a late A response after B selection
 it('waits for a workspace before starting paid preparation', () => {
   renderHook(()=>useChecklistPreparation(null,'https://trello.com/c/AAAA1111'),{wrapper})
   expect(api.post).not.toHaveBeenCalled()
+})
+it('clears a confirmed conflict only after successful preparation', async () => {
+  vi.mocked(api.post).mockRejectedValue(new ApiError(409,'Create a new request'))
+  const {result}=renderHook(()=>useChecklistPreparation('project-a','https://trello.com/c/AAAA1111'),{wrapper})
+  await waitFor(()=>expect(result.current.conflict?.status).toBe(409))
+  vi.mocked(api.post).mockRejectedValue(new ApiError(503,'Preparation unavailable'))
+  await act(async()=>{ await result.current.mutate() })
+  expect(result.current.conflict?.status).toBe(409)
+  vi.mocked(api.post).mockResolvedValue(ready)
+  await act(async()=>{ await result.current.mutate() })
+  expect(result.current.conflict).toBeNull()
+  expect(result.current.data).toEqual(ready)
+})
+it('does not carry a confirmed conflict into a different card', async () => {
+  vi.mocked(api.post).mockRejectedValue(new ApiError(409,'Create a new request'))
+  const {result,rerender}=renderHook(({url})=>useChecklistPreparation('project-a',url),{initialProps:{url:'https://trello.com/c/AAAA1111'},wrapper})
+  await waitFor(()=>expect(result.current.conflict?.status).toBe(409))
+  vi.mocked(api.post).mockRejectedValue(new ApiError(503,'Preparation unavailable'))
+  rerender({url:'https://trello.com/c/BBBB2222'})
+  await waitFor(()=>expect(result.current.error?.status).toBe(503))
+  expect(result.current.conflict).toBeNull()
 })
 it('reload reads the saved checklist and stops polling after ready', async () => {
   vi.mocked(api.get).mockResolvedValue(ready)

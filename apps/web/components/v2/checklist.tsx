@@ -1,15 +1,26 @@
 'use client'
 import useSWR from 'swr'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ApiError } from '@/lib/api'
 import { getChecklist, prepareChecklist, retryChecklist, checklistPollInterval, type ChecklistState } from '@/lib/checklist'
 
 /** SWR keys isolate A/B responses and deduplicate paste/blur for the same project/card.
  * A missing/ambiguous workspace leaves preparation dormant until the existing picker resolves it. */
 export function useChecklistPreparation(projectId: string | null, url: string) {
   const card = url.trim().match(/^https:\/\/(?:www\.)?trello\.com\/c\/([A-Za-z0-9]+)(?:[/?#]|$)/)?.[1]
-  return useSWR<ChecklistState>(projectId && card ? ['prepare-checklist', projectId, card] : null,
+  const key = projectId && card ? `${projectId}/${card}` : null
+  const [conflict, setConflict] = useState<{ key: string; error: ApiError } | null>(null)
+  const result = useSWR<ChecklistState>(projectId && card ? ['prepare-checklist', projectId, card] : null,
     ([, project, id]: [string, string, string]) => prepareChecklist(project, `https://trello.com/c/${id}`),
     { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false, dedupingInterval: 10_000, keepPreviousData: false })
+  const currentConflict = result.error && result.error instanceof ApiError && result.error.status === 409 ? result.error : null
+  useEffect(() => {
+    if (key && currentConflict) setConflict({ key, error: currentConflict })
+    else if (result.data && !result.error) setConflict(null)
+    else setConflict(previous => previous?.key === key ? previous : null)
+  }, [key, currentConflict, result.data, result.error])
+  return { ...result, conflict: currentConflict || (conflict?.key === key ? conflict.error : null),
+    rememberConflict: (error: ApiError) => { if (key) setConflict({ key, error }) } }
 }
 
 export function SavedChecklist({ bindingId, initial }: { bindingId?: string | null; initial?: ChecklistState | null }) {
@@ -35,12 +46,12 @@ const reasons: Record<string, string> = {
   'plan-conflict': 'This assignment has conflicting checklist data.',
   'snapshot-identity-invalid': 'The checklist could not be matched to this assignment.',
 }
-export function ChecklistPanel({ data, error, onRetry }: { data?: ChecklistState; error?: string; onRetry?: () => void | Promise<unknown> }) {
+export function ChecklistPanel({ data, error, onRetry, uploadAllowed = true }: { data?: ChecklistState; error?: string; onRetry?: () => void | Promise<unknown>; uploadAllowed?: boolean }) {
   const failed = !!error || data?.status === 'failed' || (data?.status === 'ready' && !data.requirements.length)
   const ready = !failed && data?.status === 'ready'
   return <section aria-label='Review checklist' className='min-w-0 rounded-xl border border-border bg-bg-secondary p-4 text-base leading-relaxed text-text-primary'>
     {failed ? <div>
-      <p role='status'>Checklist unavailable. You can still upload.</p>
+      <p role='status'>Checklist unavailable.{uploadAllowed ? ' You can still upload.' : ''}</p>
       <p className='mt-1 text-sm text-text-secondary'>{error || reasons[data?.error_code || ''] || 'The saved checklist could not be prepared.'}</p>
       {onRetry && <button type='button' className='press mt-2 min-h-11 cursor-pointer rounded-lg px-3 text-sm font-medium text-text-primary hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent' onClick={() => void onRetry()}>Try again</button>}
     </div> : ready ? <details>

@@ -32,7 +32,7 @@ import useSWR from "swr";
 import { Check, Film, FolderOpen, Loader2, Upload } from "lucide-react";
 import { SavedChecklist, ChecklistPanel, useChecklistPreparation } from "@/components/v2/checklist";
 import { prepareChecklist, uniqueChecklistWorkspace } from "@/lib/checklist";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import {
   GATE_BASE,
   fetchReview,
@@ -161,6 +161,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
   // existing brand workspace - a per-card workspace is what left a share link pointing at nothing.
   const isSuperAdmin = useAuthStore((s) => s.isSuperAdmin);
   const checklist = useChecklistPreparation(user && user.is_staff !== false && workspace?.kind === "existing" ? workspace.id : null, cardUrl);
+  const checklistConflict = checklist.conflict;
 
   // The workspaces the editor can file this hand-in into. The card can't be mapped to a project
   // automatically (projects carry no brand), so the editor picks - pre-filled when we can guess.
@@ -328,6 +329,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
     setError(null);
 
     try {
+      if (checklistConflict) throw checklistConflict;
       // 1. The workspace project: an existing brand workspace, or a new one the editor named.
       //    Aditor is one team across every brand, so a hand-in belongs to the team (project_type
       //    "team"), not to whoever uploaded it.
@@ -362,7 +364,13 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
         card?.name?.trim() ? card : await lookUpCard(cardUrl.trim()).catch(() => card);
       const folderName = (resolvedCard?.name ?? "").trim() || files[0].name;
       const cardKey = (cardUrl.match(/trello\.com\/c\/([A-Za-z0-9]+)/i)?.[1] || "").toLowerCase();
-      const prepared = checklist.data || await prepareChecklist(projectId, cardUrl.trim()).catch(() => undefined);
+      const prepared = checklist.data || await prepareChecklist(projectId, cardUrl.trim()).catch((error) => {
+        if (error instanceof ApiError && error.status === 409) {
+          checklist.rememberConflict(error);
+          throw error;
+        }
+        return undefined;
+      });
       const existingFolder = cardKey
         ? await api
             .get<{ id: string; description?: string | null }[]>(`/projects/${projectId}/folders`)
@@ -377,6 +385,9 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
           description: prepared?.trello_card_id ? `https://trello.com/c/${prepared.trello_card_id}` : cardUrl.trim(),
           ...(prepared ? { checklist_binding_id: prepared.id, ...(existingFolder ? { existing_folder_id: existingFolder.id } : {}) } : {}),
         }));
+
+      // Verify the assignment before any file side effect, including checklist outages.
+      await api.post(`/folders/${folder.id}/editor-request`, {});
 
       // 3. Every video goes INTO that one folder. They upload together; the
       //    reviewer picks up each asset on its own as it finishes transcoding,
@@ -653,13 +664,13 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
                 ))}
               </ul>
             )}
-            {checklist.data ? <SavedChecklist key={checklist.data.id} bindingId={checklist.data.id} initial={checklist.data} /> : checklist.isLoading ? <ChecklistPanel /> : checklist.error ? <ChecklistPanel error="The card could not be prepared. You can still upload." onRetry={() => checklist.mutate()} /> : null}
+            {checklistConflict ? <ChecklistPanel uploadAllowed={false} error={checklistConflict.message} onRetry={() => checklist.mutate()} /> : checklist.data ? <SavedChecklist key={checklist.data.id} bindingId={checklist.data.id} initial={checklist.data} /> : checklist.isLoading ? <ChecklistPanel /> : checklist.error ? <ChecklistPanel uploadAllowed={!error} error="The card could not be prepared." onRetry={() => checklist.mutate()} /> : null}
 
           <UploadZone className="mt-2" onFilesSelected={addFiles} />
           </div>
 
           {error && (
-            <p role="alert" className="text-sm text-red-500">
+            <p role="alert" className="text-sm text-status-error">
               {error}
             </p>
           )}
