@@ -15,3 +15,17 @@ export async function briefingFilePayload(file: File): Promise<{ text?: string; 
   if (!text) throw new Error('This briefing is empty. Add some text first.')
   return { text }
 }
+
+export function briefingFilenameTitle(name: string): string {
+  return name.replace(/\.(pdf|md|markdown|txt)$/i, '').replace(/[_]+/g, ' ').trim().slice(0, 255)
+}
+
+export function briefingLinkTitle(value: string): string | null {
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol) || /(^|\.)(google\.com|sharepoint\.com)$/.test(url.hostname)) return null
+    const part = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || '').replace(/-[a-f0-9]{32}$/i, '')
+    if (!/[ _-]/.test(part) || !/[a-z]{3}/i.test(part)) return null
+    return briefingFilenameTitle(part).replace(/-/g, ' ').trim() || null
+  } catch { return null }
+}

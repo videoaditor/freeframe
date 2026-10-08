@@ -18,6 +18,7 @@ import { partsEnabled } from '@/lib/iterations'
 import { createRequest, type FileRequest } from '@/lib/platform'
 import type { Project } from '@/types'
 import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
+import { useBriefTitle } from '@/hooks/use-brief-title'
 import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
 
@@ -41,6 +42,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
   const [title, setTitle] = React.useState('')
   const [briefFile, setBriefFile] = React.useState<File | null>(null)
   const [briefText, setBriefText] = React.useState('')
+  const { edit: editTitle, reset: resetTitle } = useBriefTitle(briefFile, briefText, setTitle)
   const [receiveParts, setReceiveParts] = React.useState(partsEnabled)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
@@ -55,9 +57,9 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
   React.useEffect(() => {
     if (!open) return
     createIdentity.current = null
-    setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError('')
+    resetTitle(); setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError('')
     if (initialProjectId) setProjectId(initialProjectId)
-  }, [open, initialProjectId])
+  }, [open, initialProjectId, resetTitle])
   React.useEffect(() => { if (!projectId && brands.length) setProjectId(brands[0].id) }, [brands, projectId])
   // Only once the list has loaded - otherwise the brand-name field flashes up and steals focus.
   const needsBrand = !!projects && !brands.length
@@ -150,7 +152,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
                 )}
               </Field>
               <Field label="Project name">
-                <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UraVia 48 · 3 hooks"
+                <input ref={titleRef} value={title} onChange={(e) => { editTitle(); setTitle(e.target.value) }} placeholder="e.g. UraVia 48 · 3 hooks"
                   className="field" aria-label="Title" />
               </Field>
               {partsEnabled && <Field label="Submission format"><div className="flex gap-2">{[true, false].map(value => <button key={String(value)} type="button" disabled={busy} aria-pressed={receiveParts === value} onClick={() => setReceiveParts(value)} className={`press min-h-11 rounded-full px-4 text-sm ${receiveParts === value ? 'bg-bg-hover font-medium' : 'text-text-secondary'}`}>{value ? 'Hooks & bodies' : 'Complete ads'}</button>)}</div><p className="mt-2 text-sm text-text-secondary">{receiveParts ? 'Your editor uploads each part once. We create and check the final combinations.' : 'Your editor uploads finished cuts for review.'}</p></Field>}

@@ -12,6 +12,8 @@ import { canSetUpAutoReview, setupProgress, type SetupProgress } from '@/lib/onb
 import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
 import { createRequest, decideSuggestion, getRules, importRules, listRequests, type FileRequest } from '@/lib/platform'
 import { useAuthStore } from '@/stores/auth-store'
+import { useBriefTitle } from '@/hooks/use-brief-title'
+import { BriefInput } from './brief-input'
 import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
 import styles from './autoreview-setup.module.css'
@@ -33,6 +35,7 @@ export function AutoReviewSetup() {
   const [title, setTitle] = React.useState('')
   const [brief, setBrief] = React.useState<File | null>(null)
   const [briefText, setBriefText] = React.useState('')
+  const briefTitle = useBriefTitle(brief, briefText, setTitle)
   const [created, setCreated] = React.useState<FileRequest | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
@@ -157,10 +160,8 @@ export function AutoReviewSetup() {
         </div>}
 
         {step === 'brief' && <form className={styles.form} onSubmit={e => { e.preventDefault(); void run(makeLink) }}>
-          <label className={styles.label}>Project name<input className={styles.input} value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Summer launch · First ad" maxLength={255} required disabled={busy} /></label>
-          {brief ? <ChosenFile file={brief} remove={() => setBrief(null)} disabled={busy} /> : <DropZone compact accept={BRIEFING_ACCEPT} disabled={busy} title="Drop your first briefing" hint="PDF, Markdown or text · up to 10 MB" onFiles={([f]) => { setBrief(f); setError('') }} />}
-          <label className={styles.label}>Or write it here<textarea aria-label="Briefing text or link" className={styles.input} rows={3} value={briefText} disabled={busy} onChange={e => setBriefText(e.target.value)} placeholder="The product, audience, key message, and anything your editor must include. A shareable document link works too." /></label>
-          <p className={styles.note}>A short note is enough to start. For document links, enable access for anyone with the link.</p>
+          <label className={styles.label}>Project name<input className={styles.input} value={title} onChange={e => { briefTitle.edit(); setTitle(e.target.value) }} placeholder="Auto-filled from your briefing" maxLength={255} required disabled={busy} /></label>
+          <BriefInput file={brief} onFile={setBrief} text={briefText} onText={setBriefText} disabled={busy} />
           <button type="submit" className={styles.primary} disabled={busy || !title.trim() || (!brief && !briefText.trim())}>{busy ? 'Creating your link…' : 'Create upload link'} <ArrowRight size={18} /></button>
           <button type="button" className={styles.secondary} disabled={busy} onClick={() => move('brand')}><ArrowLeft size={16} /> Brand kit</button>
         </form>}
