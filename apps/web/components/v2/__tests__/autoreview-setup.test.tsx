@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.mocked(importRules).mockResolvedValue({ drafted: 1, found: 1 })
   vi.mocked(decideSuggestion).mockResolvedValue({ ok: true })
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView') })
 async function mount() {
   const view = render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}><AutoReviewSetup /></SWRConfig>)
   fireEvent.click(await screen.findByRole('button', { name: 'Get started' }))
@@ -121,4 +121,16 @@ it.each([{ available: [] }, { available: [brand] }])('recovers a deleted saved b
   fireEvent.click(screen.getByRole('button', { name: 'Skip brand kit' }))
   expect(await screen.findByRole('textbox', { name: 'Project name' })).toBeInTheDocument()
   expect(api.patch).toHaveBeenLastCalledWith('/auth/me/preferences', { autoreview_setup: expect.objectContaining({ step: 'brief', projectId: brand.id }) })
+})
+
+it('uses the selected owned brand when continuing from the styled picker', async () => {
+  const secondBrand = { ...brand, id: 'brand2', name: 'Second brand' }
+  vi.mocked(api.get).mockResolvedValue([brand, secondBrand])
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
+  await mount()
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Brand' }), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('option', { name: 'Second brand' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Skip brand kit' }))
+  expect(await screen.findByRole('textbox', { name: 'Project name' })).toBeInTheDocument()
+  expect(api.patch).toHaveBeenLastCalledWith('/auth/me/preferences', { autoreview_setup: expect.objectContaining({ projectId: secondBrand.id, step: 'brief' }) })
 })

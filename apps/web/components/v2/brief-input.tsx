@@ -38,10 +38,10 @@ export function BriefInput({ file, onFile, text, onText, disabled }: {
         <button type="button" className={styles.pasteButton} disabled={disabled} onClick={() => void pasteLink()}><ClipboardPaste size={17} /> Paste link</button>
         {hasLink && !showText && <input ref={link} aria-label="Briefing link" type="url" pattern="https?://.+" className={styles.input} value={text} disabled={disabled} onChange={e => { pending.current++; onText(e.target.value); setNotice('') }} placeholder="https://docs.google.com/…" />}
         {notice && <p className={styles.note} role="status">{notice}</p>}
-        {hasLink && !showText && <p className={styles.note}>Use a link your editor can open.</p>}
+        {hasLink && !showText && <p className={styles.note}>Enable access for anyone with the link.</p>}
       </div>
     </div>
     <button type="button" className={`${styles.textButton} ${styles.textAlternative}`} aria-expanded={showText} aria-controls="brief-text-alternative" disabled={disabled} onClick={() => { pending.current++; setShowLink(false); setShowText(!showText); setNotice('') }}>{showText ? 'Hide text' : 'Paste text instead'}</button>
-    {showText && <label id="brief-text-alternative" className={styles.label}>Briefing text<textarea autoFocus aria-label="Briefing text or link" className={styles.input} rows={3} value={text} disabled={disabled} onChange={e => onText(e.target.value)} placeholder="The product, audience, key message, and anything your editor must include." /></label>}
+    {showText && <label id="brief-text-alternative" className={styles.label}>Briefing text<textarea autoFocus aria-label="Briefing text or link" className={styles.input} rows={3} value={text} disabled={disabled} onChange={e => onText(e.target.value)} placeholder="Paste your brief…" /></label>}
   </div>
 }

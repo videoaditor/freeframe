@@ -2,9 +2,10 @@
 
 import * as React from 'react'
 import Image from 'next/image'
+import * as Select from '@radix-ui/react-select'
 import { useRouter } from 'next/navigation'
 import useSWR, { useSWRConfig } from 'swr'
-import { ArrowLeft, ArrowRight, BookOpen, Check, FileText, Link2, ScanLine, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, FileText, Link2, ScanLine, Sparkles, X } from 'lucide-react'
 import type { Project, User } from '@/types'
 import { api } from '@/lib/api'
 import { ownsProject } from '@/lib/workspace-access'
@@ -140,14 +141,21 @@ export function AutoReviewSetup() {
       {step !== 'welcome' && <nav className={styles.progress} aria-label="Setup progress">{['Brand', 'Briefing', 'Share'].map((label, i) => <span key={label} data-active={i <= ['brand', 'brief', 'share'].indexOf(step)} aria-current={i === ['brand', 'brief', 'share'].indexOf(step) ? 'step' : undefined}>{label}</span>)}</nav>}
       <section className={styles.card} key={step}>
         {step === 'welcome' && <div className={styles.scene} aria-hidden="true"><span className={styles.paper}><FileText size={34} /><small>BRIEF</small></span><span className={styles.connector} /><span className={styles.scan}><ScanLine size={46} /><i /></span><span className={styles.connector} /><span className={styles.ready}><Check size={34} /><small>DELIVERY</small></span></div>}
-        <div className={styles.kicker}>{step === 'welcome' ? 'Less back-and-forth. More done.' : step === 'brand' ? 'Your brand, your rules' : step === 'brief' ? 'One project. One upload link.' : 'Briefing saved · Waiting for files'}</div>
+        {step !== 'brief' && <div className={styles.kicker}>{step === 'welcome' ? 'Less back-and-forth. More done.' : step === 'brand' ? 'Your brand, your rules' : 'Briefing saved · Waiting for files'}</div>}
         <h1 ref={heading} tabIndex={-1} className={styles.title}>{titles[step]}</h1>
-        <p className={styles.description}>{step === 'welcome' ? 'Aditor’s editing best practices, with your brief and brand rules on top.' : step === 'brand' ? 'Got a brand guide or a few non-negotiables? Drop them here. No kit? Skip it.' : step === 'brief' ? 'Drop a brief, paste a link, or tell your editor what to make.' : 'Send this upload link to your editor. Their delivery and review will appear in your dashboard.'}</p>
+        {step !== 'brief' && <p className={styles.description}>{step === 'welcome' ? 'Aditor’s editing best practices, with your brief and brand rules on top.' : step === 'brand' ? 'Got a brand guide or a few non-negotiables? Drop them here. No kit? Skip it.' : 'Send this upload link to your editor. Their delivery and review will appear in your dashboard.'}</p>}
 
         {step === 'welcome' && <><div className={styles.capabilities}><span><BookOpen size={18} /> Your brand rules</span><span><Sparkles size={18} /> Ad best practices</span><span><Link2 size={18} /> One editor link</span></div><button className={styles.primary} onClick={() => move('brand')}>Get started <ArrowRight size={18} /></button></>}
 
         {step === 'brand' && <div className={styles.form}>
-          {brands.length ? <label className={styles.label}>Brand<select value={brand?.id} disabled={busy} onChange={e => { setProjectId(e.target.value); setGuideRead(false); setNotice('') }} className={styles.input}>{brands.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select></label> : <label className={styles.label}>Brand name<input className={styles.input} value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="e.g. Northline" maxLength={255} disabled={busy} /></label>}
+          {brands.length === 1 ? <div className={styles.label}>Brand<div className={styles.brandIdentity}><span>{brand.name}</span><Check size={16} aria-hidden="true" /></div></div> : brands.length > 1 ? <div className={styles.label}>
+            <span id="setup-brand-label">Brand</span>
+            <Select.Root value={brand?.id} disabled={busy} onValueChange={id => { setProjectId(id); setGuideRead(false); setNotice('') }}>
+              <Select.Trigger aria-labelledby="setup-brand-label" className={`${styles.input} ${styles.brandTrigger}`}><Select.Value /><Select.Icon><ChevronDown size={16} /></Select.Icon></Select.Trigger>
+              <Select.Portal><Select.Content position="popper" sideOffset={6} className={`owner-sheet ${styles.brandMenu}`}><Select.Viewport>{brands.map(p => <Select.Item key={p.id} value={p.id} className={styles.brandOption}><Select.ItemText>{p.name}</Select.ItemText><Select.ItemIndicator><Check size={16} /></Select.ItemIndicator></Select.Item>)}</Select.Viewport></Select.Content></Select.Portal>
+            </Select.Root>
+          </div> : <label className={styles.label}>Brand name<input className={styles.input} value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="e.g. Northline" maxLength={255} disabled={busy} /></label>}
+
           {guide ? <ChosenFile file={guide} remove={() => { setGuide(null); setGuideRead(false) }} disabled={busy} /> : <DropZone compact accept={BRIEFING_ACCEPT} disabled={busy} title="Drop your brand kit" hint="PDF, Markdown or text · up to 10 MB" onFiles={([f]) => { setGuide(f); setGuideRead(false); setError('') }} />}
           {!guide && <label className={styles.label}>Or paste your guidelines<textarea aria-label="Brand guidelines" className={styles.input} rows={3} value={guideText} disabled={busy} onChange={e => { setGuideText(e.target.value); setGuideRead(false) }} placeholder="Always show our logo on the end card…" /></label>}
           {(guide || guideText.trim()) && !guideRead && <button className={styles.primary} disabled={busy} onClick={() => void run(readGuide)}>{busy ? 'Reading your guide…' : 'Read my brand kit'} <ArrowRight size={18} /></button>}
@@ -159,8 +167,8 @@ export function AutoReviewSetup() {
           <button className={styles.secondary} disabled={busy} onClick={() => void run(continueToBrief)}>{guideRead || activeCount ? 'Add more rules later' : 'Skip brand kit'}</button>
         </div>}
 
-        {step === 'brief' && <form className={styles.form} onSubmit={e => { e.preventDefault(); void run(makeLink) }}>
-          <label className={styles.label}>Project name<input className={styles.input} value={title} onChange={e => { briefTitle.edit(); setTitle(e.target.value) }} placeholder="Auto-filled from your briefing" maxLength={255} required disabled={busy} /></label>
+        {step === 'brief' && <form className={`${styles.form} ${styles.briefForm}`} onSubmit={e => { e.preventDefault(); void run(makeLink) }}>
+          <label className={styles.label}>Project name<input className={styles.input} value={title} onChange={e => { briefTitle.edit(); setTitle(e.target.value) }} maxLength={255} required disabled={busy} /></label>
           <BriefInput file={brief} onFile={setBrief} text={briefText} onText={setBriefText} disabled={busy} />
           <button type="submit" className={styles.primary} disabled={busy || !title.trim() || (!brief && !briefText.trim())}>{busy ? 'Creating your link…' : 'Create upload link'} <ArrowRight size={18} /></button>
           <button type="button" className={styles.secondary} disabled={busy} onClick={() => move('brand')}><ArrowLeft size={16} /> Brand kit</button>
