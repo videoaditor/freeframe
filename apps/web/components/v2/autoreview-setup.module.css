@@ -64,3 +64,13 @@
 @media(prefers-reduced-motion:reduce) { .shell *, .shell *::before, .shell *::after { animation:none!important; transition:none!important; } .scan i { display:none; } }
 
 :global([data-theme="light"]) .shell { --accent:oklch(0.45 0.15 255); --accent-hover:oklch(0.40 0.15 255); --text-inverse:oklch(1 0 0); --bg-primary:oklch(.99 .002 265); --bg-secondary:oklch(.97 .004 265); }
+.briefInput { display:flex; flex-direction:column; gap:4px; }
+.briefDrop { border:1px dashed var(--drop-border); border-radius:20px; background:var(--bg-secondary); overflow:hidden; }
+.briefDropTarget { border:0; background:transparent; padding-bottom:16px; }
+.linkAction { display:flex; flex-direction:column; align-items:center; gap:12px; padding:0 20px 20px; }
+.pasteButton { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 20px; border:1px solid var(--border-primary); border-radius:12px; background:var(--bg-primary); color:var(--text-primary); font-size:14px; font-weight:550; }
+.pasteButton:hover { background:var(--bg-hover); }
+.pasteButton:active { transform:scale(.98); }
+.pasteButton:disabled { opacity:.5; }
+.textAlternative { align-self:center; }
+.briefDrop > .file { margin:12px; }
