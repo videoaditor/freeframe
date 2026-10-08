@@ -47,6 +47,7 @@ def test_complete_requires_identity_before_s3_finalization(monkeypatch):
     monkeypatch.setattr(rq, 'complete_multipart_upload', complete)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.one.return_value = version
     with pytest.raises(HTTPException) as err:
         rq.guest_complete('t', rq.GuestComplete(s3_key='raw/a', upload_id='u', parts=[]), BackgroundTasks(), db)
     assert err.value.status_code == 422
@@ -69,7 +70,10 @@ def test_complete_submits_and_processes_with_deferred_or_existing_identity(monke
     uploads.one.return_value = persisted
     media_query.filter.return_value.first.return_value = media
     db = MagicMock()
-    db.query.side_effect = lambda model: uploads if model is RequestUpload else media_query
+    versions = MagicMock()
+    versions.filter.return_value.populate_existing.return_value.with_for_update.return_value.one.return_value = version
+    db.query.side_effect = lambda model: uploads if model is RequestUpload else versions if model is AssetVersion else media_query
+    db.scalar.return_value = datetime.now(timezone.utc)
     added = []
     db.add.side_effect = added.append
     monkeypatch.setattr(rq, '_live_request', lambda *a, **kw: req)
@@ -245,6 +249,7 @@ def test_unmeasured_object_never_becomes_submitted(monkeypatch):
     monkeypatch.setattr(rq.s3_service, 'get_s3_client', lambda: MagicMock(head_object=MagicMock(side_effect=RuntimeError('storage unavailable'))))
     db = MagicMock(); db.query.return_value.filter.return_value.first.return_value = media
     db.query.return_value.filter.return_value.one.return_value = record
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.one.return_value = v
     with pytest.raises(HTTPException) as err:
         rq.guest_complete('t', rq.GuestComplete(s3_key='raw/a',upload_id='u',parts=[]), BackgroundTasks(), db)
     assert err.value.status_code == 503

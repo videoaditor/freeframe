@@ -45,6 +45,7 @@ from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..models.checklist_binding import ChecklistBinding
 from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
+from ..services.review_timing import freeze_submission_timing
 from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
 from ..services.permissions import effective_project_role, require_project_role
 from ..services.s3_service import (
@@ -260,7 +261,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
     if binding:
         binding.request_id = req.id
     if not components(req):
-        now = datetime.now(timezone.utc)
+        req = locked_request(db, req.id)
         for asset in _submitted_assets(db, req):
             versions = db.query(AssetVersion).filter(AssetVersion.asset_id == asset.id,
                 AssetVersion.deleted_at.is_(None)).all()
@@ -273,7 +274,7 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
                         uploader_name=author.name, uploader_email=author.email)
                     db.add(record)
                 if record.submitted_at is None and version.processing_status in (ProcessingStatus.processing, ProcessingStatus.ready):
-                    record.submitted_at = now  # Confirmed adoption time; never invent an earlier transfer clock.
+                    freeze_submission_timing(db, req, record, version, adopted=True)
                 if req.completion_versions and req.completion_versions.get(str(asset.id)) != str(version.id) and version == max(versions, key=lambda v: v.version_number):
                     req.completed_at = None
                     req.completion_versions = None
@@ -607,6 +608,7 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
 def guest_complete(token: str, body: GuestComplete, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     req = locked_request(db, _live_request(db, token, recovery=True).id)
     _, version = _owned_media(db, req, body.s3_key)
+    version = db.query(AssetVersion).filter(AssetVersion.id == version.id).populate_existing().with_for_update().one()
     # Completing twice (a retried request) must not re-trigger processing on a finished version.
     if version.processing_status != ProcessingStatus.uploading:
         return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
@@ -636,7 +638,7 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
         version.processing_status = ProcessingStatus.failed
         db.commit()
         raise HTTPException(status_code=413, detail="The file is larger than announced. Upload it again.")
-    record.submitted_at = datetime.now(timezone.utc)
+    freeze_submission_timing(db, req, record, version)
     if components(req): stored_upload(req,version)
     version.processing_status = ProcessingStatus.processing
     db.commit()

@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Server-controlled project opt-in for bound AutoReview on new assignments, with frozen review selection and unchanged legacy defaults.
 
 ### Fixed
+- AutoReview timing tests permanently disqualify the exact video version from natural calibration, even after test mode is disabled or caches are stale.
+- Review timing provenance now freezes at confirmed submission in PostgreSQL; later operator attestations and stale cache reads cannot promote historical unknown versions.
+- Private AutoReview timing context identifies the exact upload request that supplied a version’s submission clock and omits ambiguous sources; guest responses retain no private order identity.
 - Production API containers receive shutdown signals directly and have time to finish Gunicorn's graceful shutdown, avoiding forced termination during deployment. Database migrations still complete before the API starts.
 - Deleted request folders disappear from the owner overview without hiding active deliveries. Public share links respect deleted targets and projects; restoring a folder preserves its original request and share links.
 - The trial notice uses a calm blue style and can be dismissed per account/campaign in this browser. Feedback remains accessible and trial expiry still applies.
