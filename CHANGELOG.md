@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AutoReview onboarding prioritizes pasted briefing links, tucks text behind a compact alternative, and suggests project names from briefing files and supported document links without overwriting manual edits.
 
 ### Added
+- Add an offline AutoReview acceptance evaluator with frozen case coverage, evidence hashes, failure-aware scoring and explicit manual acceptance gates.
 - AutoReview customer onboarding in Whop and standalone: optional brand guidelines with explicit rule approval, first briefing, editor upload link, and resumable setup. New customers enter setup automatically; existing work and editor links keep their current flow.
 
 ### Added
