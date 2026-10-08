@@ -74,3 +74,12 @@
 .pasteButton:disabled { opacity:.5; }
 .textAlternative { align-self:center; }
 .briefDrop > .file { margin:12px; }
+.briefForm { margin-top:28px; }
+.brandIdentity { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; font-size:17px; font-weight:550; }
+.brandIdentity svg { color:var(--accent); flex-shrink:0; }
+.brandTrigger { display:flex; align-items:center; justify-content:space-between; gap:12px; text-align:left; }
+.brandTrigger > span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.brandMenu { z-index:60; width:var(--radix-select-trigger-width); max-height:min(320px,var(--radix-select-content-available-height)); overflow:auto; padding:6px; border:1px solid var(--border-primary); border-radius:14px; background:var(--bg-elevated); box-shadow:0 12px 32px oklch(0 0 0 / .22); }
+.brandOption { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:10px 12px; border-radius:9px; color:var(--text-primary); font-size:15px; outline:none; cursor:pointer; }
+.brandOption[data-highlighted] { background:var(--bg-hover); }
+.brandOption[data-state=checked] { font-weight:600; }

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Simplify AutoReview setup copy and brand selection: a single brand is shown directly, multiple brands use the styled picker, and briefing inputs retain only essential guidance.
 - AutoReview onboarding prioritizes pasted briefing links, tucks text behind a compact alternative, and suggests project names from briefing files and supported document links without overwriting manual edits.
 
 ### Added
