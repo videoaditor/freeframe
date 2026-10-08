@@ -49,6 +49,13 @@ export function AutoReviewSetup() {
   const activeCount = rules?.rules.filter(r => r.scope === 'brand' && r.active).length || 0
 
   React.useEffect(() => { heading.current?.focus() }, [step])
+  React.useEffect(() => {
+    if (projects && projectId && !brands.some(p => p.id === projectId)) {
+      setProjectId('')
+      setStep('brand')
+      setNotice('Your previous brand is no longer available. Choose or create a brand to continue.')
+    }
+  }, [projects, brands, projectId])
 
   async function run(action: () => Promise<void>) {
     if (lock.current) return
