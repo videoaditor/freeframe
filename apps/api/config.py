@@ -272,8 +272,9 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
 
     # Central-gate (OIDC) sign-in for editors/team, terminated in this API rather
-    # than a Next.js BFF - see docs/architecture.md and spec #65. The magic-code
-    # and password endpoints are untouched and keep working; this is additive.
+    # than a Next.js BFF - see services/oidc_auth.py and docs/deployment.md
+    # (Configuration Reference) for the full handshake and env vars. The
+    # magic-code and password endpoints are untouched and keep working; this is additive.
     # All three empty (the default) disables /auth/oidc/* entirely (404), so an
     # instance that hasn't registered with a gate loses nothing by upgrading.
     oidc_issuer: str = ""
