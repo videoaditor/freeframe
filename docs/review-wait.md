@@ -11,3 +11,8 @@ The additive `autoreview.timing.v1` bridge contract carries server timestamps in
 The share-stream response includes `timing_context` only for the authenticated configured service principal with the matching API key. It binds the share token, project, asset and exact live version to an existing RequestUpload submission. Guests receive no tenant/submission metadata. This reuses existing fields and requires no database migration.
 
 See [H3 verification and screenshots](reviews/h3/README.md). Natural timing accuracy and live Engine integration remain open.
+
+
+New analysis work requires committed admission for its exact file version, or a committed permanent negative proving it cannot calibrate natural timing. Missing authority or metadata stays in the existing waiting state with bounded automatic retry; it spends no analysis attempt and supplies no invented ETA or analysis start. A completed review remains completed during metadata outages when no newer version is listed. Recovery preserves normal analysis retries and failures, and a confirmed newer version requires its own admission. If the final authority check fails after review completes, feedback remains available while eligible terminal timing is withheld.
+
+The private bridge-only legacy exclusion endpoint reuses existing version exclusion storage. Missing private context alone cannot disqualify a natural, pending, corrupt or ambiguous source. See [pre-dispatch verification](reviews/2026-10-08-h3-predispatch-guard.md). No new screen, queue or database migration is added by this follow-up.

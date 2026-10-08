@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Staff hand-ins verify the folder's assignment before uploading, including during optional checklist outages. Unknown or conflicting brand/briefing scope stops before any file transfer; existing reviews remain readable.
+- New AutoReview analyses wait safely during timing-authority outages and resume automatically without spending analysis retries; completed reviews remain available.
+- AutoReview timing tests permanently disqualify the exact video version from natural calibration, even after test mode is disabled or caches are stale.
+- Review timing provenance now freezes at confirmed submission in PostgreSQL; later operator attestations and stale cache reads cannot promote historical unknown versions.
+- Private AutoReview timing context identifies the exact upload request that supplied a version’s submission clock and omits ambiguous sources; guest responses retain no private order identity.
 - Production API containers receive shutdown signals directly and have time to finish Gunicorn's graceful shutdown, avoiding forced termination during deployment. Database migrations still complete before the API starts.
 - Deleted request folders disappear from the owner overview without hiding active deliveries. Public share links respect deleted targets and projects; restoring a folder preserves its original request and share links.
 - The trial notice uses a calm blue style and can be dismissed per account/campaign in this browser. Feedback remains accessible and trial expiry still applies.
@@ -28,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Staff file requests with Trello briefings verify their canonical card before freezing review inputs; preparation retries preserve the original request and frozen context.
 - Preserve saved AutoReview source labels in the editor request workspace alongside the existing timeline markers.
 - Link-sharing dialogs focus on copying/sending the link; review checklists and logo editing no longer appear there. Logo editing remains in Brand rules.
-- Parts and final-ad review views now show confirmed version-specific waiting state, preserve source upload elapsed time across reloads, and stop activity during status outages. Missing timing data does not prevent review or invent a time estimate.
+- Parts and final-ad review views now show confirmed version-specific waiting state, preserve source upload elapsed time across reloads, and stop activity during status outages. Insufficient calibration history does not prevent review or invent a time estimate.
 - Review waiting time survives reloads from the committed submission clock. Offline and failed reviews stop activity while retaining the source frame; time ranges distinguish analysis from total wait and calibrated remaining time.
 - Whop sign-in returns a valid Hub hand-in link to the selected card instead of Home.
 - Revalidate current paid membership before allowing expired campaign guest links; a previously saved upgrade no longer outlives cancellation.
