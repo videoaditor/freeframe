@@ -177,7 +177,9 @@ def create_folder(
         if getattr(current_user, 'is_staff', True) is False:
             raise HTTPException(403, 'Staff only')
         from ..services.checklists import binding_for_folder
-        binding = binding_for_folder(db, body.checklist_binding_id, project_id, body.description)
+        # Re-handing-in the same card sends the binding of the first hand-in again. It already has
+        # a request, so only the "return its own folder" branch below may use it (Luk, 2026-10-09).
+        binding = binding_for_folder(db, body.checklist_binding_id, project_id, body.description, rehandin=True)
         from ..services.project_brands import confirmed_brand
         bound = confirmed_brand(project) if project is not None else None
         if bound and binding.intent.get('brand') != bound['brand_slug']:

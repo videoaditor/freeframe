@@ -219,3 +219,51 @@ def test_request_listing_hides_checklists_from_revoked_member_or_deleted_project
     db.query.side_effect=query
     with patch('apps.api.routers.requests.require_project_role',side_effect=HTTPException(403,'Not a member')),patch('apps.api.routers.requests.review_bridge.request_status',return_value={}),patch('apps.api.routers.requests.review_bridge.asset_stats',return_value={}),patch('apps.api.routers.requests._submitted_assets',return_value=[]),patch('apps.api.routers.requests._review_assets',return_value=[]),patch('apps.api.routers.requests.binding_out',return_value={'private':'criteria'}):
         assert list_requests(None,db,user)==[]
+
+
+def _bound_binding(project_id, card, folder_id):
+    return SimpleNamespace(id=uuid.uuid4(), project_id=project_id, deleted_at=None, folder_id=folder_id,
+        request_id=uuid.uuid4(), review_share_token='t', trello_card_id=card,
+        intent={'brief_url': f'https://trello.com/c/{card}', 'trello_short_link': 'AbCd1234'})
+
+
+def test_rehandin_of_same_card_returns_its_folder():
+    """Luk, 2026-10-09: V2 of a card failed with 'Checklist belongs to another assignment'."""
+    from apps.api.routers.folders import create_folder
+    from apps.api.schemas.folder import FolderCreate
+    project_id = uuid.uuid4(); card = '0123456789abcdef01234567'
+    folder = SimpleNamespace(id=uuid.uuid4(), project_id=project_id, description=f'https://trello.com/c/{card}')
+    binding = _bound_binding(project_id, card, folder.id)
+    db = MagicMock(); db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = binding
+    db.query.return_value.filter.return_value.populate_existing.return_value.with_for_update.return_value.first.return_value = SimpleNamespace(review_brand_binding=None)
+    with patch('apps.api.routers.folders.require_project_role'), patch('apps.api.routers.folders._get_folder', return_value=folder), \
+            patch('apps.api.routers.folders._folder_to_response', return_value={'id': str(folder.id)}):
+        result = create_folder(project_id, FolderCreate(name='Card', checklist_binding_id=binding.id, existing_folder_id=folder.id,
+            description=f'https://trello.com/c/{card}'), db, SimpleNamespace(is_staff=True))
+    assert result['id'] == str(folder.id)
+    db.add.assert_not_called()
+
+
+def test_bound_binding_still_rejected_outside_rehandin():
+    from apps.api.services.checklists import binding_for_folder
+    project_id = uuid.uuid4(); card = '0123456789abcdef01234567'
+    db = MagicMock()
+    db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = _bound_binding(project_id, card, uuid.uuid4())
+    with pytest.raises(HTTPException) as e:
+        binding_for_folder(db, uuid.uuid4(), project_id, f'https://trello.com/c/{card}')
+    assert e.value.status_code == 409
+    # A request without its own folder is not a re-hand-in either.
+    db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = _bound_binding(project_id, card, None)
+    with pytest.raises(HTTPException) as e:
+        binding_for_folder(db, uuid.uuid4(), project_id, f'https://trello.com/c/{card}', rehandin=True)
+    assert e.value.status_code == 409
+
+
+def test_rehandin_still_checks_the_card():
+    from apps.api.services.checklists import binding_for_folder
+    project_id = uuid.uuid4(); card = '0123456789abcdef01234567'
+    db = MagicMock()
+    db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = _bound_binding(project_id, card, uuid.uuid4())
+    with pytest.raises(HTTPException) as e:
+        binding_for_folder(db, uuid.uuid4(), project_id, 'https://trello.com/c/Zzzz9999', rehandin=True)
+    assert e.value.status_code == 409

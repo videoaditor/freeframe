@@ -110,12 +110,16 @@ def binding_out(row):
         'limitations': plan.get('limitations', []), 'trello_card_id': getattr(row, 'trello_card_id', None), 'attempts': row.attempts}
 
 
-def binding_for_folder(db, binding_id, project_id, description):
+def binding_for_folder(db, binding_id, project_id, description, *, rehandin=False):
+    """`rehandin`: the caller only reuses the folder this binding already owns (a V2 of the same
+    card). A binding with a request is then fine as long as it has that folder; anything else
+    stays rejected."""
     row = db.query(ChecklistBinding).filter(ChecklistBinding.id == binding_id,
         ChecklistBinding.deleted_at.is_(None)).with_for_update().first()
     if row is None or row.project_id != project_id:
         raise HTTPException(404, 'Checklist not found')
-    if row.request_id is not None or row.trello_card_id is None:
+    bound_elsewhere = row.request_id is not None and not (rehandin and row.folder_id is not None)
+    if bound_elsewhere or row.trello_card_id is None:
         raise HTTPException(409, 'Checklist belongs to another assignment')
     # The exact canonical card or the originally resolved short URL is required.
     import re
