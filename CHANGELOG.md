@@ -29,15 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - "Sign in with Aditor" (the central gate) is once again the only visible sign-in method on
   AutoReview's `/login`, styled in the gate's blue; the native "Continue with Google" button is
-  removed from the page (Google still works at auth.aditor.ai itself). Magic-code and password
-  sign-in remain wired up server-side and are reachable only as a break-glass, behind the
-  off-by-default `NEXT_PUBLIC_LEGACY_LOGIN_ENABLED` build flag, or automatically on a self-hosted
-  instance that has not configured a gate.
+  removed from the page (Google still works at auth.aditor.ai itself). Password sign-in remains
+  wired up server-side and is reachable only as a break-glass, behind the off-by-default
+  `NEXT_PUBLIC_LEGACY_LOGIN_ENABLED` build flag, or automatically on a self-hosted instance that
+  has not configured a gate.
 - Shared AutoReview links now explicitly provide the blue-check image for link previews.
 - AutoReview now uses a crisp blue, two-piece Aditor-inspired check across its app logo, favicon and Apple touch icon.
 
 ### Added
-- Central-gate (OIDC) sign-in for editors/team: `/auth/oidc/{login,callback,logout}` in the FastAPI API let a reviewer sign in through `auth.aditor.ai` and reach the existing FreeFrame session; "Sign in with Aditor" is the primary option on `/login`. The gate is additive and off by default (no `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`ADITOR_AUTH_FREEFRAME_CLIENT_SECRET` configured); magic-code and password sign-in are unchanged and remain available as a rollback.
+- Central-gate (OIDC) sign-in for editors/team: `/auth/oidc/{login,callback,logout}` in the FastAPI API let a reviewer sign in through `auth.aditor.ai` and reach the existing FreeFrame session; "Sign in with Aditor" is the primary option on `/login`. The gate is additive and off by default (no `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`ADITOR_AUTH_FREEFRAME_CLIENT_SECRET` configured); password sign-in remains available as a break-glass fallback.
 
 ### Changed
 - Simplify AutoReview setup copy and brand selection: a single brand is shown directly, multiple brands use the styled picker, and briefing inputs retain only essential guidance.
