@@ -42,7 +42,14 @@ _JWK = jose_jwk.construct(_PUBLIC_PEM, algorithm="RS256").to_dict()
 _JWK["kid"] = KID
 
 
-def _id_token(**claim_overrides):
+ACCESS_TOKEN = "the-access-token"
+
+
+def _id_token(*, access_token=None, **claim_overrides):
+    """A gate id_token. `access_token`, when given, makes jose compute and embed
+    a real `at_hash` claim (exactly like the gate does), so tests can exercise
+    the actual at_hash-verification code path rather than a token that simply
+    omits the claim."""
     claims = {
         "iss": ISSUER,
         "aud": CLIENT_ID,
@@ -51,7 +58,9 @@ def _id_token(**claim_overrides):
         "nonce": "the-nonce",
     }
     claims.update(claim_overrides)
-    return jose_jwt.encode(claims, _PRIVATE_PEM, algorithm="RS256", headers={"kid": KID})
+    return jose_jwt.encode(
+        claims, _PRIVATE_PEM, algorithm="RS256", headers={"kid": KID}, access_token=access_token,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -165,8 +174,22 @@ def test_exchange_code_raises_on_non_200(jwks_mocked):
 # ── verify_id_token ──────────────────────────────────────────────────────
 
 def test_verify_id_token_accepts_a_good_token(jwks_mocked):
-    claims = oidc_auth.verify_id_token(_id_token(), nonce="the-nonce")
+    claims = oidc_auth.verify_id_token(_id_token(), nonce="the-nonce", access_token=ACCESS_TOKEN)
     assert claims["email"] == "max@aditor.ai"
+
+
+def test_verify_id_token_accepts_a_good_token_with_at_hash(jwks_mocked):
+    """The gate's real id_token always carries at_hash - exercise that actual
+    verification path (not just a token that happens to omit the claim)."""
+    token = _id_token(access_token=ACCESS_TOKEN)
+    claims = oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
+    assert claims["email"] == "max@aditor.ai"
+
+
+def test_verify_id_token_rejects_at_hash_mismatch(jwks_mocked):
+    token = _id_token(access_token=ACCESS_TOKEN)
+    with pytest.raises(oidc_auth.OIDCError):
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token="a-different-access-token")
 
 
 def test_verify_id_token_rejects_tampered_signature(jwks_mocked):
@@ -174,37 +197,37 @@ def test_verify_id_token_rejects_tampered_signature(jwks_mocked):
     head, payload, sig = token.split(".")
     tampered = f"{head}.{payload}.{sig[:-4]}{'A' * 4}"
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(tampered, nonce="the-nonce")
+        oidc_auth.verify_id_token(tampered, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_expired_token(jwks_mocked):
     token = _id_token(exp=time.time() - 60)
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(token, nonce="the-nonce")
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_wrong_audience(jwks_mocked):
     token = _id_token(aud="someone-else")
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(token, nonce="the-nonce")
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_wrong_issuer(jwks_mocked):
     token = _id_token(iss="https://evil.example")
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(token, nonce="the-nonce")
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_nonce_mismatch(jwks_mocked):
     token = _id_token()
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(token, nonce="not-the-nonce")
+        oidc_auth.verify_id_token(token, nonce="not-the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_missing_email(jwks_mocked):
     token = _id_token(email=None)
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(token, nonce="the-nonce")
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_non_rs256_algorithm(jwks_mocked):
@@ -217,7 +240,7 @@ def test_verify_id_token_rejects_non_rs256_algorithm(jwks_mocked):
               "email": "max@aditor.ai", "nonce": "the-nonce"}
     token = jose_jwt.encode(claims, "arbitrary-shared-secret", algorithm="HS256", headers={"kid": KID})
     with pytest.raises(oidc_auth.OIDCError, match="unsupported algorithm"):
-        oidc_auth.verify_id_token(token, nonce="the-nonce")
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 def test_verify_id_token_rejects_unknown_signing_key(jwks_mocked):
@@ -227,7 +250,7 @@ def test_verify_id_token_rejects_unknown_signing_key(jwks_mocked):
         other_private, algorithm="RS256", headers={"kid": "not-in-jwks"},
     )
     with pytest.raises(oidc_auth.OIDCError):
-        oidc_auth.verify_id_token(token, nonce="the-nonce")
+        oidc_auth.verify_id_token(token, nonce="the-nonce", access_token=ACCESS_TOKEN)
 
 
 # ── end_session_url ──────────────────────────────────────────────────────

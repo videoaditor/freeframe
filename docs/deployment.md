@@ -259,9 +259,10 @@ All environment variables are documented in [`.env.example`](../.env.example). K
 | `DOMAIN` | Your domain for auto SSL | (optional) |
 | `ACME_EMAIL` | Email for Let's Encrypt notifications | (optional) |
 | `MAIL_PROVIDER` | `smtp` or `ses` | `smtp` |
-| `OIDC_ISSUER` | Central-gate base URL (e.g. `https://auth.aditor.ai`) - enables `/auth/oidc/*` sign-in | (empty = disabled) |
+| `OIDC_ISSUER` | Central-gate base URL (e.g. `https://auth.aditor.ai`) - enables `/auth/oidc/*` sign-in, and makes "Sign in with Aditor" the only visible method on `/login` | (empty = disabled) |
 | `OIDC_CLIENT_ID` | This app's client id on that gate | `freeframe-web` |
 | `ADITOR_AUTH_FREEFRAME_CLIENT_SECRET` | That client's secret (client_secret_basic) | (required with `OIDC_ISSUER`) |
+| `NEXT_PUBLIC_LEGACY_LOGIN_ENABLED` (web build arg) | Break-glass: `true` shows magic-code/password on `/login` again alongside the gate | `false` |
 | `API_WORKERS` | Gunicorn worker processes | `4` |
 | `TRANSCODING_CONCURRENCY` | Parallel transcoding jobs | `2` |
 | `EMAIL_CONCURRENCY` | Parallel email jobs | `2` |

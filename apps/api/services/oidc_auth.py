@@ -127,10 +127,16 @@ def exchange_code(*, code: str, redirect_uri: str, code_verifier: str) -> dict:
         raise OIDCError("gate token exchange returned a non-JSON body") from exc
 
 
-def verify_id_token(id_token: str, *, nonce: str) -> dict:
-    """Verify signature (against the gate's JWKS), issuer, audience, expiry and
-    nonce. Returns the claims on success; raises OIDCError on any mismatch,
-    including a tampered signature or an expired token."""
+def verify_id_token(id_token: str, *, nonce: str, access_token: str | None) -> dict:
+    """Verify signature (against the gate's JWKS), issuer, audience, expiry,
+    nonce and (when the token carries one) at_hash. Returns the claims on
+    success; raises OIDCError on any mismatch, including a tampered signature
+    or an expired token.
+
+    `access_token` is required to check `at_hash`: the gate's id_token always
+    carries that claim, and python-jose raises JWTClaimsError if it's asked to
+    verify at_hash without the access_token to hash and compare against.
+    """
     try:
         header = jose_jwt.get_unverified_header(id_token)
     except JWTError as exc:
@@ -162,6 +168,7 @@ def verify_id_token(id_token: str, *, nonce: str) -> dict:
             algorithms=[JWT_ALGORITHM],
             audience=settings.oidc_client_id,
             issuer=settings.oidc_issuer,
+            access_token=access_token,
         )
     except JWTError as exc:
         raise OIDCError("id_token failed verification") from exc

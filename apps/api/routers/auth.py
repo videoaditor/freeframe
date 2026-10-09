@@ -363,9 +363,11 @@ def oidc_callback(
         id_token = tokens.get("id_token")
         if not isinstance(id_token, str):
             raise oidc_auth.OIDCError("gate token response had no id_token")
-        claims = oidc_auth.verify_id_token(id_token, nonce=saved["nonce"])
-    except (oidc_auth.OIDCError, RedisError):
-        logger.warning("Gate OIDC callback rejected a token")
+        claims = oidc_auth.verify_id_token(
+            id_token, nonce=saved["nonce"], access_token=tokens.get("access_token"),
+        )
+    except (oidc_auth.OIDCError, RedisError) as exc:
+        logger.warning("Gate OIDC callback rejected a token: %r / cause=%r", exc, exc.__cause__)
         return _login_redirect("gate_sign_in_failed")
 
     email = claims["email"].strip()

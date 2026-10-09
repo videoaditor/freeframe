@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Central-gate (OIDC) sign-in: the callback now verifies the id_token's `at_hash` claim (passing
+  the access token through to `jose`'s decoder, as the gate's tokens always carry one), fixing the
+  `gate_sign_in_failed` error every gate sign-in hit in production. A rejected token's real cause
+  is now logged, not just "rejected a token".
+
 ### Changed
+- "Sign in with Aditor" (the central gate) is once again the only visible sign-in method on
+  AutoReview's `/login`, styled in the gate's blue; the native "Continue with Google" button is
+  removed from the page (Google still works at auth.aditor.ai itself). Magic-code and password
+  sign-in remain wired up server-side and are reachable only as a break-glass, behind the
+  off-by-default `NEXT_PUBLIC_LEGACY_LOGIN_ENABLED` build flag, or automatically on a self-hosted
+  instance that has not configured a gate.
 - Shared AutoReview links now explicitly provide the blue-check image for link previews.
-- Simplified sign-in: Google first, email code behind a compact alternative; existing team and customer account rights are preserved.
 - AutoReview now uses a crisp blue, two-piece Aditor-inspired check across its app logo, favicon and Apple touch icon.
 
 ### Added

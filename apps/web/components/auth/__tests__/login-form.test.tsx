@@ -7,48 +7,60 @@ vi.mock('next/navigation',()=>({useRouter:()=>({replace:m.replace})}))
 vi.mock('@/lib/api',()=>({api:{get:m.get,post:m.post},ApiError:class extends Error {detail='Failed'}}))
 vi.mock('@/lib/auth',()=>({setTokens:vi.fn()}))
 vi.mock('@/stores/auth-store',()=>({useAuthStore:{getState:()=>({fetchUser:vi.fn(),user:null})}}))
+
+function mockGate(enabled: boolean) {
+  m.get.mockImplementation((url: string) =>
+    url === '/auth/oidc/config' ? Promise.resolve({ enabled }) : Promise.resolve({}))
+}
+
 beforeEach(()=>{
  vi.stubEnv('NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED','false')
+ vi.stubEnv('NEXT_PUBLIC_LEGACY_LOGIN_ENABLED','false')
  window.history.replaceState({},'', '/login')
- m.get.mockResolvedValue({enabled:true,client_id:'google-client'})
+ mockGate(true)
  m.post.mockResolvedValue({})
 })
 afterEach(()=>{vi.clearAllMocks();vi.unstubAllEnvs()})
 
-it('makes Google primary and discloses email only when requested',async()=>{
+it('shows only Sign in with Aditor when the gate is configured',async()=>{
  render(<LoginForm />)
- expect(await screen.findByRole('button',{name:'Continue with Google'})).toBeVisible()
+ expect(await screen.findByRole('button',{name:'Sign in with Aditor'})).toBeVisible()
+ expect(screen.queryByRole('button',{name:'Continue with Google'})).not.toBeInTheDocument()
  expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
- expect(screen.queryByText('Sign in with Aditor')).not.toBeInTheDocument()
- fireEvent.click(screen.getByRole('button',{name:'Use email instead'}))
- expect(screen.getByLabelText('Email address')).toBeVisible()
- expect(screen.getByLabelText('Email address')).toHaveFocus()
- fireEvent.change(screen.getByLabelText('Email address'),{target:{value:'editor@example.com'}})
- fireEvent.click(screen.getByRole('button',{name:'Send sign-in code'}))
- await waitFor(()=>expect(m.post).toHaveBeenCalledWith('/auth/send-magic-code',{email:'editor@example.com'}))
- expect(await screen.findByText('Check your email')).toBeVisible()
 })
-it.each(['disabled','error'])('keeps email usable when Google config is %s',async(reason)=>{
- if(reason==='error')m.get.mockRejectedValue(new Error('offline'))
- else m.get.mockResolvedValue({enabled:false,client_id:''})
+
+it('falls back to the email flow when the gate is not configured',async()=>{
+ mockGate(false)
  render(<LoginForm />)
  expect(await screen.findByLabelText('Email address')).toBeVisible()
+ expect(screen.queryByRole('button',{name:'Sign in with Aditor'})).not.toBeInTheDocument()
  expect(screen.queryByRole('button',{name:'Continue with Google'})).not.toBeInTheDocument()
 })
-it('opens email for an explicit prefilled email link',async()=>{
+
+it('reveals the legacy email flow alongside the gate when LEGACY_LOGIN_ENABLED is on',async()=>{
+ vi.stubEnv('NEXT_PUBLIC_LEGACY_LOGIN_ENABLED','true')
+ render(<LoginForm />)
+ expect(await screen.findByRole('button',{name:'Sign in with Aditor'})).toBeVisible()
+ expect(await screen.findByLabelText('Email address')).toBeVisible()
+})
+
+it('opens the email flow directly for an explicit prefilled email link, gate notwithstanding',async()=>{
  window.history.replaceState({},'', '/login?email=editor%40example.com')
  render(<LoginForm />)
  expect(await screen.findByLabelText('Email address')).toHaveValue('editor@example.com')
 })
 
-it('lets people use email while provider discovery is slow',async()=>{
- m.get.mockReturnValue(new Promise(()=>{}))
- render(<LoginForm />)
- fireEvent.click(screen.getByRole('button',{name:'Use email instead'}))
- expect(screen.getByLabelText('Email address')).toBeVisible()
-})
-it('shows sign-in errors even with email collapsed',async()=>{
+it('shows gate failure errors on the primary gate screen',async()=>{
  window.history.replaceState({},'', '/login?error=gate_sign_in_expired')
  render(<LoginForm />)
  expect(await screen.findByRole('alert')).toHaveTextContent('expired')
+})
+
+it('sends a magic code once the legacy email flow is reached',async()=>{
+ mockGate(false)
+ render(<LoginForm />)
+ fireEvent.change(await screen.findByLabelText('Email address'),{target:{value:'editor@example.com'}})
+ fireEvent.click(screen.getByRole('button',{name:'Send sign-in code'}))
+ await waitFor(()=>expect(m.post).toHaveBeenCalledWith('/auth/send-magic-code',{email:'editor@example.com'}))
+ expect(await screen.findByText('Check your email')).toBeVisible()
 })

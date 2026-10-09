@@ -9,9 +9,12 @@ services:
     profiles: ["disabled-nginx-owns-80-443"]
 
   web:
-    # Aditor authenticates editors purely by emailed magic code, so the password
-    # path is compiled out of the UI. The API side is closed by
-    # PASSWORD_LOGIN_ENABLED=false in .env.prod.
+    # Editors and team sign in through the central gate (auth.aditor.ai) - "Sign in
+    # with Aditor" is the only visible method on /login. Magic-code and password are
+    # compiled out of the UI (NEXT_PUBLIC_LEGACY_LOGIN_ENABLED stays "false" below) and
+    # the password endpoint is additionally closed by PASSWORD_LOGIN_ENABLED=false in
+    # .env.prod; flip NEXT_PUBLIC_LEGACY_LOGIN_ENABLED to "true" as a break-glass if the
+    # gate is ever down.
     #
     # NEXT_PUBLIC_REVIEW_GATE_URL turns on /handin, the one-route hand-in: the
     # editor pastes a Trello card, uploads once, and gets back the share link to
@@ -33,6 +36,7 @@ services:
     build:
       args:
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
+        NEXT_PUBLIC_LEGACY_LOGIN_ENABLED: "false"
         # OFF until the editors and the team have been told. Flip to "true" to switch it on -
         # that is the whole change, and it is one line, deliberately.
         #
