@@ -6,9 +6,24 @@ import "./globals.css";
 // SF Pro via the system font stack (--font-sans in globals.css), per the Aditor guidelines and
 // Apple's HIG: native type, no download, Dynamic Type friendly.
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   title: "Autoreview",
   icons: { icon: "/autoreview-check-v2.png", apple: "/apple-icon.png" },
   description: "Request files, get instant feedback. Like WeTransfer, with a reviewer built in.",
+  // Generic branding only: link crawlers must not receive private review content.
+  openGraph: {
+    type: "website",
+    siteName: "AutoReview",
+    title: "AutoReview",
+    description: "Request files, get instant feedback.",
+    images: [{ url: "/autoreview-check-v2.png", width: 512, height: 512, alt: "AutoReview blue check" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "AutoReview",
+    description: "Request files, get instant feedback.",
+    images: [{ url: "/autoreview-check-v2.png", alt: "AutoReview blue check" }],
+  },
 };
 
 export const viewport: Viewport = {

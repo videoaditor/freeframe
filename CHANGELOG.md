@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Shared AutoReview links now explicitly provide the blue-check image for link previews.
 - Simplified sign-in: Google first, email code behind a compact alternative; existing team and customer account rights are preserved.
 - AutoReview now uses a crisp blue, two-piece Aditor-inspired check across its app logo, favicon and Apple touch icon.
 
