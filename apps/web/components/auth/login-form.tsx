@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { GoogleButton } from '@/components/auth/google-button'
-import { AditorGateButton } from '@/components/auth/aditor-gate-button'
 import type { VerifyCodeResponse, AuthTokens } from '@/types'
 
 type Step = 'email' | 'code' | 'password' | 'classic'
@@ -22,14 +21,18 @@ function afterLogin(): string {
 
 // Build-time flag: NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=false removes the password
 // path from the UI entirely. Defaults to enabled so upstream behaviour is unchanged.
-const PASSWORD_LOGIN_ENABLED = process.env.NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED !== 'false'
 
 export function LoginForm() {
+  const PASSWORD_LOGIN_ENABLED = process.env.NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED !== 'false'
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null)
+  const [showEmail, setShowEmail] = useState(false)
+  const emailInput = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (showEmail) emailInput.current?.focus() }, [showEmail])
   const router = useRouter()
   const [step, setStep] = useState<Step>(PASSWORD_LOGIN_ENABLED ? 'classic' : 'email')
   const [email, setEmail] = useState('')
   // Prefilled when the front door sends someone here with the address they typed (?email=).
-  useEffect(() => { const e = new URLSearchParams(window.location.search).get('email'); if (e) setEmail(e) }, [])
+  useEffect(() => { const e = new URLSearchParams(window.location.search).get('email'); if (e) { setEmail(e); setShowEmail(true) } }, [])
   const [emailError, setEmailError] = useState('')
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [codeError, setCodeError] = useState('')
@@ -272,8 +275,7 @@ export function LoginForm() {
           <p className="text-sm text-text-secondary">Enter your email and password to continue.</p>
         </div>
 
-        <AditorGateButton />
-        <GoogleButton />
+        <div className="mb-6"><GoogleButton /></div>
 
         <form onSubmit={handleClassicLogin} className="flex flex-col gap-4">
           {classicError && (
@@ -429,40 +431,43 @@ export function LoginForm() {
     )
   }
 
-  // Step 1: Email
+  // Google first; email remains available without a Google account.
   return (
     <div className="animate-slide-up">
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-text-primary mb-1">Sign in to FreeFrame</h1>
-        <p className="text-sm text-text-secondary">
-          Enter your email and we&apos;ll send you a sign-in code.
-        </p>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-text-primary mb-1">Sign in to AutoReview</h1>
       </div>
 
-      <AditorGateButton />
-      <GoogleButton />
+      <GoogleButton onAvailabilityChange={setGoogleAvailable} />
+      {googleAvailable === null && !showEmail && <p role="status" className="text-sm text-text-secondary">Loading sign-in…</p>}
+      {googleAvailable !== false && (
+        <button type="button" aria-expanded={showEmail} aria-controls="email-sign-in"
+          onClick={() => setShowEmail(!showEmail)}
+          className="mt-3 min-h-11 w-full text-sm text-text-secondary underline underline-offset-4 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-md">
+          {showEmail ? 'Hide email sign-in' : 'Use email instead'}
+        </button>
+      )}
+      {generalError && (
+        <p role="alert" className="mt-4 text-sm text-status-error">{generalError}</p>
+      )}
+      {(googleAvailable === false || showEmail) && (
+        <form id="email-sign-in" onSubmit={handleSendCode} className="mt-4 flex flex-col gap-4">
+          <Input
+            ref={emailInput}
+            label="Email address"
+            type="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setEmailError('') }}
+            error={emailError}
+          />
 
-      <form onSubmit={handleSendCode} className="flex flex-col gap-4">
-        {generalError && (
-          <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
-            {generalError}
-          </div>
-        )}
-
-        <Input
-          label="Email address"
-          type="email"
-          placeholder="you@example.com"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => { setEmail(e.target.value); setEmailError('') }}
-          error={emailError}
-        />
-
-        <Button type="submit" size="lg" loading={loading} className="mt-2 w-full">
-          Send magic code
-        </Button>
-      </form>
+          <Button type="submit" size="lg" loading={loading} className="mt-2 w-full">
+            Send sign-in code
+          </Button>
+        </form>
+      )}
 
       {PASSWORD_LOGIN_ENABLED && (
         <div className="mt-6 text-center">

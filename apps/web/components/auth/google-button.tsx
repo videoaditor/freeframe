@@ -17,14 +17,21 @@ function GoogleMark() {
 }
 
 /** Renders nothing until the API says Google sign-in is configured. */
-export function GoogleButton() {
+export function GoogleButton({ onAvailabilityChange }: { onAvailabilityChange?: (available: boolean) => void } = {}) {
   const [clientId, setClientId] = useState('')
 
   useEffect(() => {
+    let active = true
     api.get<{ enabled: boolean; client_id: string }>('/auth/google/config')
-      .then((c) => { if (c.enabled && c.client_id) setClientId(c.client_id) })
-      .catch(() => {})
-  }, [])
+      .then((c) => {
+        if (!active) return
+        const available = !!(c.enabled && c.client_id)
+        if (available) setClientId(c.client_id)
+        onAvailabilityChange?.(available)
+      })
+      .catch(() => { if (active) onAvailabilityChange?.(false) })
+    return () => { active = false }
+  }, [onAvailabilityChange])
 
   if (!clientId) return null
 
@@ -36,18 +43,13 @@ export function GoogleButton() {
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={start}
-        className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-md border border-border bg-bg-tertiary px-6 text-base font-medium text-text-primary transition-colors hover:border-border-focus hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-      >
-        <GoogleMark />
-        Continue with Google
-      </button>
-      <div className="my-5 flex items-center gap-3 text-xs text-text-tertiary" aria-hidden="true">
-        <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
-      </div>
-    </>
+    <button
+      type="button"
+      onClick={start}
+      className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-md border border-border bg-bg-tertiary px-6 text-base font-medium text-text-primary transition-colors hover:border-border-focus hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+    >
+      <GoogleMark />
+      Continue with Google
+    </button>
   )
 }
