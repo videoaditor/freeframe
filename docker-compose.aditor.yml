@@ -10,11 +10,11 @@ services:
 
   web:
     # Editors and team sign in through the central gate (auth.aditor.ai) - "Sign in
-    # with Aditor" is the only visible method on /login. Magic-code and password are
-    # compiled out of the UI (NEXT_PUBLIC_LEGACY_LOGIN_ENABLED stays "false" below) and
-    # the password endpoint is additionally closed by PASSWORD_LOGIN_ENABLED=false in
-    # .env.prod; flip NEXT_PUBLIC_LEGACY_LOGIN_ENABLED to "true" as a break-glass if the
-    # gate is ever down.
+    # with Aditor" is the only visible method on /login. Google and magic-code sign-in
+    # have been removed entirely (code, routes, UI). Password is compiled out of the UI
+    # (NEXT_PUBLIC_LEGACY_LOGIN_ENABLED stays "false" below) and the password endpoint is
+    # additionally closed by PASSWORD_LOGIN_ENABLED=false in .env.prod; flip
+    # NEXT_PUBLIC_LEGACY_LOGIN_ENABLED to "true" as a break-glass if the gate is ever down.
     #
     # NEXT_PUBLIC_REVIEW_GATE_URL turns on /handin, the one-route hand-in: the
     # editor pastes a Trello card, uploads once, and gets back the share link to

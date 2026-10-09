@@ -42,10 +42,10 @@ FreeFrame is a monorepo with two main applications and supporting infrastructure
 | **Next.js** | Server-rendered frontend, handles UI, auth cookies, client-side media playback |
 | **FastAPI** | REST API, auth, business logic, SSE events, S3 presigned URLs |
 | **PostgreSQL** | Primary datastore for all entities (users, projects, assets, comments, etc.) |
-| **Redis** | Message broker for Celery task queues, magic code TTL storage |
+| **Redis** | Message broker for Celery task queues, share-link password sessions |
 | **S3 Storage** | Stores all media files (originals, transcoded outputs, thumbnails) |
 | **Transcoding Workers** | Celery workers that process video/audio/image files via FFmpeg |
-| **Email Workers** | Celery workers that send transactional emails (invites, magic codes, notifications) |
+| **Email Workers** | Celery workers that send transactional emails (invites, notifications) |
 
 ---
 

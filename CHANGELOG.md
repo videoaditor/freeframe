@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- A cold, signed-out hit to `/login` now redirects straight to the central gate
+  (`/api/auth/oidc/login`) instead of showing an intermediate "Sign in with Aditor" page that
+  needed a second click - the gate's own sign-in page is the first thing shown. A gate failure
+  (`?error=...`) still shows inline instead of auto-redirecting, so it can't loop.
+- Removed the native "Continue with Google" sign-in and the emailed magic-code sign-in entirely
+  (routes, services, UI, tests) - the central gate (and, as a break-glass/self-hosted fallback,
+  password sign-in) is now the sole way to sign in to FreeFrame.
+
 ### Fixed
+- Killed the post-login flash (dashboard → login → dashboard) after a gate sign-in by removing the
+  last client-side post-callback navigation (the native Google callback page) in favor of the
+  gate's own server-side redirect, and by not painting the login form while an existing session
+  cookie or the initial setup/gate check is still resolving.
 - Central-gate (OIDC) sign-in: the callback now verifies the id_token's `at_hash` claim (passing
   the access token through to `jose`'s decoder, as the gate's tokens always carry one), fixing the
   `gate_sign_in_failed` error every gate sign-in hit in production. A rejected token's real cause

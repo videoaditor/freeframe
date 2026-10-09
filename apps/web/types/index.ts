@@ -518,17 +518,6 @@ export interface SetupStatus {
   needs_setup: boolean;
 }
 
-export interface MagicCodeResponse {
-  message: string;
-}
-
-export interface VerifyCodeResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  needs_password: boolean;
-}
-
 export interface AuthTokens {
   access_token: string;
   refresh_token: string;

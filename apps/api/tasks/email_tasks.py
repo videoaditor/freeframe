@@ -2,7 +2,7 @@
 Celery tasks for sending emails asynchronously.
 
 Queues:
-- email_high: Magic codes, invites (immediate)
+- email_high: Invites (immediate)
 - email_low: Mentions, comments, shares (can be slightly delayed)
 """
 from datetime import datetime
@@ -39,27 +39,6 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: Optional
 # ============================================================================
 # HIGH PRIORITY EMAILS (email_high queue)
 # ============================================================================
-
-@shared_task(bind=True, queue="email_high", max_retries=3, default_retry_delay=30)
-def send_magic_code_email(self, to_email: str, code: str, expiry_minutes: int = 10):
-    """Send magic code email - high priority, immediate delivery."""
-    try:
-        subject = f"Your {settings.brand_name} login code: {code}"
-        html_body = render_template(
-            "email/magic_code.html",
-            subject=subject,
-            code=code,
-            expiry_minutes=expiry_minutes,
-        )
-        text_body = f"Your {settings.brand_name} login code is: {code}. This code expires in {expiry_minutes} minutes."
-        
-        success = _send_email(to_email, subject, html_body, text_body)
-        if not success:
-            raise Exception("Email sending failed")
-        return {"status": "sent", "to": to_email}
-    except Exception as exc:
-        self.retry(exc=exc)
-
 
 @shared_task(bind=True, queue="email_high", max_retries=3, default_retry_delay=60)
 def send_invite_email(

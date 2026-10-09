@@ -13,8 +13,6 @@ from ..database import get_db
 from ..schemas.auth import (
     LoginRequest, TokenResponse,
     RefreshRequest, UserResponse, InviteRequest,
-    SendMagicCodeRequest, SendMagicCodeResponse,
-    VerifyMagicCodeRequest, SetPasswordRequest, GoogleSignInRequest,
     AcceptInviteRequest, InviteInfoResponse,
     ChangePasswordRequest,
 )
@@ -27,13 +25,8 @@ from ..services.auth_service import (
 )
 from ..services import directory_service
 from ..services import oidc_auth
-from ..services.google_auth import google_enabled, email_from_code
-from ..services.redis_service import (
-    generate_magic_code, store_magic_code, verify_magic_code as redis_verify_magic_code,
-    MAGIC_CODE_EXPIRY_SECONDS, store_oidc_state, consume_oidc_state,
-)
-from ..tasks.email_tasks import send_magic_code_email, send_invite_email
-from ..tasks.celery_app import send_task_safe
+from ..services.redis_service import store_oidc_state, consume_oidc_state
+from ..tasks.email_tasks import send_invite_email
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..middleware.rate_limit import rate_limit
@@ -42,8 +35,6 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-MAGIC_CODE_EXPIRY_MINUTES = MAGIC_CODE_EXPIRY_SECONDS // 60
 
 
 def _generate_invite_token() -> str:
@@ -54,7 +45,7 @@ def _generate_invite_token() -> str:
 def _resolve_against_directory(db: Session, email: str, user: User | None) -> User | None:
     """Reconcile one sign-in address against the external people directory.
 
-    Returns the user allowed to receive a magic code, or None for "no code".
+    Returns the user allowed to sign in, or None to refuse.
 
     The directory is consulted on every request rather than only for unknown
     addresses, so access follows the roster continuously instead of being decided
@@ -110,151 +101,13 @@ def _resolve_against_directory(db: Session, email: str, user: User | None) -> Us
     return user
 
 
-def _create_customer(db: Session, email: str) -> Optional[User]:
-    """A self-signed-up customer account: verified by the magic code it is about to receive."""
-    # Stored as typed (trimmed), exactly like an invite, so the existing exact-match lookups find it.
-    user = User(
-        email=email.strip(),
-        name=email.split("@")[0][:255] or "New user",
-        status=UserStatus.pending_verification,
-        is_staff=False,
-    )
-    db.add(user)
-    try:
-        db.commit()
-    except IntegrityError:
-        # Someone else holds this address - never hand that account out from a signup path.
-        db.rollback()
-        return None
-    db.refresh(user)
-    return user
-
-
-@router.post("/send-magic-code", response_model=SendMagicCodeResponse, dependencies=[Depends(rate_limit("send_magic_code", 5, 600))])
-def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
-    """
-    Send magic code to an existing user's email, for login.
-
-    Accounts come from an admin invite (/users/invite), /setup/create-superadmin,
-    or - when the instance is configured with one - an external people directory
-    that vouches for the address (see _resolve_against_directory).
-
-    Every outcome returns the same response, so this endpoint can't be used to
-    enumerate registered emails.
-    """
-    existing = get_user_by_email(db, body.email)
-    user = existing
-
-    if directory_service.is_configured():
-        user = _resolve_against_directory(db, body.email, user)
-
-    # Platform v2: someone NEW may sign up as a CUSTOMER. Never staff - they see only what they
-    # create. Only when no account exists at all: an existing account the directory just refused
-    # stays refused, and is never "re-created". Answers like every other outcome (no enumeration).
-    if existing is None and user is None and settings.self_signup_enabled:
-        user = _create_customer(db, body.email)
-
-    if not user:
-        return SendMagicCodeResponse(
-            message="Magic code sent to your email",
-            email=body.email,
-        )
-
-    # Generate and store magic code in Redis
-    code = generate_magic_code()
-    store_magic_code(body.email, code)
-
-    # Queue email via Celery (async)
-    try:
-        send_task_safe(send_magic_code_email, body.email, code, MAGIC_CODE_EXPIRY_MINUTES)
-    except Exception:
-        pass  # Email delivery is best-effort; code is already in Redis
-    
-    return SendMagicCodeResponse(
-        message="Magic code sent to your email",
-        email=body.email,
-    )
-
-
-@router.post("/verify-magic-code", response_model=TokenResponse, dependencies=[Depends(rate_limit("verify_magic_code", 10, 600))])
-def verify_magic_code(body: VerifyMagicCodeRequest, db: Session = Depends(get_db)):
-    """
-    Verify magic code and return tokens.
-    Returns needs_password=True if user hasn't set a password yet.
-    """
-    user = get_user_by_email(db, body.email)
-    
-    # "No such user" and "deactivated" get the same generic failure as a wrong/expired code —
-    # distinguishing them would let a caller enumerate registered or deactivated emails.
-    if not user or user.status == UserStatus.deactivated:
-        raise HTTPException(status_code=401, detail="Invalid or expired code")
-
-    # Verify magic code from Redis
-    success, error = redis_verify_magic_code(body.email, body.code)
-    if not success:
-        raise HTTPException(status_code=401, detail=error)
-    
-    # Mark email as verified
-    user.email_verified = True
-    
-    # If user was pending verification, activate them
-    if user.status == UserStatus.pending_verification:
-        user.status = UserStatus.active
-    
-    db.commit()
-    
-    # Check if user needs to set password
-    needs_password = settings.password_login_enabled and user.password_hash is None
-    
-    return TokenResponse(
-        access_token=create_access_token(str(user.id), token_version=user.token_version),
-        refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
-        needs_password=needs_password,
-    )
-
-
-@router.get("/google/config")
-def google_config():
-    """Whether /login shows "Continue with Google". The client id is public by design."""
-    enabled = google_enabled()
-    return {"enabled": enabled, "client_id": settings.google_client_id if enabled else ""}
-
-
-@router.post("/google", response_model=TokenResponse, dependencies=[Depends(rate_limit("google_signin", 20, 600))])
-def google_sign_in(body: GoogleSignInRequest, db: Session = Depends(get_db)):
-    """A Google-verified email signs in exactly like a verified magic code: the same account,
-    the same directory rules, and a new customer account only when SELF_SIGNUP_ENABLED."""
-    if not google_enabled():
-        raise HTTPException(status_code=404, detail="Google sign-in is not configured")
-    email = email_from_code(body.code, body.redirect_uri)
-
-    existing = get_user_by_email(db, email)
-    user = existing
-    if directory_service.is_configured():
-        user = _resolve_against_directory(db, email, user)
-    if existing is None and user is None and settings.self_signup_enabled:
-        user = _create_customer(db, email)
-    if not user or user.status == UserStatus.deactivated:
-        raise HTTPException(status_code=401, detail="This Google account has no access yet")
-
-    user.email_verified = True
-    if user.status == UserStatus.pending_verification:
-        user.status = UserStatus.active
-    db.commit()
-    return TokenResponse(
-        access_token=create_access_token(str(user.id), token_version=user.token_version),
-        refresh_token=create_refresh_token(str(user.id), token_version=user.token_version),
-        needs_password=False,
-    )
-
-
-
 # ── Central-gate (OIDC) sign-in ──────────────────────────────────────────────
 # Option B (spec #65): terminated here in the Python API, not a Next.js BFF.
 # These three endpoints are the entire gate integration; everything downstream
-# (session tokens, directory provisioning) reuses the magic-code machinery
-# above unchanged. Disabled as a group (404) whenever OIDC isn't configured, so
-# a self-hosted instance that hasn't registered with a gate is unaffected.
+# (session tokens, directory provisioning) reuses the directory-resolution
+# helper above unchanged. Disabled as a group (404) whenever OIDC isn't
+# configured, so a self-hosted instance that hasn't registered with a gate is
+# unaffected.
 
 ACCESS_TOKEN_COOKIE = "ff_access_token"
 REFRESH_TOKEN_COOKIE = "ff_refresh_token"
@@ -262,7 +115,7 @@ REFRESH_TOKEN_COOKIE = "ff_refresh_token"
 # Unlike the two cookies above, no page JS ever needs to see it.
 OIDC_ID_TOKEN_COOKIE = "ff_oidc_id_token"
 # Matches the lifetime the web app already gives these cookies when it sets them
-# itself after a magic-code sign-in (lib/auth.ts setTokens) - they are a
+# itself after a password sign-in (lib/auth.ts setTokens) - they are a
 # presence flag for the Next.js middleware gate, not the credential itself.
 SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
@@ -343,7 +196,7 @@ def oidc_callback(
 ):
     """Verify state, exchange the code, verify the id_token against the gate's
     JWKS, resolve the reviewer through the existing directory path, and mint
-    the existing HS256 session exactly like a verified magic code."""
+    the existing HS256 session exactly like a password sign-in."""
     _require_oidc_enabled()
     if error or not code or not state:
         return _login_redirect("gate_sign_in_failed")
@@ -371,14 +224,12 @@ def oidc_callback(
         return _login_redirect("gate_sign_in_failed")
 
     email = claims["email"].strip()
-    existing = get_user_by_email(db, email)
-    user = existing
+    user = get_user_by_email(db, email)
     if directory_service.is_configured():
         user = _resolve_against_directory(db, email, user)
 
-    # No self-signup here, unlike magic-code/Google: the gate is scoped to
-    # editor/team sign-in (access policy decided on the gate side), never an
-    # open customer-signup funnel.
+    # No self-signup here: the gate is scoped to editor/team sign-in (access
+    # policy decided on the gate side), never an open customer-signup funnel.
     if not user or user.status == UserStatus.deactivated:
         return _login_redirect("not_registered")
 
@@ -419,19 +270,6 @@ def oidc_logout(request: Request, from_: Optional[str] = Query(default=None, ali
     response = RedirectResponse(destination, status_code=302)
     _clear_session_cookies(response)
     return response
-
-
-@router.post("/set-password", response_model=UserResponse)
-def set_password(
-    body: SetPasswordRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Set password for authenticated user (after magic code verification)."""
-    current_user.password_hash = hash_password(body.password)
-    db.commit()
-    db.refresh(current_user)
-    return current_user
 
 
 @router.get("/invite/{token}", response_model=InviteInfoResponse)
@@ -577,7 +415,7 @@ def change_password(
 ):
     """Change password for authenticated user."""
     if current_user.password_hash is None:
-        raise HTTPException(status_code=400, detail="No password set for this account; use set-password instead")
+        raise HTTPException(status_code=400, detail="No password set for this account yet")
     if not verify_password(body.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 

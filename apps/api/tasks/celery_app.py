@@ -47,14 +47,13 @@ celery_app.conf.update(
     task_queues=(
         Queue("default"),
         Queue("transcoding"),
-        Queue("email_high"),  # Magic codes, invites - immediate
+        Queue("email_high"),  # Invites - immediate
         Queue("email_low"),   # Mentions, comments - can be delayed
     ),
     task_default_queue="default",
     # Route tasks to queues
     task_routes={
         "apps.api.tasks.transcode_tasks.*": {"queue": "transcoding"},
-        "apps.api.tasks.email_tasks.send_magic_code_email": {"queue": "email_high"},
         "apps.api.tasks.email_tasks.send_invite_email": {"queue": "email_high"},
         "apps.api.tasks.email_tasks.send_mention_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_comment_email": {"queue": "email_low"},

@@ -14,7 +14,7 @@ function readCookie(name: string): string | null {
 // /auth/oidc/callback) - there is no page JS in that flow to call setTokens().
 // Adopt them into localStorage once, on first read, so every call site below
 // can keep treating localStorage as the one source of truth, exactly as it
-// did for the magic-code and Google flows.
+// does for a password sign-in.
 function adoptCookieSessionIfNeeded(): void {
   if (localStorage.getItem(ACCESS_TOKEN_KEY)) return
   const access = readCookie(ACCESS_TOKEN_KEY)
@@ -110,7 +110,7 @@ export function clearTokens(): void {
   // Route every non-Whop sign-out through the gate logout endpoint so a gate
   // (OIDC) session's SSO also ends, not just this app's own cookies - it
   // falls back to a plain /login redirect when the gate isn't configured, so
-  // this is safe for magic-code/password/Google sessions too.
+  // this is safe for a password sign-in too.
   const params = from ? `?from=${encodeURIComponent(from)}` : ''
   window.location.href = `${API_URL}/auth/oidc/logout${params}`
 }

@@ -180,9 +180,9 @@ class Settings(BaseSettings):
     # own brand in front of clients, who never need to know what runs underneath.
     brand_name: str = "FreeFrame"
 
-    # Password sign-in. Instances that authenticate purely by magic code turn
-    # this off, which hides the password UI *and* closes /auth/login and
-    # /auth/set-password — hiding the form alone would leave the method live.
+    # Password sign-in. Instances that sign in purely through the central gate
+    # (OIDC) turn this off, which hides the password UI *and* closes
+    # /auth/login — hiding the form alone would leave the method live.
     password_login_enabled: bool = True
 
     # Instance-wide project access. On, every account holds `editor` on every
@@ -199,18 +199,9 @@ class Settings(BaseSettings):
     # Off (the default) changes no behaviour.
     instance_wide_project_access: bool = False
 
-    # Platform v2 (docs/superpowers/specs/2026-09-28-review-platform-v2-design.md).
-    #
-    # SELF_SIGNUP_ENABLED: a magic code sent to an unknown address creates a CUSTOMER account
-    # (is_staff = false) instead of silently doing nothing. Off by default.
-    self_signup_enabled: bool = False
     # Whop owner entry is disabled until both are configured. No signing secret is shared.
     suite_url: str = ""
     whop_app_id: str = ""
-    # "Continue with Google" on /login. Off until both are set. New addresses still need
-    # SELF_SIGNUP_ENABLED, exactly like the magic code (docs/design/2026-10-03-google-sign-in-spec.md).
-    google_client_id: str = ""
-    google_client_secret: str = ""
     # REVIEW_BRIDGE_URL / _SECRET: Auto Review's /api/v1/* contract (review.aditor.ai), called from
     # this server only - the secret never reaches a browser. Unset = requests still work, they are
     # preserved with review unavailable; missing evidence never claims Ready or completion.
@@ -236,11 +227,12 @@ class Settings(BaseSettings):
     service_api_key: str | None = None
     service_api_key_email: str | None = None
 
-    # Directory-backed sign-in. With DIRECTORY_LOOKUP_URL set, /auth/send-magic-code
-    # checks the address against an external roster: someone listed there gets an
-    # account provisioned on first sign-in, and someone the roster no longer lists
-    # as active is refused. Instances whose people already live in another system
-    # stop keeping a second copy of them, and nobody is invited by hand.
+    # Directory-backed sign-in. With DIRECTORY_LOOKUP_URL set, the central-gate
+    # callback (/auth/oidc/callback) checks the address against an external roster:
+    # someone listed there gets an account provisioned on first sign-in, and someone
+    # the roster no longer lists as active is refused. Instances whose people already
+    # live in another system stop keeping a second copy of them, and nobody is
+    # invited by hand.
     #
     # The URL carries an {email} placeholder (URL-encoded on substitution) and must
     # answer with a JSON record, or a list whose first entry is one. Addresses the
@@ -273,8 +265,8 @@ class Settings(BaseSettings):
 
     # Central-gate (OIDC) sign-in for editors/team, terminated in this API rather
     # than a Next.js BFF - see services/oidc_auth.py and docs/deployment.md
-    # (Configuration Reference) for the full handshake and env vars. The
-    # magic-code and password endpoints are untouched and keep working; this is additive.
+    # (Configuration Reference) for the full handshake and env vars. The password
+    # endpoint is untouched and keeps working; this is additive.
     # All three empty (the default) disables /auth/oidc/* entirely (404), so an
     # instance that hasn't registered with a gate loses nothing by upgrading.
     oidc_issuer: str = ""

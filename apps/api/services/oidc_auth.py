@@ -3,7 +3,7 @@
 Option B from spec #65: the gate issues an id_token which this service verifies
 against the gate's JWKS, then the router mints FreeFrame's own existing HS256
 session tokens (auth_service.create_access_token/create_refresh_token) exactly
-as the magic-code and Google paths already do. No gate token is ever stored
+as a password sign-in already does. No gate token is ever stored
 long-term or handed to the browser - only the id_token, briefly, to resolve who
 signed in.
 

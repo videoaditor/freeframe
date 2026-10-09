@@ -4,7 +4,7 @@
   unreachable at startup — the bucket check runs off the request path and its
   failures are swallowed + logged (issue: 60s startup block, #6).
 - mail_is_configured(): detect an unconfigured mailer so startup can warn that
-  magic-code login will fail (issue: SMTP-required, #2).
+  invites and notifications will fail (issue: SMTP-required, #2).
 """
 import logging
 

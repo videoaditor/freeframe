@@ -2,8 +2,8 @@
 
 Instances whose roster already lives somewhere else - an HR table, a company
 database, an internal API - can point ``DIRECTORY_LOOKUP_URL`` at it instead of
-maintaining a second copy of their people here. The magic-code endpoint then
-treats that directory as the authority on who may sign in: a listed person is
+maintaining a second copy of their people here. The sign-in endpoints then
+treat that directory as the authority on who may sign in: a listed person is
 provisioned on first sign-in, and a person the directory no longer lists as
 active is refused.
 

@@ -89,7 +89,7 @@ In `.env` (replace `192.168.1.50` with your IP):
 
 ```env
 NEXT_PUBLIC_API_URL=http://192.168.1.50:8000   # web → API (baked into the browser bundle)
-FRONTEND_URL=http://192.168.1.50:3000           # links in invite/magic-code emails
+FRONTEND_URL=http://192.168.1.50:3000           # links in invite emails
 CORS_ALLOW_ORIGINS=*                            # API allows the LAN browser origin
 S3_PUBLIC_ENDPOINT=http://192.168.1.50:9000     # presigned upload/download URLs
 MINIO_CORS_ALLOW_ORIGIN=*                       # MinIO allows the LAN browser origin
@@ -172,7 +172,7 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 | Transcoding  | FFmpeg (multi-bitrate HLS)                        |
 | Storage      | Any S3-compatible (AWS, R2, B2, MinIO)           |
 | Proxy        | Traefik (auto SSL via Let's Encrypt)              |
-| Auth         | JWT + magic code email login                      |
+| Auth         | JWT + password login (optional central OIDC gate) |
 
 ## Documentation
 

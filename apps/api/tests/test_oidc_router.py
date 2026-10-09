@@ -4,6 +4,7 @@ The crypto/JWKS verification itself is covered in test_oidc_auth.py; these
 tests exercise the HTTP wiring - redirects, cookies, state handling, and the
 directory-refusal path - with oidc_auth's network calls mocked out.
 """
+import contextlib
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -13,6 +14,7 @@ import pytest
 
 from apps.api.models.user import UserStatus
 from apps.api.services import oidc_auth
+from apps.api.services.directory_service import DirectoryUnavailable
 
 RL = "apps.api.middleware.rate_limit.check_rate_limit"
 ISSUER = "https://auth.aditor.ai"
@@ -210,3 +212,122 @@ def test_logout_fallback_preserves_from(client):
          patch("apps.api.routers.auth.settings.frontend_url", FRONTEND):
         resp = client.get("/auth/oidc/logout?from=%2Fhandin", follow_redirects=False)
     assert resp.headers["location"] == f"{FRONTEND}/login?from=%2Fhandin"
+
+
+# ---------------------------------------------------------------------------
+# Directory-backed provisioning (DIRECTORY_LOOKUP_URL), reached through the
+# gate callback.
+# ---------------------------------------------------------------------------
+#
+# The endpoint auto-creating accounts is exactly what GHSA-9m78-fww2-p89h was
+# about, so these pin down that it only ever happens for an address an
+# operator-configured directory actively vouches for, and never otherwise.
+# Formerly exercised through the (now removed) magic-code endpoint; the gate
+# callback shares the same _resolve_against_directory helper.
+
+_DIR = "apps.api.routers.auth.directory_service"
+
+
+def _directory(record=None, unavailable=False):
+    """Patch the directory as configured, answering with `record`."""
+
+    @contextlib.contextmanager
+    def _ctx():
+        with patch(f"{_DIR}.is_configured", return_value=True), \
+             patch(f"{_DIR}.find_person",
+                   side_effect=DirectoryUnavailable("boom") if unavailable else None,
+                   return_value=record):
+            yield
+
+    return _ctx()
+
+
+def test_callback_provisions_person_the_directory_vouches_for(client, mock_db, oidc_on):
+    """An unknown address listed as active in the directory gets an account and signs in."""
+    mock_db.first.return_value = None
+
+    with _directory({"full_name": "Saskia Ramsauer", "status": "active"}):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/home"
+    mock_db.add.assert_called_once()
+    created = mock_db.add.call_args[0][0]
+    assert created.email == "max@aditor.ai"
+    assert created.status == UserStatus.active
+
+
+def test_callback_refuses_person_whose_status_is_not_allowed(client, mock_db, oidc_on):
+    """A listed person outside the allowed statuses is refused, and their account is untouched."""
+    user = _user()
+    mock_db.first.return_value = user
+
+    with _directory({"full_name": "Archived Person", "status": "archived"}):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/login?error=not_registered"
+    assert user.status == UserStatus.active  # refusal is stateless, nothing is mutated
+    mock_db.commit.assert_not_called()
+
+
+def test_callback_leaves_addresses_the_directory_does_not_know_alone(client, mock_db, oidc_on):
+    """Operator and service accounts appear on no roster, so omission must not lock them out."""
+    user = _user()
+    mock_db.first.return_value = user
+
+    with _directory(None):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/home"
+    assert resp.cookies.get("ff_access_token")
+
+
+def test_callback_survives_a_directory_outage_for_existing_users(client, mock_db, oidc_on):
+    """A directory that can't be reached must not lock out people who can already sign in."""
+    user = _user()
+    mock_db.first.return_value = user
+
+    with _directory(unavailable=True):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/home"
+
+
+def test_callback_does_not_provision_during_a_directory_outage(client, mock_db, oidc_on):
+    """An unreachable directory vouches for nobody, so no account may be created on its word."""
+    mock_db.first.return_value = None
+
+    with _directory(unavailable=True):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/login?error=not_registered"
+    mock_db.add.assert_not_called()
+
+
+def test_callback_never_gates_a_superadmin_on_the_directory(client, mock_db, oidc_on):
+    """The operator must stay reachable even when the roster lists them as inactive."""
+    user = _user(superadmin=True)
+    mock_db.first.return_value = user
+
+    with _directory({"full_name": "Owner", "status": "paused"}):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/home"
+
+
+def test_callback_allows_a_status_in_the_configured_set(client, mock_db, oidc_on):
+    """A roster's "not working right now" state must not cost someone their sign-in.
+
+    Regression test for shipping DIRECTORY_ALLOWED_STATUSES=active against a roster
+    where `paused` means "between assignments", which locked out 29 of 76 people who
+    were still very much employed.
+    """
+    mock_db.first.return_value = None
+
+    with patch("apps.api.services.directory_service.settings.directory_allowed_statuses",
+               "active,paused,onboarding"), \
+         patch(f"{_DIR}.is_configured", return_value=True), \
+         patch(f"{_DIR}.find_person", return_value={"full_name": "Between Jobs", "status": "paused"}):
+        resp = _callback(client)
+
+    assert resp.headers["location"] == f"{FRONTEND}/home"
+    mock_db.add.assert_called_once()

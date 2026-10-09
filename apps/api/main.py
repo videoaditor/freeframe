@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=run_startup_bucket_setup, name="s3-bucket-setup", daemon=True).start()
     if not mail_is_configured():
         logging.getLogger("apps.api.startup").warning(
-            "Email is not configured (MAIL_PROVIDER=%s) — magic-code login and invites "
+            "Email is not configured (MAIL_PROVIDER=%s) — invites and notifications "
             "will FAIL until you configure SMTP or SES. See docs/deployment.md.",
             settings.mail_provider,
         )

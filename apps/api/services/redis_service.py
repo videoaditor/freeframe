@@ -1,6 +1,5 @@
 import json
 import redis
-import secrets
 from typing import Optional
 from ..config import settings
 
@@ -14,68 +13,6 @@ def get_redis() -> redis.Redis:
     if _redis_client is None:
         _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
     return _redis_client
-
-
-# Magic code keys
-MAGIC_CODE_PREFIX = "magic_code:"
-MAGIC_CODE_ATTEMPTS_PREFIX = "magic_code_attempts:"
-MAGIC_CODE_EXPIRY_SECONDS = 600  # 10 minutes
-MAX_MAGIC_CODE_ATTEMPTS = 5
-
-
-def generate_magic_code() -> str:
-    """Generate a 6-digit magic code."""
-    return str(secrets.randbelow(900000) + 100000)
-
-
-def store_magic_code(email: str, code: str) -> None:
-    """Store magic code in Redis with expiry."""
-    r = get_redis()
-    key = f"{MAGIC_CODE_PREFIX}{email.lower()}"
-    r.setex(key, MAGIC_CODE_EXPIRY_SECONDS, code)
-    # Reset attempts counter
-    attempts_key = f"{MAGIC_CODE_ATTEMPTS_PREFIX}{email.lower()}"
-    r.delete(attempts_key)
-
-
-def verify_magic_code(email: str, code: str) -> tuple[bool, str]:
-    """
-    Verify magic code from Redis.
-    Returns (success, error_message).
-    """
-    r = get_redis()
-    key = f"{MAGIC_CODE_PREFIX}{email.lower()}"
-    attempts_key = f"{MAGIC_CODE_ATTEMPTS_PREFIX}{email.lower()}"
-    
-    # Check attempts
-    attempts = r.get(attempts_key)
-    if attempts and int(attempts) >= MAX_MAGIC_CODE_ATTEMPTS:
-        return False, "Too many attempts. Request a new code."
-    
-    # Get stored code
-    stored_code = r.get(key)
-    if not stored_code:
-        return False, "Code expired or not found"
-    
-    if stored_code != code:
-        # Increment attempts
-        r.incr(attempts_key)
-        r.expire(attempts_key, MAGIC_CODE_EXPIRY_SECONDS)
-        return False, "Invalid code"
-    
-    # Success - delete the code
-    r.delete(key)
-    r.delete(attempts_key)
-    return True, ""
-
-
-def delete_magic_code(email: str) -> None:
-    """Delete magic code from Redis."""
-    r = get_redis()
-    key = f"{MAGIC_CODE_PREFIX}{email.lower()}"
-    attempts_key = f"{MAGIC_CODE_ATTEMPTS_PREFIX}{email.lower()}"
-    r.delete(key)
-    r.delete(attempts_key)
 
 
 # Invite token keys (also in Redis for faster lookup)

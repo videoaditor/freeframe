@@ -35,7 +35,7 @@ def rate_limit(action: str, max_requests: int, window_seconds: int):
     Returns a FastAPI dependency that enforces IP-based rate limiting.
 
     Args:
-        action: Unique key for this rate limit (e.g. "send_magic_code")
+        action: Unique key for this rate limit (e.g. "login")
         max_requests: Maximum requests allowed in the window
         window_seconds: Time window in seconds
     """

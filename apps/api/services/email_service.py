@@ -10,7 +10,7 @@ from ..config import settings
 def mail_is_configured(s=settings) -> bool:
     """Whether the configured mailer can actually send.
 
-    Email is REQUIRED for login (magic codes) and invites, so the app warns at
+    Email is REQUIRED for invites and notifications, so the app warns at
     startup when it's not set up. `smtp` needs a host; `ses` may authenticate via
     an IAM role, so we can't reliably detect it and assume it's configured.
     """

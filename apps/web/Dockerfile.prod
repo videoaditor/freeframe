@@ -19,8 +19,8 @@ ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=true
 ENV NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=$NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED
 # Break-glass only: the central gate (auth.aditor.ai) is the canonical sign-in once an
-# instance registers with one, so magic-code/password stay off /login by default. Set
-# to true to show them again, e.g. while the gate is down.
+# instance registers with one, so password sign-in stays off /login by default. Set
+# to true to show it again, e.g. while the gate is down.
 ARG NEXT_PUBLIC_LEGACY_LOGIN_ENABLED=false
 ENV NEXT_PUBLIC_LEGACY_LOGIN_ENABLED=$NEXT_PUBLIC_LEGACY_LOGIN_ENABLED
 # Base URL of the craft-review service behind the /handin route. Empty by

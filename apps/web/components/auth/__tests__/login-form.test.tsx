@@ -14,7 +14,7 @@ function mockGate(enabled: boolean) {
 }
 
 beforeEach(()=>{
- vi.stubEnv('NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED','false')
+ vi.stubEnv('NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED','true')
  vi.stubEnv('NEXT_PUBLIC_LEGACY_LOGIN_ENABLED','false')
  window.history.replaceState({},'', '/login')
  mockGate(true)
@@ -29,25 +29,20 @@ it('shows only Sign in with Aditor when the gate is configured',async()=>{
  expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
 })
 
-it('falls back to the email flow when the gate is not configured',async()=>{
+it('falls back to the password form when the gate is not configured',async()=>{
  mockGate(false)
  render(<LoginForm />)
  expect(await screen.findByLabelText('Email address')).toBeVisible()
+ expect(screen.getByLabelText('Password')).toBeVisible()
  expect(screen.queryByRole('button',{name:'Sign in with Aditor'})).not.toBeInTheDocument()
  expect(screen.queryByRole('button',{name:'Continue with Google'})).not.toBeInTheDocument()
 })
 
-it('reveals the legacy email flow alongside the gate when LEGACY_LOGIN_ENABLED is on',async()=>{
+it('reveals the legacy password form alongside the gate when LEGACY_LOGIN_ENABLED is on',async()=>{
  vi.stubEnv('NEXT_PUBLIC_LEGACY_LOGIN_ENABLED','true')
  render(<LoginForm />)
  expect(await screen.findByRole('button',{name:'Sign in with Aditor'})).toBeVisible()
  expect(await screen.findByLabelText('Email address')).toBeVisible()
-})
-
-it('opens the email flow directly for an explicit prefilled email link, gate notwithstanding',async()=>{
- window.history.replaceState({},'', '/login?email=editor%40example.com')
- render(<LoginForm />)
- expect(await screen.findByLabelText('Email address')).toHaveValue('editor@example.com')
 })
 
 it('shows gate failure errors on the primary gate screen',async()=>{
@@ -56,11 +51,20 @@ it('shows gate failure errors on the primary gate screen',async()=>{
  expect(await screen.findByRole('alert')).toHaveTextContent('expired')
 })
 
-it('sends a magic code once the legacy email flow is reached',async()=>{
+it('hides the password form entirely when password login is disabled, even with no gate',async()=>{
+ vi.stubEnv('NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED','false')
+ mockGate(false)
+ render(<LoginForm />)
+ await waitFor(()=>expect(m.get).toHaveBeenCalledWith('/auth/oidc/config'))
+ expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument()
+})
+
+it('signs in with the classic password form once reached',async()=>{
  mockGate(false)
  render(<LoginForm />)
  fireEvent.change(await screen.findByLabelText('Email address'),{target:{value:'editor@example.com'}})
- fireEvent.click(screen.getByRole('button',{name:'Send sign-in code'}))
- await waitFor(()=>expect(m.post).toHaveBeenCalledWith('/auth/send-magic-code',{email:'editor@example.com'}))
- expect(await screen.findByText('Check your email')).toBeVisible()
+ fireEvent.change(screen.getByLabelText('Password'),{target:{value:'hunter2'}})
+ fireEvent.click(screen.getByRole('button',{name:'Sign in'}))
+ await waitFor(()=>expect(m.post).toHaveBeenCalledWith('/auth/login',{email:'editor@example.com',password:'hunter2'}))
+ await waitFor(()=>expect(m.replace).toHaveBeenCalledWith('/home'))
 })
