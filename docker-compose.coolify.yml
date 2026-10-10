@@ -80,6 +80,14 @@ x-app-env: &app-env
   INSTANCE_WIDE_PROJECT_ACCESS: ${INSTANCE_WIDE_PROJECT_ACCESS:-true}
   SHARE_COMMENT_DELETABLE_GUEST_EMAILS: ${SHARE_COMMENT_DELETABLE_GUEST_EMAILS:-review@aditor.ai}
   AUTOMATION_SHARE_WEBHOOK_URL: ${AUTOMATION_SHARE_WEBHOOK_URL:-}
+  # Central-gate (OIDC) sign-in, formerly api.environment in docker-compose.aditor.yml.
+  OIDC_ISSUER: ${OIDC_ISSUER:-https://auth.aditor.ai}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-freeframe-web}
+  OIDC_SCOPE: ${OIDC_SCOPE:-}
+  ADITOR_AUTH_FREEFRAME_CLIENT_SECRET: ${ADITOR_AUTH_FREEFRAME_CLIENT_SECRET:-}
+  # Outbound event feed to the hub - empty on a second instance.
+  HUB_EVENTS_WEBHOOK_URL: ${HUB_EVENTS_WEBHOOK_URL:-}
+  HUB_EVENTS_WEBHOOK_SECRET: ${HUB_EVENTS_WEBHOOK_SECRET:-}
 
 services:
   postgres:
@@ -126,12 +134,13 @@ services:
         condition: service_healthy
     command: >
       sh -c "cd /workspace/apps/api && alembic upgrade head && cd /workspace &&
-      gunicorn apps.api.main:app
+      exec gunicorn apps.api.main:app
       -w $${API_WORKERS:-4}
       -k uvicorn.workers.UvicornWorker
       --bind 0.0.0.0:8000
       --timeout 120
       --graceful-timeout 30"
+    stop_grace_period: 45s
     expose:
       - "8000"
     healthcheck:
@@ -203,7 +212,10 @@ services:
         NEXT_PUBLIC_API_URL: /api
         NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED: ${NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED:-false}
         # Same values and reasoning as docker-compose.aditor.yml.
+        NEXT_PUBLIC_SITE_URL: ${FRONTEND_URL:-http://localhost:3000}
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
+        NEXT_PUBLIC_LEGACY_LOGIN_ENABLED: "false"
+        NEXT_PUBLIC_OIDC_ENABLED: "true"
         NEXT_PUBLIC_SHARE_COMMENTS_COLLAPSED: "false"
         NEXT_PUBLIC_AUTOMATION_GUEST_EMAILS: "review@aditor.ai"
         NEXT_PUBLIC_FOLDER_LINK_LABEL: "Trello card link"
