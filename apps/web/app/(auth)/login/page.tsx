@@ -66,9 +66,13 @@ export default function LoginPage() {
     return () => { active = false }
   }, [router])
 
-  // Nothing paints here while a session cookie might still be present or the
-  // gate redirect is in flight - only the destination (dashboard, gate, or the
-  // login form itself) ever shows.
-  if (!showForm) return null
+  // While we decide where to send the visitor (checking the session, bouncing to
+  // the gate, or redirecting an already-signed-in user to their destination), the
+  // branded (auth) layout shell (logo + card + tagline) would otherwise paint
+  // behind us and flash as "the login page" - most visibly on the fresh full-page
+  // load that follows a gate (Google) sign-in. Cover the viewport with the plain
+  // app background so nothing branded shows until we either land on the
+  // destination or have actually decided to show the sign-in form.
+  if (!showForm) return <div aria-hidden className="fixed inset-0 z-50 bg-bg-primary" />
   return <LoginForm />
 }
