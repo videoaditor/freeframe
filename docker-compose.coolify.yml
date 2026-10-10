@@ -95,6 +95,14 @@ services:
     environment: *app-env
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # n8n reads this database directly (credential "FreeFrame DB (n8n_read)"). On aditor-platform it
+    # joined freeframe_default and reached the container as freeframe-postgres-1; the alias on the
+    # shared Coolify network keeps that hostname working.
+    networks:
+      default:
+      coolify:
+        aliases:
+          - freeframe-postgres-1
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-freeframe}"]
       interval: 10s
@@ -236,6 +244,10 @@ services:
       start_period: 15s
       retries: 3
     restart: unless-stopped
+
+networks:
+  coolify:
+    external: true
 
 volumes:
   pgdata:
