@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-07",
+  "timezone": "Asia/Tokyo",
+  "thread_id": "01a1145f-0daa-78f0-adde-68ed93d77067",
+  "freeframe_base": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+  "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+  "python": "3.12 (existing dependency runtime, read-only; no installation/modification)",
+  "web_test_node": "22.22.3",
+  "initial_shell_node": "25.4.0",
+  "provider": "injected at runCraftAuditSource; no paid calls",
+  "database": "no real H4 DB started; pytest uses mocked DB; PostgreSQL checks skipped",
+  "stack": {
+    "project": "autoreview-h4",
+    "api_port": 18044,
+    "web_port": 13044,
+    "bridge_port": 18744,
+    "postgres_port": 55444,
+    "redis_port": 16344,
+    "s3_port": 19044
+  },
+  "docker": {
+    "initial_version": "29.4.0",
+    "build": "EOF from daemon",
+    "subsequent_checks": "socket absent; no restart or shared cleanup",
+    "disk_at_failure": "529 MiB free; then ENOSPC",
+    "own_cleanup": "only own .next/cache removed",
+    "stack_started": false
+  },
+  "production": {
+    "freeframe_image": null,
+    "freeframe_commit": null,
+    "worker_version": null,
+    "credential_source": "documented ~/.config/aditor/deploy.env absent; no access change",
+    "github_deployments": []
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "origin": "standalone-local-owner-form",
+  "href": "http://localhost:13044/r/ferBgRLr54ztWK2D0KxuNfZkZTWlHcvz",
+  "component": "RequestSheet > LinkCard",
+  "authentication": "existing Alan identity, sanitized local fixture"
+}

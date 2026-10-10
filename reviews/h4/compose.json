@@ -1,0 +1,163 @@
+{
+  "name": "autoreview-h4",
+  "services": {
+    "postgres": {
+      "image": "postgres:16-alpine",
+      "environment": {
+        "POSTGRES_USER": "h4",
+        "POSTGRES_PASSWORD": "h4",
+        "POSTGRES_DB": "h4"
+      },
+      "ports": [
+        "127.0.0.1:55444:5432"
+      ],
+      "volumes": [
+        "pgdata:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U h4"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 20
+      }
+    },
+    "redis": {
+      "image": "redis:7-alpine",
+      "ports": [
+        "127.0.0.1:16344:6379"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 20
+      }
+    },
+    "minio": {
+      "image": "chrislusf/seaweedfs:3.97",
+      "command": [
+        "server",
+        "-s3",
+        "-s3.port=9000",
+        "-s3.config=/etc/h4-s3.json",
+        "-dir=/data",
+        "-ip=minio",
+        "-master.volumeSizeLimitMB=128",
+        "-volume.max=16"
+      ],
+      "ports": [
+        "127.0.0.1:19044:9000"
+      ],
+      "volumes": [
+        "miniodata:/data",
+        "./s3-fixture.json:/etc/h4-s3.json:ro"
+      ]
+    },
+    "api": {
+      "image": "${H4_API_IMAGE:-freeframe-h4-api:20261007}",
+      "environment": {
+        "DATABASE_URL": "postgresql://h4:h4@postgres:5432/h4",
+        "REDIS_URL": "redis://redis:6379/0",
+        "JWT_SECRET": "h4-isolated-fixture-not-production",
+        "S3_ENDPOINT": "http://minio:9000",
+        "S3_PUBLIC_ENDPOINT": "http://localhost:19044",
+        "S3_BUCKET": "h4-media",
+        "S3_ACCESS_KEY": "h4minio",
+        "S3_SECRET_KEY": "h4minio-isolated",
+        "FRONTEND_URL": "http://localhost:13044",
+        "REVIEW_BRIDGE_URL": "http://host.docker.internal:18744",
+        "REVIEW_BRIDGE_SECRET": "h4-bridge-fixture",
+        "AUTOMATION_SHARE_WEBHOOK_URL": "http://host.docker.internal:18744/api/freeframe/project-registered",
+        "AUTOMATION_SHARE_WEBHOOK_SECRET": "h4-hook-fixture",
+        "AUTOMATION_GUEST_EMAILS": "review@aditor.ai",
+        "SHARE_COMMENT_DELETABLE_GUEST_EMAILS": "review@aditor.ai",
+        "PASSWORD_LOGIN_ENABLED": "true",
+        "SELF_SIGNUP_ENABLED": "false",
+        "INSTANCE_WIDE_PROJECT_ACCESS": "true"
+      },
+      "volumes": [
+        "${H4_RUNTIME_ROOT:-../..}/apps/api:/workspace/apps/api",
+        "${H4_RUNTIME_ROOT:-../..}/packages/transcoder:/workspace/packages/transcoder"
+      ],
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "redis": {
+          "condition": "service_healthy"
+        },
+        "minio": {
+          "condition": "service_started"
+        }
+      },
+      "ports": [
+        "127.0.0.1:18044:8000"
+      ],
+      "command": [
+        "sh",
+        "-c",
+        "cd /workspace/apps/api && alembic upgrade head && cd /workspace && uvicorn apps.api.main:app --host 0.0.0.0 --port 8000"
+      ]
+    },
+    "worker": {
+      "image": "${H4_API_IMAGE:-freeframe-h4-api:20261007}",
+      "environment": {
+        "DATABASE_URL": "postgresql://h4:h4@postgres:5432/h4",
+        "REDIS_URL": "redis://redis:6379/0",
+        "JWT_SECRET": "h4-isolated-fixture-not-production",
+        "S3_ENDPOINT": "http://minio:9000",
+        "S3_PUBLIC_ENDPOINT": "http://localhost:19044",
+        "S3_BUCKET": "h4-media",
+        "S3_ACCESS_KEY": "h4minio",
+        "S3_SECRET_KEY": "h4minio-isolated",
+        "FRONTEND_URL": "http://localhost:13044",
+        "REVIEW_BRIDGE_URL": "http://host.docker.internal:18744",
+        "REVIEW_BRIDGE_SECRET": "h4-bridge-fixture",
+        "AUTOMATION_SHARE_WEBHOOK_URL": "http://host.docker.internal:18744/api/freeframe/project-registered",
+        "AUTOMATION_SHARE_WEBHOOK_SECRET": "h4-hook-fixture",
+        "AUTOMATION_GUEST_EMAILS": "review@aditor.ai",
+        "SHARE_COMMENT_DELETABLE_GUEST_EMAILS": "review@aditor.ai",
+        "PASSWORD_LOGIN_ENABLED": "true",
+        "SELF_SIGNUP_ENABLED": "false",
+        "INSTANCE_WIDE_PROJECT_ACCESS": "true"
+      },
+      "volumes": [
+        "${H4_RUNTIME_ROOT:-../..}/apps/api:/workspace/apps/api",
+        "${H4_RUNTIME_ROOT:-../..}/packages/transcoder:/workspace/packages/transcoder"
+      ],
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "redis": {
+          "condition": "service_healthy"
+        },
+        "minio": {
+          "condition": "service_started"
+        }
+      },
+      "command": [
+        "celery",
+        "-A",
+        "apps.api.tasks.celery_app",
+        "worker",
+        "-Q",
+        "transcoding,default",
+        "-c",
+        "1",
+        "--loglevel=info"
+      ]
+    }
+  },
+  "volumes": {
+    "pgdata": {},
+    "miniodata": {}
+  }
+}
