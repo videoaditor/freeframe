@@ -33,7 +33,7 @@ export function BriefInput({ file, onFile, text, onText, disabled }: {
   return <div className={styles.briefInput}>
     <div className={styles.briefDrop}>
       {file ? <div className={styles.file}><FileText size={22} /><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={disabled} onClick={() => onFile(null)}><X size={18} /></button></div>
-        : <DropZone compact disabled={disabled} accept={BRIEFING_ACCEPT} title="Drop your first briefing" hint="PDF, Markdown or text · up to 10 MB" className={styles.briefDropTarget} onFiles={([f]) => { pending.current++; onFile(f) }} />}
+        : <DropZone compact disabled={disabled} accept={BRIEFING_ACCEPT} title="Drop your first briefing" hint="Word (.docx), PDF, Markdown or text · up to 10 MB" className={styles.briefDropTarget} onFiles={([f]) => { pending.current++; onFile(f) }} />}
       <div className={styles.linkAction}>
         <button type="button" className={styles.pasteButton} disabled={disabled} onClick={() => void pasteLink()}><ClipboardPaste size={17} /> Paste link</button>
         {hasLink && !showText && <input ref={link} aria-label="Briefing link" type="url" pattern="https?://.+" className={styles.input} value={text} disabled={disabled} onChange={e => { pending.current++; onText(e.target.value); setNotice('') }} placeholder="https://docs.google.com/…" />}

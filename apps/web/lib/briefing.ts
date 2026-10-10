@@ -1,11 +1,12 @@
 import { fileToBase64 } from './platform'
 
-export const BRIEFING_ACCEPT = '.pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain'
+export const BRIEFING_ACCEPT = '.docx,.pdf,.md,.markdown,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/markdown,text/plain'
 
-export async function briefingFilePayload(file: File): Promise<{ text?: string; pdf_base64?: string }> {
+export async function briefingFilePayload(file: File): Promise<{ text?: string; pdf_base64?: string; docx_base64?: string }> {
   if (file.size > 10 * 1024 * 1024) throw new Error('Choose a briefing smaller than 10 MB.')
-  if (file.type === 'application/pdf' || (!file.type && /\.pdf$/i.test(file.name))) return { pdf_base64: await fileToBase64(file) }
-  if (!/\.(md|markdown|txt)$/i.test(file.name)) throw new Error('Choose a PDF, Markdown (.md), or text file.')
+  if (/\.docx$/i.test(file.name)) return { docx_base64: await fileToBase64(file) }
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return { pdf_base64: await fileToBase64(file) }
+  if (!/\.(md|markdown|txt)$/i.test(file.name)) throw new Error('Choose a Word (.docx), PDF, Markdown (.md), or text file.')
   const text = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result).trim())
@@ -17,7 +18,7 @@ export async function briefingFilePayload(file: File): Promise<{ text?: string; 
 }
 
 export function briefingFilenameTitle(name: string): string {
-  return name.replace(/\.(pdf|md|markdown|txt)$/i, '').replace(/[_]+/g, ' ').trim().slice(0, 255)
+  return name.replace(/\.(docx|pdf|md|markdown|txt)$/i, '').replace(/[_]+/g, ' ').trim().slice(0, 255)
 }
 
 export function briefingLinkTitle(value: string): string | null {

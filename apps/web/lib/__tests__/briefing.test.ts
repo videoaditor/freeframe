@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { briefingFilePayload } from '../briefing'
+import { briefingFilePayload, briefingFilenameTitle } from '../briefing'
 
 it('reads Markdown as text rather than sending it as a PDF', async () => {
   const file = new File(['# Launch\nShow the logo.'], 'brief.md', { type: 'text/markdown' })
@@ -13,4 +13,13 @@ it('encodes PDFs and rejects unsupported or oversized files', async () => {
 })
 it('rejects an empty text briefing', async () => {
   await expect(briefingFilePayload(new File(['  '], 'brief.txt'))).rejects.toThrow('empty')
+})
+
+it('accepts Word documents even when the browser reports generic binary MIME', async () => {
+  const file = new File(['docx'], 'Brief.DOCX', { type: 'application/octet-stream' })
+  expect(await briefingFilePayload(file)).toEqual({ docx_base64: 'ZG9jeA==' })
+})
+
+it('uses a Word filename as the project title without its extension', () => {
+  expect(briefingFilenameTitle('example_briefing_ad_19.DOCX')).toBe('example briefing ad 19')
 })

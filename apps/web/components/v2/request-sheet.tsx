@@ -60,7 +60,9 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
     resetTitle(); setCreated(null); setTitle(''); setBriefFile(null); setBriefText(''); setError('')
     if (initialProjectId) setProjectId(initialProjectId)
   }, [open, initialProjectId, resetTitle])
-  React.useEffect(() => { if (!projectId && brands.length) setProjectId(brands[0].id) }, [brands, projectId])
+  React.useEffect(() => {
+    if (brands.length && !brands.some((brand) => brand.id === projectId)) setProjectId(brands[0].id)
+  }, [brands, projectId])
   // Only once the list has loaded - otherwise the brand-name field flashes up and steals focus.
   const needsBrand = !!projects && !brands.length
   // Focus the first thing to TYPE, not the first thing to tab to (the brand picker is prefilled).
@@ -91,6 +93,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
         brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'),
         brief_url: isUrl ? text : '',
         brief_pdf_base64: file.pdf_base64 || '',
+        ...(file.docx_base64 ? { brief_docx_base64: file.docx_base64 } : {}),
       }
       const fingerprint = JSON.stringify(payload)
       if (createIdentity.current?.payload !== fingerprint) createIdentity.current = { payload: fingerprint, key: crypto.randomUUID() }
@@ -140,7 +143,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
             </div>
           ) : (
             <form onSubmit={submit} className="mt-6 space-y-5">
-              <Field label="Brand">
+              {brands.length === 1 ? <p className="text-[15px] text-text-secondary break-words">For <span className="font-medium text-text-primary">{brands[0].name}</span></p> : <Field label="Brand">
                 {needsBrand ? (
                   <input ref={brandRef} value={newBrand} onChange={(e) => setNewBrand(e.target.value)} placeholder="e.g. Glow25"
                     className="field" aria-label="Brand name" />
@@ -150,7 +153,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
                     <Select.Portal><Select.Content position="popper" sideOffset={6} className="owner-sheet z-[60] max-h-64 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-2xl border border-border bg-bg-elevated p-1.5 shadow-xl"><Select.Viewport>{brands.map(p => <Select.Item key={p.id} value={p.id} className="relative flex min-h-11 cursor-pointer items-center gap-3 rounded-xl py-2 pl-3 pr-10 text-[0.9375rem] outline-none data-[highlighted]:bg-accent-muted data-[highlighted]:text-accent"><Select.ItemText>{p.name}</Select.ItemText><Select.ItemIndicator className="absolute right-3"><Check size={16} /></Select.ItemIndicator></Select.Item>)}</Select.Viewport></Select.Content></Select.Portal>
                   </Select.Root>
                 )}
-              </Field>
+              </Field>}
               <Field label="Project name">
                 <input ref={titleRef} value={title} onChange={(e) => { editTitle(); setTitle(e.target.value) }} placeholder="e.g. UraVia 48 · 3 hooks"
                   className="field" aria-label="Title" />
@@ -161,12 +164,12 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
                   <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-bg-primary/50 p-3 pl-4">
                     <FileText className="h-5 w-5 text-accent" />
                     <span className="min-w-0 flex-1 truncate text-[15px] text-text-primary">{briefFile.name}</span>
-                    <button type="button" onClick={() => setBriefFile(null)} className="press grid h-9 w-9 place-items-center rounded-full text-text-tertiary hover:bg-bg-hover" aria-label="Remove briefing">
+                    <button type="button" onClick={() => setBriefFile(null)} className="press grid h-11 w-11 place-items-center rounded-full text-text-tertiary hover:bg-bg-hover" aria-label="Remove briefing">
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                 ) : (
-                  <DropZone compact disabled={busy} accept={BRIEFING_ACCEPT} onFiles={([f]) => { setBriefFile(f); setError('') }} title="Drop a briefing" hint="PDF, Markdown or text · up to 10 MB" />
+                  <DropZone compact disabled={busy} accept={BRIEFING_ACCEPT} onFiles={([f]) => { setBriefFile(f); setError('') }} title="Drop a briefing" hint="Word (.docx), PDF, Markdown or text · up to 10 MB" />
                 )}
                 <textarea value={briefText} onChange={(e) => setBriefText(e.target.value)} rows={2} disabled={busy}
                   placeholder="Paste a Google Docs link, another link, or your briefing…"

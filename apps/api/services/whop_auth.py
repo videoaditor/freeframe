@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.user import User, UserStatus
+from ..models.project import Project, ProjectMember, ProjectRole, ProjectType
 from .redis_service import get_redis
 from . import campaign_access
 
@@ -32,6 +33,7 @@ class Owner:
     email: str
     expires: int
     campaign: dict | None = None
+    brand_name: str = "My brand"
 
 
 def _suite_url() -> str:
@@ -108,7 +110,9 @@ def exchange_whop_token(whop_token: str) -> Owner:
         raise HTTPException(503, 'Whop sign-in returned an incomplete response')
     owner = owner_from_token(data['token'])
     entitlement = check_entitlement(owner.token, allow_expired=True)
-    return replace(owner, campaign=entitlement.get('campaign'))
+    name = data.get('brandName')
+    return replace(owner, campaign=entitlement.get('campaign'),
+                   brand_name=name.strip()[:255] if isinstance(name, str) and name.strip() else 'My brand')
 
 
 def _matches(user: User, owner: Owner) -> bool:
@@ -145,6 +149,25 @@ def resolve_customer(db: Session, owner: Owner) -> User:
 
 def session_key(user_id) -> str:
     return f'whop:owner:{user_id}'
+
+
+def ensure_customer_workspace(db: Session, user: User, brand_name: str = 'My brand') -> Project:
+    """Reuse the verified customer's own workspace; a display name never links accounts."""
+    if user.is_staff is not False or not isinstance(user.suite_brand_id, str) or not user.suite_brand_id:
+        raise HTTPException(403, 'A verified Whop account is required')
+    # Serialize parallel Whop sign-ins and project loads so they cannot create two brands.
+    db.query(User).filter(User.id == user.id, User.deleted_at.is_(None)).with_for_update().one()
+    project = db.query(Project).filter(Project.created_by == user.id, Project.deleted_at.is_(None)) \
+        .order_by(Project.created_at, Project.id).first()
+    if project is not None:
+        db.commit()
+        return project
+    project = Project(id=uuid.uuid4(), name=brand_name.strip()[:255] or 'My brand',
+                      project_type=ProjectType.team, is_workspace=True, is_public=False, created_by=user.id)
+    db.add(project)
+    db.add(ProjectMember(project_id=project.id, user_id=user.id, role=ProjectRole.owner))
+    db.commit()
+    return project
 
 
 def gate_key(user_id) -> str:

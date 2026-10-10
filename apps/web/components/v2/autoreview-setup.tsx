@@ -93,8 +93,8 @@ export function AutoReviewSetup() {
   }
   async function readGuide() {
     const payload = guide ? await briefingFilePayload(guide) : { text: guideText.trim() }
-    if (!payload.pdf_base64 && !payload.text) throw new Error('Drop a guide or paste your brand guidelines first.')
-    if (payload.text && payload.text.length > 12000) throw new Error('Paste up to 12,000 characters of guidelines, or upload a PDF.')
+    if (!payload.pdf_base64 && !payload.docx_base64 && !payload.text) throw new Error('Drop a guide or paste your brand guidelines first.')
+    if (payload.text && payload.text.length > 12000) throw new Error('Paste up to 12,000 characters of guidelines, or upload a Word document or PDF.')
     const id = await ensureBrand()
     await save({ step: 'brand', projectId: id })
     const result = await importRules({ project_id: id, ...payload })
@@ -115,7 +115,8 @@ export function AutoReviewSetup() {
     const text = briefText.trim()
     const isUrl = /^https?:\/\//i.test(text)
     const payload = { project_id: id, title: title.trim(), receive_iterations: false,
-      brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'), brief_url: isUrl ? text : '', brief_pdf_base64: file.pdf_base64 || '' }
+      brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'), brief_url: isUrl ? text : '', brief_pdf_base64: file.pdf_base64 || '',
+      ...(file.docx_base64 ? { brief_docx_base64: file.docx_base64 } : {}) }
     const fingerprint = JSON.stringify(payload)
     if (identity.current?.fingerprint !== fingerprint) identity.current = { fingerprint, key: crypto.randomUUID() }
     const result = await createRequest({ ...payload, idempotency_key: identity.current.key })
@@ -156,7 +157,7 @@ export function AutoReviewSetup() {
             </Select.Root>
           </div> : <label className={styles.label}>Brand name<input className={styles.input} value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="e.g. Northline" maxLength={255} disabled={busy} /></label>}
 
-          {guide ? <ChosenFile file={guide} remove={() => { setGuide(null); setGuideRead(false) }} disabled={busy} /> : <DropZone compact accept={BRIEFING_ACCEPT} disabled={busy} title="Drop your brand kit" hint="PDF, Markdown or text · up to 10 MB" onFiles={([f]) => { setGuide(f); setGuideRead(false); setError('') }} />}
+          {guide ? <ChosenFile file={guide} remove={() => { setGuide(null); setGuideRead(false) }} disabled={busy} /> : <DropZone compact accept={BRIEFING_ACCEPT} disabled={busy} title="Drop your brand kit" hint="Word (.docx), PDF, Markdown or text · up to 10 MB" onFiles={([f]) => { setGuide(f); setGuideRead(false); setError('') }} />}
           {!guide && <label className={styles.label}>Or paste your guidelines<textarea aria-label="Brand guidelines" className={styles.input} rows={3} value={guideText} disabled={busy} onChange={e => { setGuideText(e.target.value); setGuideRead(false) }} placeholder="Always show our logo on the end card…" /></label>}
           {(guide || guideText.trim()) && !guideRead && <button className={styles.primary} disabled={busy} onClick={() => void run(readGuide)}>{busy ? 'Reading your guide…' : 'Read my brand kit'} <ArrowRight size={18} /></button>}
           {notice && <p role="status" className={styles.note}>{notice}</p>}

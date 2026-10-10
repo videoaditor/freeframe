@@ -18,6 +18,7 @@ from ..services.storage import project_storage_used_bytes
 from ..services.permissions import effective_project_role, implicit_project_role, higher_role, is_staff
 from ..config import settings
 from ..services import automation_share
+from ..services.whop_auth import ensure_customer_workspace
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -183,6 +184,10 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from sqlalchemy import or_
+
+    # Also repair accounts signed in before automatic brand provisioning was introduced.
+    if current_user.is_staff is False and isinstance(current_user.suite_brand_id, str) and current_user.suite_brand_id:
+        ensure_customer_workspace(db, current_user)
 
     # Get memberships for current user
     memberships = db.query(ProjectMember).filter(

@@ -185,12 +185,12 @@ export async function tryReview(
 // ── Owner ──────────────────────────────────────────────────────────────────────
 
 export const listRequests = () => api.get<FileRequest[]>('/requests')
-export const createRequest = (body: { project_id: string; title: string; idempotency_key?: string; brief_text?: string; brief_url?: string; brief_pdf_base64?: string; receive_iterations?: boolean; aspect_ratio?: string }) =>
+export const createRequest = (body: { project_id: string; title: string; idempotency_key?: string; brief_text?: string; brief_url?: string; brief_pdf_base64?: string; brief_docx_base64?: string; receive_iterations?: boolean; aspect_ratio?: string }) =>
   api.post<FileRequest>('/requests', body)
 export const revokeRequest = (id: string) => api.delete(`/requests/${id}`)
 export const getTimeSaved = (days = 30) => api.get<TimeSaved>(`/insights/time-saved?days=${days}`)
 export const getRules = (projectId: string) => api.get<{ brand: string; rules: RuleRow[]; suggestions: SuggestionRow[] }>(`/insights/rules?project_id=${projectId}`)
-export const importRules = (body: { project_id: string; text?: string; url?: string; pdf_base64?: string }) =>
+export const importRules = (body: { project_id: string; text?: string; url?: string; pdf_base64?: string; docx_base64?: string }) =>
   api.post<{ drafted: number; found: number }>('/insights/rules/import', body)
 
 export const decideSuggestion = (body: { project_id: string; suggestion_id: string; action: 'accept' | 'dismiss' }) =>

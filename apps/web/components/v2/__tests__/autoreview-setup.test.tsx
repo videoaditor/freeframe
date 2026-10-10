@@ -134,3 +134,20 @@ it('uses the selected owned brand when continuing from the styled picker', async
   expect(await screen.findByRole('textbox', { name: 'Project name' })).toBeInTheDocument()
   expect(api.patch).toHaveBeenLastCalledWith('/auth/me/preferences', { autoreview_setup: expect.objectContaining({ projectId: secondBrand.id, step: 'brief' }) })
 })
+
+it('reads a Word brand guide during first-time setup', async () => {
+  await mount()
+  fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [new File(['docx'], 'guide.docx')] } })
+  fireEvent.click(screen.getByRole('button', { name: 'Read my brand kit' }))
+  await waitFor(() => expect(importRules).toHaveBeenCalledWith({ project_id: brand.id, docx_base64: 'ZG9jeA==' }))
+})
+
+it('includes a Word briefing in the first upload link', async () => {
+  await mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Skip brand kit' }))
+  await screen.findByRole('textbox', { name: 'Project name' })
+  fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [new File(['docx'], 'Launch brief.docx')] } })
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('Launch brief'))
+  fireEvent.click(screen.getByRole('button', { name: 'Create upload link' }))
+  await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ brief_docx_base64: 'ZG9jeA==' })))
+})

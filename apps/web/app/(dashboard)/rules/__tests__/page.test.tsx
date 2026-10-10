@@ -7,7 +7,7 @@ import { decideSuggestion, getRules, importRules } from '@/lib/platform'
 import { ToastProvider } from '@/components/shared/toast'
 
 vi.mock('@/lib/api', () => ({ api: { get: vi.fn() } }))
-vi.mock('@/lib/platform', () => ({ getRules: vi.fn(), importRules: vi.fn(), decideSuggestion: vi.fn(), fileToBase64: vi.fn() }))
+vi.mock('@/lib/platform', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/platform')>(), getRules: vi.fn(), importRules: vi.fn(), decideSuggestion: vi.fn() }))
 vi.mock('@/components/v2/brand-logo', () => ({ BrandLogo: () => null }))
 vi.mock('@/hooks/use-page-title', () => ({ usePageTitle: vi.fn() }))
 vi.mock('@/stores/auth-store', () => ({ useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: { is_staff: false } }) }))
@@ -135,4 +135,13 @@ it('shows a brand-specific QA example without the removed helper copy', async ()
   expect(screen.queryByText(/Write it how you’d say it/)).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole('combobox', { name: 'Brand' }), { target: { value: 'p2' } })
   expect(await screen.findByPlaceholderText('Always show the Sunday Studio logo on the end card.')).toBeInTheDocument()
+})
+
+
+it('accepts Word guidelines through the same document intake as request briefs', async () => {
+  render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ToastProvider><RulesPage /></ToastProvider></SWRConfig>)
+  await screen.findByText('Import guidelines')
+  fireEvent.click(screen.getByRole('button', { name: 'Import guidelines' }))
+  fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [new File(['word'], 'guide.docx')] } })
+  await waitFor(() => expect(importRules).toHaveBeenCalledWith({ project_id: 'p1', docx_base64: 'd29yZA==' }))
 })

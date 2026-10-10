@@ -83,3 +83,34 @@ it('starts a new assignment when the sheet is reopened with the same brief', asy
   await waitFor(()=>expect(createRequest).toHaveBeenCalledTimes(2))
   expect(vi.mocked(createRequest).mock.calls[1][0].idempotency_key).not.toBe(first)
 })
+
+
+it('shows the only brand as context without asking the owner to choose it', async () => {
+  await mount()
+  expect(screen.queryByRole('combobox', { name: 'Brand' })).not.toBeInTheDocument()
+  expect(screen.getByText('Northline').parentElement).toHaveTextContent('For Northline')
+})
+
+it('passes a Word brief to the server for document parsing', async () => {
+  const view = await mount()
+  fireEvent.change(view.container.ownerDocument.querySelector('input[type=file]')!, { target: { files: [new File(['docx'], 'brief.docx')] } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ brief_docx_base64: 'ZG9jeA==' })))
+})
+
+
+it('uses the remaining brand when the previously selected brand is no longer available', async () => {
+  vi.mocked(api.get).mockResolvedValue([{ id: 'brand1', name: 'Northline' }, { id: 'brand2', name: 'Sunday Studio' }])
+  const cache = new Map()
+  const config = { provider: () => cache, dedupingInterval: 0 }
+  const view = render(<SWRConfig value={config}><RequestSheet open initialProjectId="brand2" onOpenChange={vi.fn()} /></SWRConfig>)
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Brand' })).toHaveTextContent('Sunday Studio'))
+  view.rerender(<SWRConfig value={config}><RequestSheet open={false} initialProjectId="brand2" onOpenChange={vi.fn()} /></SWRConfig>)
+  vi.mocked(api.get).mockResolvedValue([{ id: 'brand1', name: 'Northline' }])
+  view.rerender(<SWRConfig value={config}><RequestSheet open initialProjectId="brand2" onOpenChange={vi.fn()} /></SWRConfig>)
+  await waitFor(() => expect(screen.queryByRole('combobox', { name: 'Brand' })).not.toBeInTheDocument())
+  expect(screen.getByText('Northline').parentElement).toHaveTextContent('For Northline')
+  fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'Launch' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'brand1' })))
+})
