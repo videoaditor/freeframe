@@ -149,6 +149,12 @@ services:
       --timeout 120
       --graceful-timeout 30"
     stop_grace_period: 45s
+    # dispatch-agent calls the api directly (formerly 127.0.0.1:3091 on aditor-platform).
+    networks:
+      default:
+      coolify:
+        aliases:
+          - freeframe-api
     expose:
       - "8000"
     healthcheck:
