@@ -45,6 +45,7 @@ from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..models.checklist_binding import ChecklistBinding
 from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
+from ..services.briefing import docx_text, MAX_DOCUMENT_BASE64
 from ..services.review_timing import freeze_submission_timing
 from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
 from ..services.permissions import effective_project_role, require_project_role
@@ -128,6 +129,7 @@ class RequestCreate(BaseModel):
     brief_text: str = ""
     brief_url: str = ""
     brief_pdf_base64: str = Field(default="", max_length=15_000_000)
+    brief_docx_base64: str = Field(default="", max_length=MAX_DOCUMENT_BASE64)
     idempotency_key: Optional[uuid.UUID] = None
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
 
@@ -164,10 +166,11 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
 
+    brief_text = '\n\n'.join(filter(None, [docx_text(body.brief_docx_base64) if body.brief_docx_base64 else '', body.brief_text]))
     brand = project_brand(db, project)
     from ..services.project_brands import require_card_reference
     require_card_reference(project, body.brief_url)
-    intent = {'brand': brand, 'title': body.title.strip(), 'brief_text': body.brief_text,
+    intent = {'brand': brand, 'title': body.title.strip(), 'brief_text': brief_text,
         'brief_url': body.brief_url, 'brief_pdf_base64': body.brief_pdf_base64,
         'expires_in_days': body.expires_in_days,
         **({'receive_iterations': True, 'aspect_ratio': body.aspect_ratio,
@@ -190,7 +193,7 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         if body.iteration_plan_token:
             try:
                 manifest=read_plan(body.iteration_plan_token,str(current_user.id),str(project.id),
-                    {'brief_text':body.brief_text,'brief_url':body.brief_url,'brief_pdf_base64':body.brief_pdf_base64})
+                    {'brief_text':brief_text,'brief_url':body.brief_url,'brief_pdf_base64':body.brief_pdf_base64})
             except ValueError as error: raise HTTPException(422,str(error)) from error
     folder = Folder(project_id=project.id, name=body.title.strip(),
                     description=(body.brief_url or "File request")[:2000], created_by=current_user.id)
@@ -204,7 +207,7 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
     db.add(link)
     db.flush()
     brand = project_brand(db, project)
-    excerpt = (body.brief_text or body.brief_url or ("PDF briefing" if body.brief_pdf_base64 else "")).strip()[:500] or None
+    excerpt = (brief_text or body.brief_url or ("PDF briefing" if body.brief_pdf_base64 else "")).strip()[:500] or None
     req = UploadRequest(
         token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,
         created_by=current_user.id, title=body.title.strip(), brand_slug=brand,
@@ -212,7 +215,7 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         receive_iterations=body.receive_iterations, iteration_manifest=manifest,
         iteration_state={'submitted':False,'structured':bool(body.iteration_plan_token),
             'brief_input':{'url':body.brief_url,'pdf':body.brief_pdf_base64}} if body.receive_iterations else None,
-        iteration_mode='components',iteration_ratio=body.aspect_ratio,iteration_brief=body.brief_text,
+        iteration_mode='components',iteration_ratio=body.aspect_ratio,iteration_brief=brief_text,
         iteration_owner_id=project.created_by if body.receive_iterations else None,
         expires_at=(datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)) if body.expires_in_days else None,
     )
@@ -388,14 +391,16 @@ class RulesImport(BaseModel):
     text: str = ""
     url: str = ""
     pdf_base64: str = ""
+    docx_base64: str = Field(default="", max_length=MAX_DOCUMENT_BASE64)
 
 
 @router.post("/insights/rules/import")
 def import_rules(body: RulesImport, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     brand = _project_brand(db, body.project_id, current_user, ProjectRole.owner)
-    if not (body.text.strip() or body.url.strip() or body.pdf_base64):
-        raise HTTPException(status_code=400, detail="Drop a PDF, paste text or a link.")
-    r = review_bridge.import_rules(brand, body.text, body.url, body.pdf_base64)
+    text = '\n\n'.join(filter(None, [docx_text(body.docx_base64) if body.docx_base64 else '', body.text]))
+    if not (text.strip() or body.url.strip() or body.pdf_base64):
+        raise HTTPException(status_code=400, detail="Choose a Word document or PDF, or paste text or a link.")
+    r = review_bridge.import_rules(brand, text, body.url, body.pdf_base64)
     if r is None:
         raise HTTPException(status_code=503, detail="Auto Review could not read that right now.")
     return r

@@ -10,7 +10,8 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { useToast } from '@/components/shared/toast'
-import { decideSuggestion, fileToBase64, getRules, importRules } from '@/lib/platform'
+import { decideSuggestion, getRules, importRules } from '@/lib/platform'
+import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
 import type { Project } from '@/types'
 import { BrandLogo } from '@/components/v2/brand-logo'
 import { DropZone } from '@/components/v2/drop-zone'
@@ -54,8 +55,7 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
   async function read(payload: { text?: string; url?: string } | File) {
     setReading(true); setImportError('')
     try {
-      if (payload instanceof File && payload.type !== 'application/pdf' && !(!payload.type && /\.pdf$/i.test(payload.name))) throw new Error('Choose a PDF, or paste your guidelines as text.')
-      const body = payload instanceof File ? { pdf_base64: await fileToBase64(payload) } : payload
+      const body = payload instanceof File ? await briefingFilePayload(payload) : payload
       const result = await importRules({ project_id: projectId, ...body })
       if (!mounted.current) return
       toast.success(result.drafted ? `${result.drafted} rules ready for your approval.` : 'No new rules found. Your existing rules are unchanged.')
@@ -106,7 +106,7 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
       <aside className="playbook-brand-kit min-w-0"><BrandLogo projectId={projectId} brandName={brandName} /><p className="mt-5 px-1 text-[0.8125rem] leading-relaxed text-text-secondary">Add a quick note whenever something changes. Each suggestion comes to you for approval.</p></aside>
     </div>
     <Dialog.Root open={importOpen} onOpenChange={setImportOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" /><Dialog.Content className="owner-sheet playbook-dialog sheet-in"><div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-2xl font-semibold tracking-tight">Import guidelines</Dialog.Title><Dialog.Description className="mt-2 text-[0.9375rem] text-text-secondary">For {brandName}. You approve every suggested rule.</Dialog.Description></div><Dialog.Close aria-label="Close guidelines" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div><div className="mt-6">
-      <DropZone compact accept="application/pdf" disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Drop your brand guide'} hint="PDF · drop it here or choose a file" />
+      <DropZone compact accept={BRIEFING_ACCEPT} disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Drop your brand guide'} hint="Word (.docx), PDF, Markdown or text · up to 10 MB" />
       {reading && <p role="status" className="mt-4 text-[0.875rem] text-text-secondary">Finding the details that matter…</p>}{importError && <p role="alert" className="mt-4 text-[0.875rem] text-text-secondary">{importError}</p>}
     </div></Dialog.Content></Dialog.Portal></Dialog.Root>
   </>

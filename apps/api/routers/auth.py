@@ -16,7 +16,7 @@ from ..schemas.auth import (
     AcceptInviteRequest, InviteInfoResponse,
     ChangePasswordRequest,
 )
-from ..services.whop_auth import exchange_whop_token, resolve_customer, store_owner_session, require_customer_entitlement
+from ..services.whop_auth import exchange_whop_token, resolve_customer, store_owner_session, require_customer_entitlement, ensure_customer_workspace
 from ..middleware.auth import get_identity_user
 from ..services.auth_service import (
     hash_password, verify_password,
@@ -348,6 +348,8 @@ def whop_session(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(401, "Open Aditor Review from Whop to sign in")
     owner = exchange_whop_token(token)
     user = resolve_customer(db, owner)
+    if not owner.campaign or not (owner.campaign.get("previewOnly") and owner.campaign.get("state") == "expired"):
+        ensure_customer_workspace(db, user, owner.brand_name)
     store_owner_session(user, owner)
     return TokenResponse(
         access_token=create_access_token(str(user.id), token_version=user.token_version),

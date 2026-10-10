@@ -290,3 +290,80 @@ def test_paid_upgrade_updates_trusted_campaign(monkeypatch, redis):
     monkeypatch.setattr(service, '_post', lambda *a, **k: {'allow': True, 'campaign': trial_context(paid=True)})
     service.require_customer_entitlement(user)
     assert user.suite_campaign['previewOnly'] is False
+
+
+def test_first_whop_signin_starts_with_one_private_brand_workspace(client, mock_db, monkeypatch, redis):
+    from apps.api.models.project import Project, ProjectMember, ProjectRole
+    calls = stub_suite(monkeypatch)
+    mock_db.order_by.return_value = mock_db
+    whop = jwt.encode({'aud': 'app_review', 'exp': int(time.time()) + 60}, 'test', algorithm='HS256')
+    result = client.post('/auth/whop', headers={'x-whop-user-token': whop})
+    assert result.status_code == 200
+    projects = [c.args[0] for c in mock_db.add.call_args_list if isinstance(c.args[0], Project)]
+    assert len(projects) == 1
+    project = projects[0]
+    assert project.name == 'My brand' and project.is_workspace is True and project.is_public is False
+    member = next(c.args[0] for c in mock_db.add.call_args_list if isinstance(c.args[0], ProjectMember))
+    assert member.project_id == project.id and member.user_id == project.created_by
+    assert member.role == ProjectRole.owner
+
+
+def test_workspace_reuses_only_existing_owned_project_and_preserves_name(mock_db):
+    from apps.api.models.project import Project
+    user = customer()
+    project = Project(id=uuid.uuid4(), name='Fortea', created_by=user.id)
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.return_value = project
+    result = service.ensure_customer_workspace(mock_db, user, 'Different display name')
+    assert result is project and result.name == 'Fortea'
+    mock_db.add.assert_not_called()
+    assert 'created_by' in str(mock_db.filter.call_args_list[-1].args[0])
+    assert 'deleted_at' in str(mock_db.filter.call_args_list[-1].args[1])
+    mock_db.with_for_update.assert_called_once()
+
+
+def test_workspace_creation_uses_verified_name_and_private_identity(mock_db):
+    from apps.api.models.project import Project, ProjectMember
+    user = customer()
+    mock_db.order_by.return_value = mock_db
+    project = service.ensure_customer_workspace(mock_db, user, '  Fortea  ')
+    assert project.name == 'Fortea' and project.created_by == user.id
+    assert project.is_public is False
+    member = next(c.args[0] for c in mock_db.add.call_args_list if isinstance(c.args[0], ProjectMember))
+    assert member.user_id == user.id
+
+
+def test_exchange_brand_name_is_display_only_and_not_read_from_jwt(monkeypatch):
+    stub_suite(monkeypatch, owner_token=token(brandName='Untrusted claim name'))
+    whop = jwt.encode({'aud': 'app_review', 'exp': int(time.time()) + 60}, 'test', algorithm='HS256')
+    assert service.exchange_whop_token(whop).brand_name == 'My brand'
+
+
+def test_whop_docx_request_works_when_proxy_removes_authorization(client, mock_db, monkeypatch, redis):
+    from types import SimpleNamespace
+    from apps.api.middleware import auth
+    from apps.api.models.project import Project
+    from apps.api.routers import requests as routes
+    from apps.api.tests.test_briefing_docx import docx
+    user = customer()
+    mock_db.first.return_value = user
+    stub_suite(monkeypatch)
+    whop = jwt.encode({'aud': 'app_review', 'exp': int(time.time()) + 60}, 'test', algorithm='HS256')
+    signed_in = client.post('/auth/whop', headers={'x-whop-user-token': whop})
+    assert signed_in.status_code == 200
+    monkeypatch.setattr(auth, 'get_user_by_id', lambda *args: user)
+    project = Project(id=uuid.uuid4(), created_by=user.id, name='Fortea')
+    mock_db.first.return_value = project
+    mock_db.populate_existing.return_value = mock_db
+    mock_db.with_for_update.return_value = mock_db
+    monkeypatch.setattr(routes, 'require_project_role', lambda *a: None)
+    monkeypatch.setattr(routes, 'project_brand', lambda *a: 'cust-owned')
+    monkeypatch.setattr(routes, '_request_out', lambda req, *a, **kw: {'excerpt': req.brief_excerpt})
+    binding = MagicMock(return_value=SimpleNamespace(id=uuid.uuid4(), request_id=None))
+    monkeypatch.setattr(routes, 'reserve_binding', binding)
+    monkeypatch.setattr(routes, 'dispatch_binding', lambda *a: None)
+    result = client.post('/requests', headers={'X-FreeFrame-Token': signed_in.json()['access_token']},
+                         json={'project_id': str(project.id), 'title': 'Launch', 'brief_docx_base64': docx()})
+    assert result.status_code == 201, result.text
+    assert result.json()['excerpt'].startswith('Launch brief')
+    assert binding.call_args.args[4]['brief_text'].startswith('Launch brief')
