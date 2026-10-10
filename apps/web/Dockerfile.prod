@@ -23,6 +23,12 @@ ENV NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED=$NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED
 # to true to show it again, e.g. while the gate is down.
 ARG NEXT_PUBLIC_LEGACY_LOGIN_ENABLED=false
 ENV NEXT_PUBLIC_LEGACY_LOGIN_ENABLED=$NEXT_PUBLIC_LEGACY_LOGIN_ENABLED
+# Whether this instance has registered with the central gate (auth.aditor.ai). Gates
+# middleware.ts's server-side /login bounce: off by default so an instance that hasn't
+# configured a gate keeps showing the password break-glass form instead of 307ing
+# into a 404. Not a secret: it only toggles which branch of already-public UI renders.
+ARG NEXT_PUBLIC_OIDC_ENABLED=false
+ENV NEXT_PUBLIC_OIDC_ENABLED=$NEXT_PUBLIC_OIDC_ENABLED
 # Base URL of the craft-review service behind the /handin route. Empty by
 # default, which turns that route off - a self-hoster who is not Aditor gets no
 # page pointing at Aditor's reviewer. Not a secret: it is a public hostname the

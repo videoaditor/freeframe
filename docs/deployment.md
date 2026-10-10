@@ -263,6 +263,7 @@ All environment variables are documented in [`.env.example`](../.env.example). K
 | `OIDC_CLIENT_ID` | This app's client id on that gate | `freeframe-web` |
 | `ADITOR_AUTH_FREEFRAME_CLIENT_SECRET` | That client's secret (client_secret_basic) | (required with `OIDC_ISSUER`) |
 | `NEXT_PUBLIC_LEGACY_LOGIN_ENABLED` (web build arg) | Break-glass: `true` shows password sign-in on `/login` again alongside the gate | `false` |
+| `NEXT_PUBLIC_OIDC_ENABLED` (web build arg) | `true` once this instance has registered with a gate - lets `middleware.ts` 307 a signed-out `/login` hit straight there (and a signed-in one straight to its destination) before any HTML renders | `false` |
 | `API_WORKERS` | Gunicorn worker processes | `4` |
 | `TRANSCODING_CONCURRENCY` | Parallel transcoding jobs | `2` |
 | `EMAIL_CONCURRENCY` | Parallel email jobs | `2` |

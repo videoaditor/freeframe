@@ -37,6 +37,9 @@ services:
       args:
         NEXT_PUBLIC_PASSWORD_LOGIN_ENABLED: "false"
         NEXT_PUBLIC_LEGACY_LOGIN_ENABLED: "false"
+        # The gate (auth.aditor.ai) is registered for this instance, so /login's
+        # middleware bounce (spec #78) is safe to turn on here.
+        NEXT_PUBLIC_OIDC_ENABLED: "true"
         # OFF until the editors and the team have been told. Flip to "true" to switch it on -
         # that is the whole change, and it is one line, deliberately.
         #

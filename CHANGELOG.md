@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   last client-side post-callback navigation (the native Google callback page) in favor of the
   gate's own server-side redirect, and by not painting the login form while an existing session
   cookie or the initial setup/gate check is still resolving.
+- `/login` no longer flashes the Autoreview logo/card before bouncing away, in either direction:
+  `apps/web/app/(auth)/layout.tsx` server-renders that shell unconditionally, so the earlier
+  client-only fix above still painted it for a blink on both a cold signed-out hit and the
+  post-gate-callback return. `apps/web/middleware.ts` now does both redirects server-side, before
+  any HTML renders - behind the new `NEXT_PUBLIC_OIDC_ENABLED` build flag so an instance without a
+  registered gate still shows the password break-glass form instead of 307ing into a 404. The
+  client-side checks in `page.tsx` stay as a fallback.
 - Central-gate (OIDC) sign-in: the callback now verifies the id_token's `at_hash` claim (passing
   the access token through to `jose`'s decoder, as the gate's tokens always carry one), fixing the
   `gate_sign_in_failed` error every gate sign-in hit in production. A rejected token's real cause
