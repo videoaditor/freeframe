@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     # not broken, which is the harder failure to notice.
     automation_share_webhook_url: str = ""
     automation_share_webhook_secret: str = ""
+    # Outbound events to the hub when a client asks for changes (a guest comment on a hand-in
+    # version) or an editor answers (a new version completed via the hand-in lane). FreeFrame stays
+    # "dumb": it only emits these, the hub owns the ping/escalation loop. Empty (the default) means
+    # nothing is sent. Separate from automation_share_webhook_* above - different consumer, different
+    # payloads.
+    hub_events_webhook_url: str = ""
+    hub_events_webhook_secret: str = ""
     # Extra browser origins allowed by CORS, comma-separated (in addition to the
     # frontend + localhost defaults). Set to "*" to allow any origin — handy for
     # testing on a LAN via a machine's IP; do not use "*" in production.

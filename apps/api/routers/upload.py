@@ -189,6 +189,9 @@ def complete_upload(
     version.processing_status = ProcessingStatus.processing
     db.commit()
 
+    from ..services import hub_events
+    hub_events.announce_revision_submitted(db, db.get(Asset, body.asset_id), body.version_id)
+
     # Trigger transcoding in background (task dispatched in Step 7)
     background_tasks.add_task(_trigger_processing, body.asset_id, body.version_id)
 

@@ -1094,6 +1094,9 @@ def guest_comment(
     db.add(activity)
     db.commit()
 
+    from ..services import hub_events
+    hub_events.announce_client_comment(db, comment, asset, actor_name)
+
     return _build_comment_response(comment, db)
 
 
