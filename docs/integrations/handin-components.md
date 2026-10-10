@@ -45,7 +45,7 @@ Only authenticated project owners can list/download private originals through Fr
 
 Do not paste or commit credentials. Apply the new forward Alembic migration before starting new API/worker code. Run compatible AutoReview/Mixer adapters first, then API/worker/beat, then enable the frontend build flag. The runtime flag alone cannot alter a previously built Next.js bundle.
 
-The existing n8n feedback views and automation webhook contracts are unchanged. This path uses direct service adapters plus durable Celery tasks. A generic webhook is not needed for each hook/body.
+The existing n8n feedback views and automation webhook contracts are unchanged. This path uses direct service adapters plus durable Celery tasks for part-level work; a generic webhook is not needed for each hook/body. A separate outbound hub-events webhook does fire on guest comments and completions for hand-in requests created here - see `apps/api/services/hub_events.py` and the `HUB_EVENTS_WEBHOOK_URL` entry in CHANGELOG.md.
 
 ## HTTP contracts
 
