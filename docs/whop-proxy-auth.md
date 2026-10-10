@@ -39,3 +39,27 @@ Suite should return `brandName` from `/v1/auth/owner` for the initial workspace 
 proxy-safe session headers and central-gate build configuration. Acceptance: a new Whop member sees
 one brand, a repeated sign-in keeps that same workspace, and a Word briefing creates a request with
 the extracted full text in its frozen checklist input (not just the 500-character display excerpt).
+
+## Briefing text, links and recovery
+
+Request briefings, including setup, accept an attachment plus one document link and notes. Brand
+guidelines offer a file or pasted input; pasted input may combine one source link and notes. Put an
+arbitrary source URL on its own line; explicit Google Docs and document-file URLs are also recognized
+inside notes. Product URLs and inline Drive video/folder references stay in the instructions.
+Multiple document sources are rejected before submission so no source is silently discarded.
+
+TXT supports UTF-8 (with or without BOM), UTF-16 with BOM and common Windows-1252 text. Empty files,
+binary controls and unmarked UTF-16 containing NUL bytes need a readable UTF-8 export. The file cap is
+10 MB; the complete briefing text cap is 20,000 characters, and guidelines are capped at 12,000.
+The API also checks the combined Word text and notes before creating a request or importing rules.
+
+The review service must support public Google Docs exports and public Drive TXT/PDF downloads.
+Sharing must allow anyone with the link; a private sign-in page is not a briefing. Drive folders and
+linked Word/ZIP files are not supported as source documents: upload Word directly instead. The
+guideline bridge exposes only the safe `guide-limit` and `briefing-unavailable` input-error codes.
+
+Checklist preparation appears beside the saved upload link. Late failures also appear on the
+existing request card; opening its warning shows the same details and retry. After fixing a linked
+document's sharing, Try again reuses the saved request and source. It does not replace attachments
+or create another request. File sharing and media hand-in remain usable during preparation failure.
+Both API and web need rebuilding; there is no migration, dependency or environment change.

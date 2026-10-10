@@ -85,7 +85,7 @@ it('keeps text after a failed import and sends a URL with the right project', as
   expect(screen.getByRole('textbox', { name: 'Quick rule' })).toHaveValue('https://example.test/guide')
   fireEvent.click(screen.getByRole('button', { name: 'Add for approval' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  expect(importRules).toHaveBeenLastCalledWith({ project_id: 'p1', url: 'https://example.test/guide' })
+  expect(importRules).toHaveBeenLastCalledWith({ project_id: 'p1', text: '', url: 'https://example.test/guide' })
 })
 
 it('isolates late imports and rule dialogs when the brand changes', async () => {
@@ -144,4 +144,11 @@ it('accepts Word guidelines through the same document intake as request briefs',
   fireEvent.click(screen.getByRole('button', { name: 'Import guidelines' }))
   fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [new File(['word'], 'guide.docx')] } })
   await waitFor(() => expect(importRules).toHaveBeenCalledWith({ project_id: 'p1', docx_base64: 'd29yZA==' }))
+})
+
+it('audit rules separates a Google source link and note', async () => {
+  mount()
+  fireEvent.change(await screen.findByRole('textbox',{name:'Quick rule'}),{target:{value:'https://docs.google.com/document/d/test/edit\nKeep the logo visible.'}})
+  fireEvent.click(screen.getByRole('button',{name:'Add for approval'}))
+  await waitFor(() => expect(importRules).toHaveBeenCalledWith({project_id:'p1',url:'https://docs.google.com/document/d/test/edit',text:'Keep the logo visible.'}))
 })

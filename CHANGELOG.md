@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   password sign-in) is now the sole way to sign in to FreeFrame.
 
 ### Fixed
+- Preserve briefing notes alongside one document link or attachment in requests, setup and brand rules. Read common TXT encodings correctly and reject empty, unreadable or oversized text with clear limits.
+- Show failed briefing preparation on request cards and shared-link dialogs, with a retry for the same request; file uploads remain available.
 - Accept Word (`.docx`) briefings and brand guidelines up to 10 MB, preserving their text in the review checklist and removing the extension from suggested project names.
 - Start Whop customers with one private brand workspace automatically, reuse existing workspaces, and show a single brand as context when requesting files.
 - Killed the post-login flash (dashboard → login → dashboard) after a gate sign-in by removing the

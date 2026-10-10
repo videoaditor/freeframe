@@ -6,6 +6,7 @@ lives here and never reaches a browser.
 FAIL OPEN, everywhere. A review service that is down, slow or unconfigured must never stop an
 owner creating a request or an editor handing in: every call returns None on any failure, and
 callers treat None as "not reviewed" - which the owner sees as unavailable while files remain accessible.
+Guideline imports may return two allowlisted input-error codes so owners can correct the source.
 """
 import logging
 import re
@@ -22,7 +23,7 @@ def is_configured() -> bool:
     return bool(settings.review_bridge_url.strip() and settings.review_bridge_secret.strip())
 
 
-def _call(method: str, path: str, *, json: Any = None, params: Optional[dict] = None, timeout: float = 20) -> Optional[dict]:
+def _call(method: str, path: str, *, json: Any = None, params: Optional[dict] = None, timeout: float = 20, input_errors: frozenset[str] = frozenset()) -> Optional[dict]:
     if not is_configured():
         return None
     try:
@@ -36,6 +37,11 @@ def _call(method: str, path: str, *, json: Any = None, params: Optional[dict] = 
         )
         if r.status_code >= 400:
             logger.warning("review bridge %s %s -> %s", method, path, r.status_code)
+            if r.status_code == 400 and input_errors:
+                body = r.json()
+                code = body.get('error') if isinstance(body, dict) else None
+                if isinstance(code, str) and code in input_errors:
+                    return {'error': code}
             return None
         return r.json()
     except Exception:  # noqa: BLE001 - fail open by design, see module docstring
@@ -92,7 +98,7 @@ def rules(brand: str) -> Optional[dict]:
 def import_rules(brand: str, text: str = "", url: str = "", pdf_base64: str = "") -> Optional[dict]:
     return _call("POST", "/api/v1/rules/import", json={
         "brand": brand, "text": text, "url": url, "pdf_base64": pdf_base64,
-    }, timeout=90)
+    }, timeout=90, input_errors=frozenset({'guide-limit', 'briefing-unavailable'}))
 
 
 def decide_suggestion(brand: str, suggestion_id: str, action: str, by: str) -> Optional[dict]:

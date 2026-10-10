@@ -2,6 +2,7 @@
 import base64
 import binascii
 import io
+import re
 import xml.etree.ElementTree as ET
 import zipfile
 import zlib
@@ -10,6 +11,20 @@ from fastapi import HTTPException
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_DOCUMENT_BASE64 = 4 * ((MAX_DOCUMENT_BYTES + 2) // 3)
+BRIEFING_TEXT_LIMIT = 20_000
+GUIDELINE_TEXT_LIMIT = 12_000
+
+
+def validate_briefing_text(text: str, *, guidelines: bool = False) -> str:
+    if re.search(r'[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]', text):
+        raise HTTPException(400, 'This document contains unreadable characters. Save it as UTF-8 or paste readable text.')
+    limit = GUIDELINE_TEXT_LIMIT if guidelines else BRIEFING_TEXT_LIMIT
+    if len(text) > limit:
+        label = 'Guidelines' if guidelines else 'Briefings'
+        raise HTTPException(400, f'{label} can contain up to {limit:,} characters. Shorten the text and try again.')
+    return text
+
+
 WORD_NAMESPACE = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 

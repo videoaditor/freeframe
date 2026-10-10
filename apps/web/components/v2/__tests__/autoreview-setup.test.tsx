@@ -151,3 +151,31 @@ it('includes a Word briefing in the first upload link', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create upload link' }))
   await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ brief_docx_base64: 'ZG9jeA==' })))
 })
+
+it('audit setup treats a pasted Google document as a source, preserving notes', async () => {
+  await mount()
+  fireEvent.change(screen.getByRole('textbox', { name: 'Brand guidelines' }), { target: { value: 'https://docs.google.com/document/d/test/edit\nKeep the logo visible.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Read my brand kit' }))
+  await waitFor(() => expect(importRules).toHaveBeenCalledWith({project_id:brand.id,url:'https://docs.google.com/document/d/test/edit',text:'Keep the logo visible.'}))
+})
+it('audit setup rejects a TXT guide above the actual12000-character rule-extraction limit clearly', async () => {
+  await mount()
+  const text='Keep the product visible. '.repeat(600)
+  fireEvent.change(document.querySelector('input[type=file]')!, {target:{files:[new File([text],'guide.txt')]}})
+  fireEvent.click(screen.getByRole('button', { name: 'Read my brand kit' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Guidelines can contain up to 12,000 characters')
+  expect(importRules).not.toHaveBeenCalled()
+})
+
+it('shows preparation failure and retries the saved setup link without creating another request', async () => {
+  const failed={id:'b1',status:'failed',requirements:[],limitations:[],error_code:'briefing-unavailable'}
+  useAuthStore.setState({user:{...user,preferences:{autoreview_setup:{version:1,step:'share',projectId:brand.id,requestId:request.id}}}})
+  vi.mocked(listRequests).mockResolvedValue([{...request,checklist_binding_id:'b1',checklist:failed} as never])
+  vi.mocked(api.get).mockImplementation(async path => path === '/checklists/b1' ? failed : [brand])
+  vi.mocked(api.post).mockResolvedValue({...failed,status:'queued'})
+  render(<SWRConfig value={{provider:()=>new Map(),shouldRetryOnError:false}}><AutoReviewSetup /></SWRConfig>)
+  expect(await screen.findByText(/Checklist unavailable/)).toBeVisible()
+  fireEvent.click(screen.getByRole('button',{name:'Try again'}))
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/checklists/b1/retry'))
+  expect(createRequest).not.toHaveBeenCalled()
+})

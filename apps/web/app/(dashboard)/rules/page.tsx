@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { useToast } from '@/components/shared/toast'
 import { decideSuggestion, getRules, importRules } from '@/lib/platform'
-import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
+import { BRIEFING_ACCEPT, GUIDELINE_HINT, briefingFilePayload, briefingTextPayload } from '@/lib/briefing'
 import type { Project } from '@/types'
 import { BrandLogo } from '@/components/v2/brand-logo'
 import { DropZone } from '@/components/v2/drop-zone'
@@ -52,10 +52,10 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
   const houseRules = (data?.rules || []).filter(r => r.scope === 'global' && r.active)
   const required = brandRules.filter(r => r.severity === 'blocker').length
 
-  async function read(payload: { text?: string; url?: string } | File) {
+  async function read(payload: string | File) {
     setReading(true); setImportError('')
     try {
-      const body = payload instanceof File ? await briefingFilePayload(payload) : payload
+      const body = payload instanceof File ? await briefingFilePayload(payload, 'Guidelines') : briefingTextPayload(payload, 'Guidelines')
       const result = await importRules({ project_id: projectId, ...body })
       if (!mounted.current) return
       toast.success(result.drafted ? `${result.drafted} rules ready for your approval.` : 'No new rules found. Your existing rules are unchanged.')
@@ -85,7 +85,7 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
       <div className="playbook-composer-art" aria-hidden="true"><div className="playbook-book"><span className="playbook-book-spine" /><BookOpen size={38} strokeWidth={1.3} /><span className="playbook-book-line" /><span className="playbook-book-line short" /></div></div>
       <div className="min-w-0 flex-1">
       <div className="flex items-center justify-between gap-3"><label htmlFor="quick-guideline" className="text-[1rem] font-semibold tracking-tight">Add a quick rule</label><button type="button" disabled={reading} onClick={() => { setImportError(''); setImportOpen(true) }} className="min-h-11 text-[0.75rem] text-text-secondary underline decoration-border underline-offset-4 hover:text-text-primary disabled:opacity-50">Import guidelines</button></div>
-      <form onSubmit={e => { e.preventDefault(); if (text.trim() && !reading) void read(/^https?:\/\//i.test(text.trim()) ? { url: text.trim() } : { text: text.trim() }) }} className="quick-rule-input mt-2 flex items-end gap-2 rounded-2xl border border-border bg-bg-secondary p-2">
+      <form onSubmit={e => { e.preventDefault(); if (text.trim() && !reading) void read(text) }} className="quick-rule-input mt-2 flex items-end gap-2 rounded-2xl border border-border bg-bg-secondary p-2">
         <textarea ref={quickInput} id="quick-guideline" value={text} onChange={e => setText(e.target.value)} disabled={reading} rows={2} className="min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-[1rem] leading-relaxed outline-none disabled:opacity-50" placeholder={`Always show the ${brandName} logo on the end card.`} aria-label="Quick rule" />
         <button type="submit" disabled={!text.trim() || reading} aria-label={reading ? 'Preparing rule…' : 'Add for approval'} title="Add for approval" className="press grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-text-inverse disabled:opacity-40"><ArrowUp size={20} /></button>
       </form>
@@ -106,7 +106,7 @@ function BrandPlaybook({ projectId, brandName }: { projectId: string; brandName:
       <aside className="playbook-brand-kit min-w-0"><BrandLogo projectId={projectId} brandName={brandName} /><p className="mt-5 px-1 text-[0.8125rem] leading-relaxed text-text-secondary">Add a quick note whenever something changes. Each suggestion comes to you for approval.</p></aside>
     </div>
     <Dialog.Root open={importOpen} onOpenChange={setImportOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" /><Dialog.Content className="owner-sheet playbook-dialog sheet-in"><div className="flex items-start justify-between gap-4"><div><Dialog.Title className="text-2xl font-semibold tracking-tight">Import guidelines</Dialog.Title><Dialog.Description className="mt-2 text-[0.9375rem] text-text-secondary">For {brandName}. You approve every suggested rule.</Dialog.Description></div><Dialog.Close aria-label="Close guidelines" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-bg-hover"><X size={20} /></Dialog.Close></div><div className="mt-6">
-      <DropZone compact accept={BRIEFING_ACCEPT} disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Drop your brand guide'} hint="Word (.docx), PDF, Markdown or text · up to 10 MB" />
+      <DropZone compact accept={BRIEFING_ACCEPT} disabled={reading} onFiles={([f]) => { if (f) void read(f) }} title={reading ? 'Reading your guide…' : 'Drop your brand guide'} hint={GUIDELINE_HINT} />
       {reading && <p role="status" className="mt-4 text-[0.875rem] text-text-secondary">Finding the details that matter…</p>}{importError && <p role="alert" className="mt-4 text-[0.875rem] text-text-secondary">{importError}</p>}
     </div></Dialog.Content></Dialog.Portal></Dialog.Root>
   </>

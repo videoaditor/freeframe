@@ -10,13 +10,14 @@ import type { Project, User } from '@/types'
 import { api } from '@/lib/api'
 import { ownsProject } from '@/lib/workspace-access'
 import { canSetUpAutoReview, setupProgress, type SetupProgress } from '@/lib/onboarding'
-import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
+import { BRIEFING_ACCEPT, GUIDELINE_HINT, briefingFilePayload, briefingTextPayload, validateBriefingText } from '@/lib/briefing'
 import { createRequest, decideSuggestion, getRules, importRules, listRequests, type FileRequest } from '@/lib/platform'
 import { useAuthStore } from '@/stores/auth-store'
 import { useBriefTitle } from '@/hooks/use-brief-title'
 import { BriefInput } from './brief-input'
 import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
+import { SavedChecklist } from './checklist'
 import styles from './autoreview-setup.module.css'
 
 type Step = 'welcome' | 'brand' | 'brief' | 'share'
@@ -92,9 +93,8 @@ export function AutoReviewSetup() {
     setStep('brief')
   }
   async function readGuide() {
-    const payload = guide ? await briefingFilePayload(guide) : { text: guideText.trim() }
-    if (!payload.pdf_base64 && !payload.docx_base64 && !payload.text) throw new Error('Drop a guide or paste your brand guidelines first.')
-    if (payload.text && payload.text.length > 12000) throw new Error('Paste up to 12,000 characters of guidelines, or upload a Word document or PDF.')
+    const payload = guide ? await briefingFilePayload(guide, 'Guidelines') : briefingTextPayload(guideText, 'Guidelines')
+    if (!('pdf_base64' in payload && payload.pdf_base64) && !('docx_base64' in payload && payload.docx_base64) && !payload.text && !('url' in payload && payload.url)) throw new Error('Drop a guide or paste your brand guidelines first.')
     const id = await ensureBrand()
     await save({ step: 'brand', projectId: id })
     const result = await importRules({ project_id: id, ...payload })
@@ -111,11 +111,11 @@ export function AutoReviewSetup() {
     if (!title.trim()) throw new Error('Name your first project.')
     if (!brief && !briefText.trim()) throw new Error('Add a brief, a document link, or a short note for your editor.')
     const file = brief ? await briefingFilePayload(brief) : {}
+    const input = briefingTextPayload(briefText)
+    const text = validateBriefingText([file.text, input.text].filter(Boolean).join('\n\n'))
     const id = await ensureBrand()
-    const text = briefText.trim()
-    const isUrl = /^https?:\/\//i.test(text)
     const payload = { project_id: id, title: title.trim(), receive_iterations: false,
-      brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'), brief_url: isUrl ? text : '', brief_pdf_base64: file.pdf_base64 || '',
+      brief_text: text, brief_url: input.url || '', brief_pdf_base64: file.pdf_base64 || '',
       ...(file.docx_base64 ? { brief_docx_base64: file.docx_base64 } : {}) }
     const fingerprint = JSON.stringify(payload)
     if (identity.current?.fingerprint !== fingerprint) identity.current = { fingerprint, key: crypto.randomUUID() }
@@ -157,7 +157,7 @@ export function AutoReviewSetup() {
             </Select.Root>
           </div> : <label className={styles.label}>Brand name<input className={styles.input} value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="e.g. Northline" maxLength={255} disabled={busy} /></label>}
 
-          {guide ? <ChosenFile file={guide} remove={() => { setGuide(null); setGuideRead(false) }} disabled={busy} /> : <DropZone compact accept={BRIEFING_ACCEPT} disabled={busy} title="Drop your brand kit" hint="Word (.docx), PDF, Markdown or text · up to 10 MB" onFiles={([f]) => { setGuide(f); setGuideRead(false); setError('') }} />}
+          {guide ? <ChosenFile file={guide} remove={() => { setGuide(null); setGuideRead(false) }} disabled={busy} /> : <DropZone compact accept={BRIEFING_ACCEPT} disabled={busy} title="Drop your brand kit" hint={GUIDELINE_HINT} onFiles={([f]) => { setGuide(f); setGuideRead(false); setError('') }} />}
           {!guide && <label className={styles.label}>Or paste your guidelines<textarea aria-label="Brand guidelines" className={styles.input} rows={3} value={guideText} disabled={busy} onChange={e => { setGuideText(e.target.value); setGuideRead(false) }} placeholder="Always show our logo on the end card…" /></label>}
           {(guide || guideText.trim()) && !guideRead && <button className={styles.primary} disabled={busy} onClick={() => void run(readGuide)}>{busy ? 'Reading your guide…' : 'Read my brand kit'} <ArrowRight size={18} /></button>}
           {notice && <p role="status" className={styles.note}>{notice}</p>}
@@ -178,6 +178,7 @@ export function AutoReviewSetup() {
         {step === 'share' && (delivery ? <div className={styles.form}>
           <div className={styles.delivery}><FileText size={22} /><span><strong>{delivery.title}</strong><small>Waiting for files</small></span><Check size={20} /></div>
           <LinkCard url={delivery.url} label="Your editor’s upload link" hint="Tap to copy. Your editor won’t need an account." copiedHint="Copied. Send it to your editor — you’re set." openLabel="Upload an ad yourself" />
+          <SavedChecklist bindingId={delivery.checklist_binding_id} initial={delivery.checklist} />
           <button className={styles.primary} disabled={busy} onClick={() => void run(finish)}>{busy ? 'Saving…' : 'Open dashboard'} <ArrowRight size={18} /></button>
         </div> : <div className={styles.form}>{resumeError ? <p role="alert">Could not load your saved link. <button className={styles.secondary} onClick={() => void reloadRequests()}>Try again</button></p> : !resumed ? <p role="status">Loading your saved link…</p> : <><p>Your saved request is no longer available.</p><button className={styles.primary} onClick={() => move('brief')}>Create a new briefing</button></>}</div>)}
         {error && <p role="alert" className={styles.error}>{error}</p>}
