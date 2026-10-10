@@ -36,3 +36,14 @@ Evidence: [before](screenshots/whop-brief-20261010/before-word-rejected.png), [d
 | --- | --- | --- |
 | Word file rejected after choosing it | Word file encoded, validated and parsed server-side | Normal brief handoff works |
 | Single Whop brand has a selector or asks for a new brand | Existing/provisioned brand shown as context | Remove an unnecessary decision |
+
+
+## Follow-up: ordinary briefing inputs
+
+One pasted HTTP(S) document link may accompany notes, independent of order; more than one source link gets a clear correction before submission. Incidental product and Drive media references remain in the notes. Text briefs fit the existing 20,000-character extraction budget; guideline text fits 12,000. The 10 MB binary-file cap stays. UTF-8, UTF-16 with BOM and common Windows-1252 TXT preserve accents; binary control data is rejected. The existing saved-checklist panel appears beneath a created upload link in both request and setup success views so preparation, failure, and retry remain visible. No new navigation or controls beyond the reused retry component.
+
+Late failures remain visible on existing dashboard request cards as “Briefing needs attention”. This opens the existing share dialog with the same checklist/retry panel. Its existing request polling supplies status; no per-card fetch or new navigation. Links and uploads remain usable.
+
+Inspected the final recovery copy at 1280×800 and 390×844 using native Chrome controls and its responsive preview, against the same synthetic local API. The mobile warning is readable, keyboard reachable and opens the existing share dialog. The dialog fits the viewport with legible recovery text and a reachable 44px retry control. Try again visibly returned the same link to “Preparing review checklist…”. This verifies UI state handling, not a production AI review. The fixture does not implement OIDC discovery; its login-only 404 messages are unrelated to the checked request flow.
+
+Evidence: [previous success without status](screenshots/whop-brief-20261010/word-link-success-desktop-dark.png), [desktop recovery](screenshots/briefing-inputs-20261010/desktop-recovery.png), [mobile recovery](screenshots/briefing-inputs-20261010/mobile-recovery.png), [persistent mobile warning](screenshots/briefing-inputs-20261010/mobile-card.png), [retry](screenshots/briefing-inputs-20261010/desktop-retry.png). Saved-source recovery only promises checking sharing permissions and retrying; replacing a saved attachment is not offered by this flow.

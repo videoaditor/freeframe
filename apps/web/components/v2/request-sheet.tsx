@@ -17,10 +17,11 @@ import { useAuthStore } from '@/stores/auth-store'
 import { partsEnabled } from '@/lib/iterations'
 import { createRequest, type FileRequest } from '@/lib/platform'
 import type { Project } from '@/types'
-import { BRIEFING_ACCEPT, briefingFilePayload } from '@/lib/briefing'
+import { BRIEFING_ACCEPT, BRIEFING_HINT, briefingFilePayload, briefingTextPayload, validateBriefingText } from '@/lib/briefing'
 import { useBriefTitle } from '@/hooks/use-brief-title'
 import { DropZone } from './drop-zone'
 import { LinkCard } from './link-card'
+import { SavedChecklist } from './checklist'
 
 export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }: {
   open: boolean
@@ -77,9 +78,9 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
     if (!canSubmit) return
     setBusy(true); setError('')
     try {
-      const text = briefText.trim()
+      const input = briefingTextPayload(briefText)
       const file = briefFile ? await briefingFilePayload(briefFile) : {}
-      const isUrl = /^https?:\/\//i.test(text)
+      const text = validateBriefingText([file.text, input.text].filter(Boolean).join('\n\n'))
       let pid = projectId
       if (needsBrand) {
         const p = await api.post<Project>('/projects', { name: newBrand.trim(), project_type: 'team', is_workspace: true })
@@ -90,8 +91,8 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
         project_id: pid,
         ...(partsEnabled ? { receive_iterations: receiveParts } : {}),
         title: title.trim(),
-        brief_text: [file.text, isUrl ? '' : text].filter(Boolean).join('\n\n'),
-        brief_url: isUrl ? text : '',
+        brief_text: text,
+        brief_url: input.url || '',
         brief_pdf_base64: file.pdf_base64 || '',
         ...(file.docx_base64 ? { brief_docx_base64: file.docx_base64 } : {}),
       }
@@ -134,6 +135,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
           {created ? (
             <div className="mt-6 space-y-4 fade-in">
               <LinkCard url={created.url} />
+              <SavedChecklist bindingId={created.checklist_binding_id} initial={created.checklist} />
               <p className="text-[13px] text-text-tertiary">
                 Share this link with your editor. They enter their name and email before uploading and appear in your leaderboard after their first upload.
               </p>
@@ -169,7 +171,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
                     </button>
                   </div>
                 ) : (
-                  <DropZone compact disabled={busy} accept={BRIEFING_ACCEPT} onFiles={([f]) => { setBriefFile(f); setError('') }} title="Drop a briefing" hint="Word (.docx), PDF, Markdown or text · up to 10 MB" />
+                  <DropZone compact disabled={busy} accept={BRIEFING_ACCEPT} onFiles={([f]) => { setBriefFile(f); setError('') }} title="Drop a briefing" hint={BRIEFING_HINT} />
                 )}
                 <textarea value={briefText} onChange={(e) => setBriefText(e.target.value)} rows={2} disabled={busy}
                   placeholder="Paste a Google Docs link, another link, or your briefing…"

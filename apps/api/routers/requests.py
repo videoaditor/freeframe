@@ -45,7 +45,7 @@ from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..models.checklist_binding import ChecklistBinding
 from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
-from ..services.briefing import docx_text, MAX_DOCUMENT_BASE64
+from ..services.briefing import docx_text, MAX_DOCUMENT_BASE64, validate_briefing_text
 from ..services.review_timing import freeze_submission_timing
 from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
 from ..services.permissions import effective_project_role, require_project_role
@@ -166,7 +166,7 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
 
-    brief_text = '\n\n'.join(filter(None, [docx_text(body.brief_docx_base64) if body.brief_docx_base64 else '', body.brief_text]))
+    brief_text = validate_briefing_text('\n\n'.join(filter(None, [docx_text(body.brief_docx_base64) if body.brief_docx_base64 else '', body.brief_text])))
     brand = project_brand(db, project)
     from ..services.project_brands import require_card_reference
     require_card_reference(project, body.brief_url)
@@ -397,12 +397,16 @@ class RulesImport(BaseModel):
 @router.post("/insights/rules/import")
 def import_rules(body: RulesImport, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     brand = _project_brand(db, body.project_id, current_user, ProjectRole.owner)
-    text = '\n\n'.join(filter(None, [docx_text(body.docx_base64) if body.docx_base64 else '', body.text]))
+    text = validate_briefing_text('\n\n'.join(filter(None, [docx_text(body.docx_base64) if body.docx_base64 else '', body.text])), guidelines=True)
     if not (text.strip() or body.url.strip() or body.pdf_base64):
         raise HTTPException(status_code=400, detail="Choose a Word document or PDF, or paste text or a link.")
     r = review_bridge.import_rules(brand, text, body.url, body.pdf_base64)
     if r is None:
         raise HTTPException(status_code=503, detail="Auto Review could not read that right now.")
+    if r.get('error') == 'guide-limit':
+        raise HTTPException(400, 'Guidelines can contain up to 12,000 characters. Shorten the document and try again.')
+    if r.get('error') == 'briefing-unavailable':
+        raise HTTPException(400, 'The document could not be read. Check sharing permissions (anyone with the link), or upload the document directly as Word (.docx), PDF or text, then try again.')
     return r
 
 

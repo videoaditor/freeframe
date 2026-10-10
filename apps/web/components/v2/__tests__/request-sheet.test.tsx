@@ -5,12 +5,12 @@ import { RequestSheet } from '../request-sheet'
 import { api } from '@/lib/api'
 import { createRequest } from '@/lib/platform'
 
-vi.mock('@/lib/api', () => ({ api: { get: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('@/lib/platform', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/platform')>(), createRequest: vi.fn() }))
 vi.mock('../brand-logo', () => ({ BrandLogo: () => null }))
 vi.mock('../link-card', () => ({ LinkCard: () => <p>Link ready</p> }))
 vi.mock('@/stores/auth-store', () => ({ useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: { is_staff: false } }) }))
-afterEach(cleanup)
+afterEach(() => { cleanup(); Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo') })
 it('starts a request in the brand whose project the owner opened', async () => {
   vi.mocked(api.get).mockResolvedValue([{ id: 'brand1', name: 'Northline' }, { id: 'brand2', name: 'Sunday Studio' }])
   render(<SWRConfig value={{ provider: () => new Map() }}><RequestSheet open initialProjectId="brand2" onOpenChange={vi.fn()} /></SWRConfig>)
@@ -113,4 +113,46 @@ it('uses the remaining brand when the previously selected brand is no longer ava
   fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'Launch' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
   await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'brand1' })))
+})
+
+it.each(['https://docs.google.com/document/d/test/edit\nKeep the logo visible.', 'Keep the logo visible.\nhttps://drive.google.com/file/d/test/view'])('audit request separates a source link from surrounding notes: %s', async text => {
+  await mount()
+  fireEvent.change(screen.getByRole('textbox', { name: 'Briefing text or link' }), { target: { value: text } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({ brief_text: 'Keep the logo visible.', brief_url: text.match(/https?:\/\/\S+/)![0] })))
+})
+it('audit request exposes failed briefing preparation after the link is created', async () => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {configurable:true,value:vi.fn()})
+  const failed = {id:'b1',status:'failed',requirements:[],limitations:[],error_code:'briefing-unavailable'}
+  vi.mocked(api.get).mockImplementation(async path => path === '/checklists/b1' ? failed : [{ id: 'brand1', name: 'Northline' }])
+  vi.mocked(api.post).mockResolvedValue({...failed,status:'queued',error_code:null})
+  vi.mocked(createRequest).mockResolvedValue({id:'r1',url:'https://review.example/r/1',checklist_binding_id:'b1',checklist:failed} as never)
+  await mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await screen.findByText('Your link is ready')
+  expect(screen.getByText(/Checklist unavailable/)).toBeVisible()
+  fireEvent.click(screen.getByRole('button',{name:'Try again'}))
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/checklists/b1/retry'))
+  expect(createRequest).toHaveBeenCalledTimes(1)
+})
+
+it.each([
+  ['brief.txt', 'File instructions.', {brief_text:'File instructions.\n\nExtra note.'}],
+  ['brief.pdf', 'pdf', {brief_text:'Extra note.',brief_pdf_base64:'cGRm'}],
+  ['brief.docx', 'docx', {brief_text:'Extra note.',brief_docx_base64:'ZG9jeA=='}],
+])('preserves an uploaded %s alongside a Google link and note', async (name, content, expected) => {
+  await mount()
+  fireEvent.change(document.querySelector('input[type=file]')!,{target:{files:[new File([content as string],name as string)]}})
+  fireEvent.change(screen.getByRole('textbox',{name:'Briefing text or link'}),{target:{value:'https://docs.google.com/document/d/test/edit\nExtra note.'}})
+  fireEvent.click(screen.getByRole('button',{name:'Create link'}))
+  await waitFor(() => expect(createRequest).toHaveBeenCalledWith(expect.objectContaining({...expected as object,brief_url:'https://docs.google.com/document/d/test/edit'})))
+})
+it('keeps the form intact when multiple document links need combining', async () => {
+  await mount()
+  const text='https://docs.google.com/document/d/a/edit\nhttps://drive.google.com/file/d/b/view'
+  fireEvent.change(screen.getByRole('textbox',{name:'Briefing text or link'}),{target:{value:text}})
+  fireEvent.click(screen.getByRole('button',{name:'Create link'}))
+  expect(await screen.findByRole('alert')).toHaveTextContent('one document link')
+  expect(screen.getByRole('textbox',{name:'Briefing text or link'})).toHaveValue(text)
+  expect(createRequest).not.toHaveBeenCalled()
 })

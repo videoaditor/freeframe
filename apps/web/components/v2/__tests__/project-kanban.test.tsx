@@ -93,3 +93,17 @@ it('keeps unavailable files in review with their existing folder and share acces
   expect(screen.getByRole('link', {name:'Unavailable'})).toHaveAttribute('href','/projects/p1?folder=f1')
   expect(screen.getByRole('button', {name:'Share Unavailable'})).toBeVisible()
 })
+
+
+it('keeps a late briefing failure visible and opens the existing link details for recovery', () => {
+  const onShare=vi.fn()
+  const pending=request('Launch', {assets:0,checklist_binding_id:'b1',checklist:{id:'b1',status:'queued',requirements:[],limitations:[]}})
+  const view=render(<ProjectKanban requests={[pending]} paused={false} onShare={onShare} />)
+  expect(screen.queryByRole('button',{name:'Briefing needs attention: Launch'})).not.toBeInTheDocument()
+  const failed={...pending,checklist:{...pending.checklist!,status:'failed' as const,error_code:'briefing-unavailable'}}
+  view.rerender(<ProjectKanban requests={[failed]} paused={false} onShare={onShare} />)
+  fireEvent.click(screen.getByRole('button',{name:'Briefing needs attention: Launch'}))
+  expect(onShare).toHaveBeenCalledWith(failed)
+  expect(screen.getByRole('link',{name:'Launch'})).toHaveAttribute('href','/projects/p1')
+  expect(screen.getByRole('button',{name:'Share Launch'})).toBeEnabled()
+})

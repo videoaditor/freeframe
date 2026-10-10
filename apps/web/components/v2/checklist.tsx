@@ -42,7 +42,7 @@ const labels = { basics: 'Basics', brand: 'Brand', briefing: 'Briefing' }
 const reasons: Record<string, string> = {
   'plan-api-unavailable': 'Checklist preparation is not available yet.',
   'review-unconfigured': 'Checklist preparation is not connected yet.',
-  'briefing-unavailable': 'The briefing could not be read.',
+  'briefing-unavailable': 'The saved briefing could not be read. If it uses a document link, check sharing permissions (anyone with the link), then try again.',
   'plan-conflict': 'This assignment has conflicting checklist data.',
   'snapshot-identity-invalid': 'The checklist could not be matched to this assignment.',
 }

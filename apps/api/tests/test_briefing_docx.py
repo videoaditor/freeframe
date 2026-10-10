@@ -74,3 +74,52 @@ def test_word_doctype_is_rejected_in_utf16_too():
     xml = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE w:document [<!ENTITY x "injected">]><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>&x;</w:t></w:r></w:p></w:document>'
     with pytest.raises(HTTPException):
         docx_text(docx(xml.encode('utf-16')))
+
+
+@pytest.mark.parametrize('text', ['x' * 20001, 'Bad\x00text'], ids=['oversized', 'nul'])
+def test_unreadable_or_oversized_request_text_is_rejected_before_writes(text, mock_db, monkeypatch):
+    project, bridge = setup_request(mock_db, monkeypatch)
+    with pytest.raises(HTTPException) as exc:
+        routes.create_request(routes.RequestCreate(project_id=project.id, title='Launch', brief_text=text), mock_db, MagicMock())
+    assert exc.value.status_code == 400
+    mock_db.add.assert_not_called()
+    bridge.assert_not_called()
+
+
+def test_combined_word_and_pasted_text_must_fit_request_limit(mock_db, monkeypatch):
+    project, bridge = setup_request(mock_db, monkeypatch)
+    with pytest.raises(HTTPException) as exc:
+        routes.create_request(routes.RequestCreate(project_id=project.id, title='Launch', brief_docx_base64=docx(), brief_text='x' * 19999), mock_db, MagicMock())
+    assert exc.value.status_code == 400
+    mock_db.add.assert_not_called()
+    bridge.assert_not_called()
+
+
+def test_word_rules_must_fit_complete_guideline_budget(mock_db, monkeypatch):
+    monkeypatch.setattr(routes, '_project_brand', lambda *a: 'cust-owned')
+    bridge = MagicMock(return_value={'drafted': 1})
+    monkeypatch.setattr(routes.review_bridge, 'import_rules', bridge)
+    with pytest.raises(HTTPException) as exc:
+        routes.import_rules(routes.RulesImport(project_id=uuid.uuid4(), docx_base64=docx(), text='x' * 11999), mock_db, MagicMock())
+    assert exc.value.status_code == 400
+    bridge.assert_not_called()
+
+
+@pytest.mark.parametrize('code, message', [('guide-limit', '12,000'), ('briefing-unavailable', 'anyone with the link')])
+def test_guideline_input_errors_reach_owner_as_actionable_400(code, message, mock_db, monkeypatch):
+    import httpx
+    monkeypatch.setattr(routes, '_project_brand', lambda *a: 'cust-owned')
+    monkeypatch.setattr(routes.review_bridge, 'is_configured', lambda: True)
+    monkeypatch.setattr(routes.review_bridge.httpx, 'request', lambda *a, **kw: httpx.Response(400, json={'error': code, 'internal': 'must not leak'}))
+    with pytest.raises(HTTPException) as exc:
+        routes.import_rules(routes.RulesImport(project_id=uuid.uuid4(), url='https://docs.google.com/document/d/test/edit'), mock_db, MagicMock())
+    assert exc.value.status_code == 400
+    assert message in exc.value.detail
+    assert 'must not leak' not in exc.value.detail
+
+
+def test_unrecognized_guide_errors_do_not_cross_the_bridge(monkeypatch):
+    import httpx
+    monkeypatch.setattr(routes.review_bridge, 'is_configured', lambda: True)
+    monkeypatch.setattr(routes.review_bridge.httpx, 'request', lambda *a, **kw: httpx.Response(400, json={'error': 'internal-secret'}))
+    assert routes.review_bridge.import_rules('cust-owned', url='https://docs.google.com/document/d/test/edit') is None
