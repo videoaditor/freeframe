@@ -22,26 +22,19 @@ function sanitizeFrom(value: string | null): string {
   return value && value.startsWith('/') && !value.startsWith('//') ? value : '/home'
 }
 
-async function isSetupDone(request: NextRequest): Promise<boolean> {
-  if (request.cookies.get('ff_setup_done')?.value) return true
-  try {
-    const res = await fetch(`${API_URL}/setup/status`, { next: { revalidate: 60 } })
-    if (!res.ok) return false
-    const data = await res.json()
-    return !data.needs_setup
-  } catch {
-    // API unreachable - treat setup as not confirmed, fall through to the form.
-    return false
-  }
-}
-
 // /login must never paint the Autoreview shell for a visitor who is about to be sent
 // elsewhere: a cold signed-out hit bounces straight to the gate, and a hit that already
 // carries a session (the post-gate-callback bounce) bounces straight to its destination.
-// Both happen here, server-side, before any HTML renders. page.tsx keeps its own
-// client-side checks as a belt-and-suspenders fallback for whatever this misses (e.g.
-// an unreachable API on the setup check).
-async function handleLoginRoute(request: NextRequest): Promise<NextResponse | null> {
+// Both happen here, server-side, before any HTML renders, so no shell ever flashes in
+// either direction. This must stay free of any server-side fetch: middleware runs inside
+// the web container where the browser's relative NEXT_PUBLIC_API_URL ("/api") is not a
+// resolvable base, so a fetch here would throw and silently suppress the bounce (the old
+// isSetupDone() gate did exactly that, which is why the shell kept flashing). For a
+// gate-registered instance the gate is the login, so first-time-setup is not a concern on
+// this route; genuine needs-setup is still handled for protected routes below and by
+// /setup itself. page.tsx keeps its own client-side checks as a belt-and-suspenders
+// fallback (e.g. when OIDC is disabled).
+function handleLoginRoute(request: NextRequest): NextResponse | null {
   const { searchParams } = request.nextUrl
 
   // A gate failure comes back as ?error=... - show it, never loop back into the gate.
@@ -61,8 +54,6 @@ async function handleLoginRoute(request: NextRequest): Promise<NextResponse | nu
   // fresh gate sign-in just because the short-lived access cookie already expired.
   if (request.cookies.get('ff_refresh_token')?.value) return null
 
-  if (!(await isSetupDone(request))) return null
-
   const gateUrl = new URL(`${API_URL}/auth/oidc/login`, request.url)
   gateUrl.searchParams.set('from', sanitizeFrom(searchParams.get('from')))
   return NextResponse.redirect(gateUrl, 307)
@@ -72,7 +63,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname === '/login') {
-    const redirect = await handleLoginRoute(request)
+    const redirect = handleLoginRoute(request)
     if (redirect) return redirect
   }
 

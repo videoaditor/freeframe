@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   any HTML renders - behind the new `NEXT_PUBLIC_OIDC_ENABLED` build flag so an instance without a
   registered gate still shows the password break-glass form instead of 307ing into a 404. The
   client-side checks in `page.tsx` stay as a fallback.
+- The server-side `/login` gate bounce above was still suppressed on a real cold hit: it was gated
+  behind a setup check that did a server-side `fetch` to the browser-relative `NEXT_PUBLIC_API_URL`
+  (`/api`), which is not a resolvable base inside the web container, so the fetch threw and the
+  bounce fell through to the Autoreview shell. The `/login` bounce no longer makes any server-side
+  call - for a gate-registered instance the gate is the login, so first-time-setup is not a concern
+  on this route (genuine needs-setup is still handled for protected routes and by `/setup`). This
+  removes the last flash on both the cold hit and the post-Google return.
 - Central-gate (OIDC) sign-in: the callback now verifies the id_token's `at_hash` claim (passing
   the access token through to `jose`'s decoder, as the gate's tokens always carry one), fixing the
   `gate_sign_in_failed` error every gate sign-in hit in production. A rejected token's real cause

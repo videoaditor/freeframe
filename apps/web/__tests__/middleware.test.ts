@@ -29,7 +29,7 @@ afterEach(() => {
 describe('middleware /login', () => {
   it('307s a cold signed-out hit straight to the gate, with no intermediate render', async () => {
     const middleware = await loadMiddleware(true)
-    const req = makeRequest('/login', { ff_setup_done: '1' })
+    const req = makeRequest('/login')
     const res = await middleware(req)
     expect(res.status).toBe(307)
     const location = new URL(res.headers.get('location')!)
@@ -97,20 +97,19 @@ describe('middleware /login', () => {
     expect(res.headers.get('location')).toBeNull()
   })
 
-  it('does not bounce to the gate while setup is not yet confirmed done', async () => {
+  it('bounces a cold hit to the gate without any server-side call (no setup-check dependency)', async () => {
+    // Regression guard: the gate bounce must never depend on a server-side fetch.
+    // Middleware runs inside the web container where the browser's relative
+    // NEXT_PUBLIC_API_URL ("/api") is not a resolvable base, so a fetch here throws
+    // and used to silently suppress the bounce - leaving the Autoreview shell to flash.
     const middleware = await loadMiddleware(true)
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ needs_setup: true }) })))
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('network down')))
+    vi.stubGlobal('fetch', fetchSpy)
     const req = makeRequest('/login')
     const res = await middleware(req)
-    expect(res.headers.get('location')).toBeNull()
-  })
-
-  it('does not bounce to the gate when the setup check is unreachable', async () => {
-    const middleware = await loadMiddleware(true)
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))))
-    const req = makeRequest('/login')
-    const res = await middleware(req)
-    expect(res.headers.get('location')).toBeNull()
+    expect(res.status).toBe(307)
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/auth/oidc/login')
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('leaves protected routes unaffected: still redirects to /login when signed out', async () => {
