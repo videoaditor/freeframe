@@ -695,13 +695,15 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
 }
 
 export default function HandinPage() {
-  const [mode, setMode] = React.useState<'components' | 'complete'>('components');
+  // The parts upload is a beta: the existing complete-ad upload stays the default
+  // and the split upload sits next to it as a second, labelled option.
+  const [mode, setMode] = React.useState<'components' | 'complete'>('complete');
   const [locked, setLocked] = React.useState(false);
   const lock = React.useCallback(() => setLocked(true), []);
   if (!partsEnabled) return <CompleteHandinPage />;
   return <div className="owner-workspace handin-workspace min-h-full">
     <div className="mx-auto flex max-w-[1040px] gap-2 px-5 pt-6 sm:px-8" aria-label="Submission format">
-      {(['components', 'complete'] as const).map(value => <button key={value} disabled={locked} aria-pressed={mode === value} onClick={() => setMode(value)} className={`press min-h-11 rounded-full px-4 text-sm font-medium ${mode === value ? 'bg-bg-hover text-text-primary' : 'text-text-secondary'}`}>{value === 'components' ? 'Separate parts' : 'Complete ads'}</button>)}
+      {(['complete', 'components'] as const).map(value => <button key={value} disabled={locked} aria-pressed={mode === value} onClick={() => setMode(value)} className={`press min-h-11 rounded-full px-4 text-sm font-medium ${mode === value ? 'bg-bg-hover text-text-primary' : 'text-text-secondary'}`}>{value === 'components' ? <>Split upload <span className="ml-1 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">Beta</span></> : 'Complete ads'}</button>)}
     </div>
     {mode === 'components' ? <PartsHandin onStarted={lock} /> : <CompleteHandinPage onStarted={lock} />}
   </div>;

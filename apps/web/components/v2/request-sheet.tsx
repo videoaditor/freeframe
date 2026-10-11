@@ -44,7 +44,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
   const [briefFile, setBriefFile] = React.useState<File | null>(null)
   const [briefText, setBriefText] = React.useState('')
   const { edit: editTitle, reset: resetTitle } = useBriefTitle(briefFile, briefText, setTitle)
-  const [receiveParts, setReceiveParts] = React.useState(partsEnabled)
+  const [receiveParts, setReceiveParts] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const [created, setCreated] = React.useState<FileRequest | null>(null)
@@ -160,7 +160,7 @@ export function RequestSheet({ open, onOpenChange, onCreated, initialProjectId }
                 <input ref={titleRef} value={title} onChange={(e) => { editTitle(); setTitle(e.target.value) }} placeholder="e.g. UraVia 48 · 3 hooks"
                   className="field" aria-label="Title" />
               </Field>
-              {partsEnabled && <Field label="Submission format"><div className="flex gap-2">{[true, false].map(value => <button key={String(value)} type="button" disabled={busy} aria-pressed={receiveParts === value} onClick={() => setReceiveParts(value)} className={`press min-h-11 rounded-full px-4 text-sm ${receiveParts === value ? 'bg-bg-hover font-medium' : 'text-text-secondary'}`}>{value ? 'Hooks & bodies' : 'Complete ads'}</button>)}</div><p className="mt-2 text-sm text-text-secondary">{receiveParts ? 'Your editor uploads each part once. We create and check the final combinations.' : 'Your editor uploads finished cuts for review.'}</p></Field>}
+              {partsEnabled && <Field label="Submission format"><div className="flex gap-2">{[false, true].map(value => <button key={String(value)} type="button" disabled={busy} aria-pressed={receiveParts === value} onClick={() => setReceiveParts(value)} className={`press min-h-11 rounded-full px-4 text-sm ${receiveParts === value ? 'bg-bg-hover font-medium' : 'text-text-secondary'}`}>{value ? 'Split upload (Beta)' : 'Complete ads'}</button>)}</div><p className="mt-2 text-sm text-text-secondary">{receiveParts ? 'Your editor uploads each part once. We create and check the final combinations.' : 'Your editor uploads finished cuts for review.'}</p></Field>}
               <Field label="Briefing" hint="Optional">
                 {briefFile ? (
                   <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-bg-primary/50 p-3 pl-4">
