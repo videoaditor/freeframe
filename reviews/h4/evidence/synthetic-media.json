@@ -1,0 +1,10 @@
+{
+  "file": "synthetic.mp4",
+  "sha256": "a08cb3ab1c17a3399d964fa64f9b3149d1d78639be549f3d98ae5a4749bd953d",
+  "duration_seconds": 5,
+  "dimensions": "360x640",
+  "fps": 24,
+  "audio": "generated 440 Hz sine",
+  "source": "FFmpeg testsrc2 + sine",
+  "uploaded": false
+}

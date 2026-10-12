@@ -1,0 +1,50 @@
+[
+  {
+    "url": "https://review.aditor.ai/o",
+    "status": 200,
+    "final_url": "https://feedback.aditor.ai/login?from=%2Fhome#",
+    "redirects": [
+      {
+        "status": 302,
+        "location": "https://feedback.aditor.ai/login?from=%2Fhome#"
+      }
+    ]
+  },
+  {
+    "url": "https://feedback.aditor.ai/login",
+    "status": 200,
+    "final_url": "https://feedback.aditor.ai/login",
+    "redirects": []
+  },
+  {
+    "url": "https://feedback.aditor.ai/api/health",
+    "status": 200,
+    "final_url": "https://feedback.aditor.ai/api/health",
+    "redirects": [],
+    "body": {
+      "status": "ok"
+    }
+  },
+  {
+    "url": "https://feedback.aditor.ai/api/auth/google/config",
+    "status": 200,
+    "final_url": "https://feedback.aditor.ai/api/auth/google/config",
+    "redirects": [],
+    "body": {
+      "enabled": true
+    }
+  },
+  {
+    "url": "https://feedback.aditor.ai/api/r/[existing-project-token]",
+    "status": 200,
+    "final_url": "[existing-project-request]",
+    "redirects": [],
+    "body": {
+      "title": "AutoReview \u2014 Pr\u00fcflisten, Quellenlabels, Wartezeit & Standalone-Abnahme",
+      "brand": "Aditor",
+      "expires_at": null,
+      "completed_at": null,
+      "asset_count": 0
+    }
+  }
+]

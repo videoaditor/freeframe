@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/alansimon/Downloads/autoreview-handoffs-2026-10-05/sessions/H4/feedback-agent
+
+stdout | test/h4-standalone.integration.test.ts > serves only the isolated H4 bridge until stopped
+H4_BRIDGE_SMOKE_PASSED auth, registration replay, synthetic Trello, invalid link
+H4_BRIDGE_READY http://localhost:18744; provider answers injected; external I/O denied
+
+ ✓ test/h4-standalone.integration.test.ts (1 test) 57ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  12:37:47
+   Duration  1.07s (transform 542ms, setup 0ms, collect 687ms, tests 57ms, environment 0ms, prepare 85ms)

@@ -1,0 +1,64 @@
+ WARN  The "workspaces" field in package.json is not supported by pnpm. Create a "pnpm-workspace.yaml" file instead.
+
+> web@0.1.0 build /Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/25) ...
+   Generating static pages (6/25)
+   Generating static pages (12/25)
+   Generating static pages (18/25)
+ ✓ Generating static pages (25/25)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    6.54 kB         121 kB
+├ ○ /_not-found                          884 B          88.8 kB
+├ ○ /apple-icon.png                      0 B                0 B
+├ ○ /assets                              1.53 kB         158 kB
+├ ○ /feedback                            6.17 kB         108 kB
+├ ○ /handin                              10.4 kB         133 kB
+├ ○ /home                                12.8 kB         168 kB
+├ ○ /icon.png                            0 B                0 B
+├ ○ /insights                            5.55 kB         112 kB
+├ ƒ /invite/[token]                      4.57 kB         105 kB
+├ ○ /login                               7.62 kB         108 kB
+├ ○ /login/google                        2.53 kB        99.2 kB
+├ ○ /notifications                       4.54 kB         105 kB
+├ ○ /projects                            10.7 kB         175 kB
+├ ƒ /projects/[id]                       21.7 kB         223 kB
+├ ƒ /projects/[id]/assets/[assetId]      50.8 kB         386 kB
+├ ƒ /projects/[id]/collections           5.87 kB         134 kB
+├ ƒ /projects/[id]/settings              12.6 kB         149 kB
+├ ƒ /r/[token]                           19.4 kB         319 kB
+├ ○ /rules                               11.5 kB         134 kB
+├ ○ /settings                            2.42 kB        90.4 kB
+├ ○ /settings/admin                      6 kB            127 kB
+├ ○ /settings/appearance                 3.14 kB         102 kB
+├ ○ /settings/branding                   5.26 kB         107 kB
+├ ○ /settings/notifications              4.31 kB        92.2 kB
+├ ○ /settings/profile                    6.82 kB         107 kB
+├ ○ /setup                               4.09 kB         104 kB
+├ ƒ /share/[token]                       19.7 kB         121 kB
+├ ○ /whop                                7.6 kB          104 kB
+└ ƒ /whop/session                        0 B                0 B
++ First Load JS shared by all            87.9 kB
+  ├ chunks/2200cc46-1a8ca59e587433ea.js  53.7 kB
+  ├ chunks/2945-703be146001654d9.js      31.9 kB
+  └ other shared chunks (total)          2.39 kB
+
+
+ƒ Middleware                             26.7 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

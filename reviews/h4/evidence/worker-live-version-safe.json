@@ -1,0 +1,13 @@
+{
+  "version_id": "857086a2-3adf-4788-8319-2d4bcd75b7f8",
+  "created_on": "2026-10-06T17:47:41.702455Z",
+  "script_etag": "5fa2975a2274cdc041d2fa3eaf7420780226d974681b7ad8eb28244e5af083ce",
+  "git_commit_annotation": {
+    "workers/triggered_by": "version_upload"
+  },
+  "bindings_whitelist": {
+    "MODE": "prod",
+    "OWNER_WORKSPACE_URL": "https://feedback.aditor.ai/login?from=%2Fhome",
+    "SPINE_URL": "https://aditor-suite.onrender.com"
+  }
+}

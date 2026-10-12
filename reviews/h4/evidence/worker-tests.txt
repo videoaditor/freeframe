@@ -1,0 +1,263 @@
+
+> test
+> vitest run
+
+
+ RUN  v2.1.9 /Users/alansimon/Downloads/autoreview-handoffs-2026-10-05/sessions/H4/feedback-agent
+
+ ✓ test/pronounce.test.ts (27 tests) 17ms
+ ✓ test/freeframe-watch.test.ts (71 tests) 32ms
+ ✓ test/revision-rate.test.ts (58 tests) 17ms
+ ✓ test/client-feedback.test.ts (26 tests) 21ms
+ ✓ test/freeframe-agent.test.ts (101 tests) 43ms
+ ✓ test/billing-reviews.test.ts (38 tests) 29ms
+stdout | test/must-fix-check.test.ts > which reads are full and which are the Must-fix check, 2026-10-02 > the first file of a hand-in gets the full review
+freeframe-sweep: {"at":1791344393537,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":16}
+
+stdout | test/must-fix-check.test.ts > which reads are full and which are the Must-fix check, 2026-10-02 > a file uploaded after the hand-in window is reviewed AT ONCE, with the Must-fix check - never a stub
+freeframe-sweep: {"at":1791344393555,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":1,"card":null,"posted":0,"briefingChars":0},{"asset":"Hook1 corrected.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[{"asset":"Hook1 corrected.mp4","why":"uploaded after the hand-in window - Must-fix check only"}],"registered":1,"leftOver":0,"passes":1,"tookMs":3}
+
+stdout | test/must-fix-check.test.ts > which reads are full and which are the Must-fix check, 2026-10-02 > a later VERSION of a reviewed file gets the Must-fix check
+freeframe-sweep: {"at":1791344393558,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":null,"fixed":[],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/must-fix-check.test.ts > which reads are full and which are the Must-fix check, 2026-10-02 > a correction whose first attempt failed is STILL a correction on its retry
+freeframe-sweep: {"at":1791344393559,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/must-fix-check.test.ts > the kill switch > KV flag:must-fix-check = off puts corrections and late files back on the full review
+freeframe-sweep: {"at":1791344393560,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":null,"fixed":[],"stillOpen":[],"newlyBroken":[]},{"asset":"Late.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[{"asset":"Late.mp4","why":"uploaded after the hand-in window - Must-fix check only"}],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/must-fix-check.test.ts > the kill switch > any other value, or none, leaves the Must-fix check on
+freeframe-sweep: {"at":1791344393561,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":null,"fixed":[],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/must-fix-check.test.ts > a correction is only compared on what the Must-fix check actually looked at > says 'Fixed in v2' for a fixed MUST-FIX, and stays silent about a taste note nobody re-checked
+freeframe-sweep: {"at":1791344393564,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":null,"fixed":["End card missing"],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+
+stdout | test/must-fix-check.test.ts > the fix-rate measure only counts what the Must-fix check re-checked > records 1 given (the must-fix), not 2 (the must-fix plus a taste note)
+freeframe-sweep: {"at":1791344393566,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":"Sam","fixed":["End card missing"],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/must-fix-check.test.ts > what the Must-fix check asks the model > sends only the blocker rules - a strict subset of what the full review is asked
+freeframe-sweep: {"at":1791344393567,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":1,"card":null,"posted":0,"briefingChars":0},{"asset":"Hook1 corrected.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[{"asset":"Hook1 corrected.mp4","why":"uploaded after the hand-in window - Must-fix check only"}],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+ ✓ test/must-fix-check.test.ts (9 tests) 37ms
+ ✓ test/gate-deliver.test.ts (25 tests) 37ms
+ ✓ test/freeframe-switch.test.ts (28 tests) 33ms
+ ✓ test/pronunciation.test.ts (20 tests) 23ms
+stdout | test/freeframe-sweep.test.ts > the sweep runs at all > reviews a first version instead of throwing before it starts
+freeframe-sweep: {"at":1791344393542,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":16}
+
+stdout | test/freeframe-sweep.test.ts > the first version - the round the editor is meant to act on > posts the review onto the asset and remembers the comment ids
+freeframe-sweep: {"at":1791344393558,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+
+stdout | test/freeframe-sweep.test.ts > the second version - did they act on it? > puts NOTHING new on the asset - v2 is what the client opens
+freeframe-sweep: {"at":1791344393561,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":4}
+freeframe-sweep: {"at":1791344393565,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["No medication names"],"stillOpen":["End card colours"],"newlyBroken":["Captions unreadable"]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":3}
+
+stdout | test/freeframe-sweep.test.ts > the second version - did they act on it? > replies 'Fixed in v2' in the v1 thread of the finding that now passes
+freeframe-sweep: {"at":1791344393569,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+freeframe-sweep: {"at":1791344393571,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["No medication names"],"stillOpen":["End card colours"],"newlyBroken":["Captions unreadable"]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/freeframe-sweep.test.ts > the second version - did they act on it? > records what BROKE as well as what was fixed, and tells Slack nothing
+freeframe-sweep: {"at":1791344393573,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+freeframe-sweep: {"at":1791344393574,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["No medication names"],"stillOpen":["End card colours"],"newlyBroken":["Captions unreadable"]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+
+stdout | test/freeframe-sweep.test.ts > the second version - did they act on it? > advances the stored record to the new version number
+freeframe-sweep: {"at":1791344393575,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":3}
+freeframe-sweep: {"at":1791344393578,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["No medication names"],"stillOpen":["End card colours"],"newlyBroken":["Captions unreadable"]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+
+stdout | test/freeframe-sweep.test.ts > the second version - did they act on it? > says nothing in Slack when the project is marked quiet
+freeframe-sweep: {"at":1791344393580,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+freeframe-sweep: {"at":1791344393581,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["A"],"stillOpen":["B"],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+
+stdout | test/freeframe-sweep.test.ts > a third version behaves like the second > still stays silent on the asset and still measures against the FIRST version
+freeframe-sweep: {"at":1791344393584,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":3,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+freeframe-sweep: {"at":1791344393585,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["A"],"stillOpen":["B","C"],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+freeframe-sweep: {"at":1791344393585,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":3,"editor":null,"fixed":["A","B"],"stillOpen":["C"],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/freeframe-sweep.test.ts > a third version behaves like the second > never says 'Fixed' twice in the same thread, however many rounds it takes
+freeframe-sweep: {"at":1791344393586,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+freeframe-sweep: {"at":1791344393587,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":["A"],"stillOpen":["B"],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+freeframe-sweep: {"at":1791344393588,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":3,"editor":null,"fixed":["A"],"stillOpen":["B"],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+freeframe-sweep: {"at":1791344393589,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":4,"editor":null,"fixed":["A"],"stillOpen":["B"],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/freeframe-sweep.test.ts > idempotence - the cron WILL see the same asset again > does not re-review or re-post when nothing new arrived
+freeframe-sweep: {"at":1791344393591,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":1,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+
+stdout | test/freeframe-sweep.test.ts > idempotence - the cron WILL see the same asset again > does not repeat the v2 report when v2 is seen twice
+freeframe-sweep: {"at":1791344393592,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+freeframe-sweep: {"at":1791344393592,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"editor":null,"fixed":[],"stillOpen":[],"newlyBroken":["B"]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/freeframe-sweep.test.ts > a clean read > posts nothing on the asset, and still records the review
+freeframe-sweep: {"at":1791344393602,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+
+stdout | test/freeframe-sweep.test.ts > a clean read > still speaks up when there IS something
+freeframe-sweep: {"at":1791344393603,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":1,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+
+stdout | test/freeframe-sweep.test.ts > who hears what > posts nothing for an editor who is not a trainee when nothing was proven
+freeframe-sweep: {"at":1791344393603,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":2,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/freeframe-sweep.test.ts > pins request review records and comments to the bytes read, and rechecks a changed version ID
+freeframe-sweep: {"at":1791344393607,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":1,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+freeframe-sweep: {"at":1791344393607,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"editor":null,"fixed":["End card colours"],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+stdout | test/freeframe-sweep.test.ts > clears a previous version error before starting new bytes
+freeframe-sweep: {"at":1791344393609,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":1}
+
+ ✓ test/v1-bridge.test.ts (23 tests) 91ms
+ ✓ test/company-rules.test.ts (22 tests) 110ms
+stdout | test/freeframe-sweep.test.ts > drains delayed sub-stage writes before completing a review
+freeframe-sweep: {"at":1791344393610,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":32}
+
+stdout | test/freeframe-sweep.test.ts > respects the failed first-version attempt ceiling until new bytes arrive
+freeframe-sweep: {"at":1791344393643,"watched":1,"reviewed":[{"asset":"BSG_V7 final.mp4","version":2,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":0}
+
+ ✓ test/review-index.test.ts (22 tests) 38ms
+ ✓ test/freeframe-sweep.test.ts (36 tests) 165ms
+ ✓ test/rule-cache.test.ts (11 tests) 63ms
+ ✓ test/card-review.test.ts (15 tests) 63ms
+ ✓ test/admin-flow.test.ts (15 tests) 515ms
+   ✓ brief-lookup (paste-to-mint) > derives name, editor label and card destination from a Trello card (creds present) 407ms
+ ✓ test/freeframe-register.test.ts (26 tests) 511ms
+   ✓ asset-ready: read it now, not in ten minutes > refuses a share it is not already watching 464ms
+(node:11355) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ test/store.test.ts (17 tests) 19ms
+ ✓ test/measured.test.ts (26 tests) 13ms
+ ✓ test/store-d1.test.ts (14 tests) 17ms
+ ✓ test/airtable-fetch-binding.test.ts (10 tests) 38ms
+ ✓ test/review-gate.test.ts (24 tests) 866ms
+   ✓ verdictForHandin > reviewing when nothing is readable yet (empty asset list) 854ms
+ ✓ test/decide.test.ts (20 tests) 423ms
+   ✓ the Jev client > retries once on 529, then gives up with an error rather than throwing 403ms
+ ✓ test/owner-view.test.ts (9 tests) 107ms
+ ✓ test/rules.test.ts (21 tests) 13ms
+stdout | test/rearm-delivered.test.ts > a delivered project that gets a new upload is reviewed, not re-paused > the asset-ready ping leaves a marker, and the next sweep reviews the new version
+[slack muted] Someone handed in T - Ready to go
+freeframe-sweep: {"at":1791344394524,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":null,"fixed":[],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":34}
+
+stdout | test/rearm-delivered.test.ts > older projects are watched by event, not by polling, 2026-10-04 > a V2 uploaded later wakes it: the ping re-arms it and the sweep reads the new version
+[slack muted] Someone handed in T - Ready to go
+freeframe-sweep: {"at":1791344394591,"watched":1,"reviewed":[{"asset":"Hook1.mp4","version":2,"editor":null,"fixed":[],"stillOpen":[],"newlyBroken":[]}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+
+ ✓ test/rearm-delivered.test.ts (7 tests) 114ms
+ ✓ test/must-fix-prompt.test.ts (11 tests) 18ms
+ ✓ test/gate-card.test.ts (8 tests) 42ms
+ ✓ test/billing-reviews-endpoint.test.ts (15 tests) 120ms
+stdout | test/large-file-engine.test.ts > a file over the Worker's limit goes to the engine > is reviewed through the engine, not refused
+freeframe-sweep: {"at":1791344394797,"watched":1,"reviewed":[{"asset":"Hook 1.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":13}
+
+stdout | test/large-file-engine.test.ts > a file over the Worker's limit goes to the engine > a clean review of a big file says 'Ready to go' - because it really was reviewed
+freeframe-sweep: {"at":1791344394811,"watched":1,"reviewed":[{"asset":"Hook 1.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":4}
+
+stdout | test/large-file-engine.test.ts > a file refused BEFORE the engine route existed gets one retry through it > retries a record that says only video-too-large
+freeframe-sweep: {"at":1791344394821,"watched":1,"reviewed":[{"asset":"Hook 1.mp4","version":1,"card":null,"posted":0,"briefingChars":0}],"skipped":[],"mustFixOnly":[],"registered":1,"leftOver":0,"passes":1,"tookMs":2}
+
+ ✓ test/large-file-engine.test.ts (7 tests) 33ms
+ ✓ test/try-card.test.ts (9 tests) 79ms
+ ✓ test/agent-api.test.ts (12 tests) 42ms
+ ✓ test/slop.test.ts (17 tests) 13ms
+ ✓ test/whop.test.ts (14 tests) 14ms
+ ✓ test/review-workspace.test.ts (11 tests) 31ms
+ ✓ test/review-stage.test.ts (17 tests) 30ms
+ ↓ test/h4-standalone.integration.test.ts (1 test | 1 skipped)
+ ✓ test/revision-rounds.test.ts (11 tests) 11ms
+ ✓ test/backfill-rules.test.ts (9 tests) 46ms
+ ✓ test/suite-auth.test.ts (12 tests) 20ms
+ ✓ test/owner-session.test.ts (9 tests) 141ms
+ ✓ test/craft-guards.test.ts (11 tests) 3ms
+ ✓ test/owner-report.test.ts (15 tests) 89ms
+ ✓ test/early-delivery-warning.test.ts (6 tests) 32ms
+ ✓ test/isolation.test.ts (5 tests) 112ms
+ ✓ test/owner-jwt.test.ts (5 tests) 41ms
+ ✓ test/retry-vs-revision.test.ts (8 tests) 14ms
+ ✓ test/manual-reviews.test.ts (14 tests) 5ms
+ ✓ test/client-feedback-company.test.ts (6 tests) 13ms
+ ✓ test/nudge-unfinished-handin.test.ts (9 tests) 26ms
+ ✓ test/whop-login.test.ts (4 tests) 66ms
+ ✓ test/one-checklist.test.ts (8 tests) 13ms
+ ✓ test/rule-verdicts-visible.test.ts (10 tests) 88ms
+ ✓ test/applicant-score.test.ts (9 tests) 3ms
+ ✓ test/owner-entitlement.test.ts (4 tests) 47ms
+ ✓ test/announce-after-delivery.test.ts (7 tests) 58ms
+ ✓ test/image-only-handin.test.ts (6 tests) 21ms
+ ✓ test/try-route.test.ts (14 tests) 22ms
+ ✓ test/brand-autosync.test.ts (9 tests) 4ms
+ ✓ test/review-playback.test.ts (2 tests) 5ms
+ ✓ test/measured-hook-only.test.ts (7 tests) 9ms
+ ✓ test/rules-into-coach.test.ts (9 tests) 5ms
+ ✓ test/applicant-rubric.test.ts (10 tests) 6ms
+ ✓ test/freeframe-channels.test.ts (5 tests) 49ms
+ ✓ test/scorecard-honesty.test.ts (10 tests) 18ms
+ ✓ test/hub-mint.test.ts (4 tests) 37ms
+ ✓ test/wrangler-secrets.test.ts (6 tests) 667ms
+   ✓ committed secret regression > contains no Slack webhook literal or common provider token 665ms
+ ✓ test/never-fake-clean.test.ts (7 tests) 48ms
+ ✓ test/demo-shim.test.ts (5 tests) 462ms
+   ✓ builds the current saved review with only bundled media and UI assets 429ms
+ ✓ test/brand-guide-pdf.test.ts (6 tests) 21ms
+ ✓ test/spend-cap.test.ts (8 tests) 5ms
+ ✓ test/freeframe-deliver.test.ts (9 tests) 4ms
+ ✓ test/coach-noise.test.ts (5 tests) 5ms
+ ✓ test/expected-videos.test.ts (6 tests) 19ms
+ ✓ test/review-export.test.ts (8 tests) 8ms
+ ✓ test/guide-intake.test.ts (4 tests) 36ms
+ ✓ test/brand-link.test.ts (4 tests) 20ms
+ ✓ test/try-lib.test.ts (13 tests) 7ms
+ ✓ test/provision.test.ts (5 tests) 59ms
+ ✓ test/selfregister-ready.test.ts (6 tests) 70ms
+ ✓ test/brand-identity.test.ts (9 tests) 5ms
+ ✓ test/measured-loudness.test.ts (9 tests) 3ms
+ ✓ test/gate-handoff.test.ts (7 tests) 14ms
+ ✓ test/gate-review-no-score.test.ts (4 tests) 19ms
+ ✓ test/owner-data.test.ts (4 tests) 25ms
+ ✓ test/video-mime.test.ts (5 tests) 5ms
+ ✓ test/auth-email.test.ts (6 tests) 3ms
+ ✓ test/delivery-comment.test.ts (10 tests) 3ms
+ ✓ test/objection.test.ts (8 tests) 7ms
+ ✓ test/time-saved.test.ts (10 tests) 28ms
+ ✓ test/content-type-default.test.ts (6 tests) 3ms
+ ✓ test/craft-failure-log.test.ts (6 tests) 5ms
+ ✓ test/suite.test.ts (4 tests) 6ms
+ ✓ test/rules-delivered-whole.test.ts (5 tests) 3ms
+ ✓ test/brief-code.test.ts (3 tests) 64ms
+stdout | test/registration-survives.test.ts > registrations survive being overwritten > a row erased from the shared list by another writer is put back by the next sweep
+[slack muted] :warning: Auto Review cannot check *New hand-in* - share-unreachable 404
+The share link does not resolve any more. It may have been deleted or regenerated - send the new one.
+https://feedback.aditor.ai/share/tokN
+
+ ✓ test/registration-survives.test.ts (2 tests) 55ms
+ ✓ test/briefing-signpost.test.ts (4 tests) 4ms
+ ✓ test/applicant-endpoint.test.ts (7 tests) 6ms
+ ✓ test/session.test.ts (3 tests) 20ms
+ ✓ test/measure-health.test.ts (5 tests) 12ms
+ ✓ test/craft-never-silent.test.ts (5 tests) 2ms
+ ✓ test/freeframe-sweep-lock.test.ts (4 tests) 13ms
+ ✓ test/notion-cron-off.test.ts (3 tests) 5ms
+ ✓ test/craft-new-checks.test.ts (5 tests) 2ms
+ ✓ test/extraction-pool.test.ts (4 tests) 9ms
+ ✓ test/never-write-airtable-brands.test.ts (2 tests) 105ms
+ ✓ test/review-record-independence.test.ts (4 tests) 3ms
+ ✓ test/freeframe.test.ts (5 tests) 5ms
+ ✓ test/upload-start-retry.test.ts (11 tests) 4848ms
+   ✓ the upload handshake survives a blip > retries a 429 and succeeds 1207ms
+   ✓ the upload handshake survives a blip > retries when there is no response at all (timeout) 3603ms
+ ✓ test/d1-backfill.test.ts (3 tests) 6ms
+ ✓ test/resolve.test.ts (5 tests) 3ms
+ ✓ test/notify-recovers-score.test.ts (6 tests) 3ms
+ ✓ test/applicant-slack-card.test.ts (5 tests) 2ms
+ ✓ test/sampling.test.ts (4 tests) 3ms
+ ✓ test/applicant-billing.test.ts (5 tests) 3ms
+ ✓ test/briefing-reaches-coach.test.ts (3 tests) 2ms
+ ✓ test/rules-safety.test.ts (4 tests) 7ms
+ ✓ test/owner-auth.test.ts (4 tests) 3ms
+ ✓ test/score-stability.test.ts (3 tests) 3ms
+ ✓ test/superseded.test.ts (4 tests) 3ms
+ ✓ test/brand-lang.test.ts (4 tests) 4ms
+ ✓ test/craft-failure-detail.test.ts (3 tests) 3ms
+ ✓ test/first-pass-rate.test.ts (3 tests) 3ms
+ ✓ test/review-estimate.test.ts (2 tests) 2ms
+ ✓ test/verdict.test.ts (3 tests) 5ms
+
+ Test Files  125 passed | 1 skipped (126)
+      Tests  1393 passed | 1 skipped (1394)
+   Start at  12:39:51
+   Duration  7.90s (transform 3.91s, setup 0ms, collect 19.35s, tests 11.65s, environment 29ms, prepare 12.80s)

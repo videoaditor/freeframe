@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "domains": [
+    {
+      "id": "ab450362ac536ef218955416055559773133b58e",
+      "zone_name": "aditor.ai",
+      "hostname": "review.aditor.ai",
+      "service": "feedback-submission-production",
+      "environment": "production"
+    }
+  ]
+}
