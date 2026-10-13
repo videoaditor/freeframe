@@ -46,6 +46,21 @@ export default function RootLayout({
             __html: `(function(){try{var d=JSON.parse(localStorage.getItem('ff-theme')||'{}');var t=d.state&&d.state.theme||'dark';if(t==='system'){t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){document.documentElement.setAttribute('data-theme','dark')}})()`,
           }}
         />
+        {/* Page-view analytics (self-hosted Umami). Long token-like path segments (share/invite links)
+            are replaced with ":id" before sending, and query strings/hashes are never sent. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.umamiScrub=function(t,p){var s=function(u){return u&&u.replace(/\\/[A-Za-z0-9_-]{20,}(?=[\\/?#]|$)/g,'/:id')};p.url=s(p.url);p.referrer=s(p.referrer);return p}`,
+          }}
+        />
+        <script
+          defer
+          src="https://metrics.aditor.ai/script.js"
+          data-website-id="48ef0aa8-5e02-4c88-b437-0edc2e9463ac"
+          data-exclude-search="true"
+          data-exclude-hash="true"
+          data-before-send="umamiScrub"
+        />
       </head>
       <body className="font-sans antialiased">
         <ThemeInitializer />
