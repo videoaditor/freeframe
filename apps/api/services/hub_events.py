@@ -42,6 +42,19 @@ def _handin_request_for_asset(db: Session, asset) -> Optional[UploadRequest]:
     return req
 
 
+def _review_url(req) -> Optional[str]:
+    """The editor-facing review link for a hand-in request - same /r/<token> link the
+    editor-submissions list uses. None if the request has no token (can't resolve), in which case
+    the caller omits review_url rather than blocking the event."""
+    token = getattr(req, "token", None)
+    if not token:
+        return None
+    base = (getattr(settings, "frontend_url", "") or "").strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}/r/{token}"
+
+
 def _post(event: dict) -> None:
     url = (getattr(settings, "hub_events_webhook_url", "") or "").strip()
     if not url:
@@ -69,13 +82,17 @@ def announce_client_comment(db: Session, comment, asset, author_name: Optional[s
     if req is None:
         return
     internal = req.iteration_state["internal_handin"]
-    _post({
+    event = {
         "event": "client_comment",
         "card_url": internal.get("card_url"),
         "editor_email": req.last_uploader_email,
         "comment": {"id": str(comment.id), "body": comment.body, "author_name": author_name},
         "version_id": str(comment.version_id),
-    })
+    }
+    review_url = _review_url(req)
+    if review_url:
+        event["review_url"] = review_url
+    _post(event)
 
 
 def announce_revision_submitted(db: Session, asset, version_id) -> None:

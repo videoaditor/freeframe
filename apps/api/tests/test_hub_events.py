@@ -11,12 +11,15 @@ from unittest.mock import MagicMock
 from apps.api.config import settings
 
 
-def _handin_request(card_url="https://trello.com/c/abc12345", folder_id=None, editor_email="editor@aditor.ai"):
-    return SimpleNamespace(
+def _handin_request(card_url="https://trello.com/c/abc12345", folder_id=None, editor_email="editor@aditor.ai", token=None):
+    req = SimpleNamespace(
         folder_id=folder_id or uuid.uuid4(),
         iteration_state={"internal_handin": {"card_url": card_url, "editor_name": "Editor"}},
         last_uploader_email=editor_email,
     )
+    if token:
+        req.token = token
+    return req
 
 
 def _db_with_request(req):
@@ -71,6 +74,69 @@ def test_a_guest_comment_on_a_handin_version_posts_a_signed_client_comment_event
     finally:
         settings.hub_events_webhook_url = ""
         settings.hub_events_webhook_secret = ""
+
+
+def test_client_comment_includes_the_editor_review_url_when_the_request_has_a_token(monkeypatch):
+    """review_url is the same absolute /r/<token> link the editor-submissions list uses, covered by
+    the same HMAC signature as the rest of the payload."""
+    from apps.api.services import hub_events
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    settings.hub_events_webhook_secret = "s3cret"
+    original_frontend_url = settings.frontend_url
+    settings.frontend_url = "https://feedback.aditor.ai"
+    try:
+        folder_id = uuid.uuid4()
+        req = _handin_request(folder_id=folder_id, token="tok_abc123")
+        db = _db_with_request(req)
+        asset = SimpleNamespace(folder_id=folder_id)
+        version_id = uuid.uuid4()
+        comment = SimpleNamespace(id=uuid.uuid4(), body="Make the logo bigger", guest_author_id=uuid.uuid4(),
+                                  visibility="public", version_id=version_id)
+
+        sent = {}
+
+        def fake_post(url, content=None, headers=None, timeout=None):
+            sent["content"] = content
+            sent["headers"] = headers
+            return MagicMock(status_code=200)
+
+        monkeypatch.setattr(hub_events.httpx, "post", fake_post)
+        hub_events.announce_client_comment(db, comment, asset, "A Client")
+
+        payload = json.loads(sent["content"])
+        assert payload["review_url"] == "https://feedback.aditor.ai/r/tok_abc123"
+        expected_sig = hmac.new(b"s3cret", sent["content"], hashlib.sha256).hexdigest()
+        assert sent["headers"]["X-Aditor-Signature"] == expected_sig
+    finally:
+        settings.hub_events_webhook_url = ""
+        settings.hub_events_webhook_secret = ""
+        settings.frontend_url = original_frontend_url
+
+
+def test_client_comment_omits_review_url_when_the_request_has_no_token(monkeypatch):
+    """If the review link can't be resolved, the event still sends - just without review_url."""
+    from apps.api.services import hub_events
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    try:
+        folder_id = uuid.uuid4()
+        req = _handin_request(folder_id=folder_id)  # no token
+        db = _db_with_request(req)
+        asset = SimpleNamespace(folder_id=folder_id)
+        comment = SimpleNamespace(id=uuid.uuid4(), body="Make the logo bigger", guest_author_id=uuid.uuid4(),
+                                  visibility="public", version_id=uuid.uuid4())
+
+        sent = {}
+
+        def fake_post(url, content=None, headers=None, timeout=None):
+            sent.update(json.loads(content))
+            return MagicMock(status_code=200)
+
+        monkeypatch.setattr(hub_events.httpx, "post", fake_post)
+        hub_events.announce_client_comment(db, comment, asset, "A Client")
+
+        assert "review_url" not in sent
+    finally:
+        settings.hub_events_webhook_url = ""
 
 
 def test_an_internal_author_comment_emits_nothing(monkeypatch):
