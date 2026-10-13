@@ -11,10 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Outbound hub events for the hand-in lane, replacing the n8n `freeframe-comment-ping`: a signed
   `client_comment` webhook POST fires when a guest reviewer comments on a hand-in version, and a
   signed `revision_submitted` webhook POST fires when a new version completes through the hand-in
-  lane (`POST /upload/complete`). Team comments and auto-review findings never trigger either event.
-  Off by default; configured via `HUB_EVENTS_WEBHOOK_URL` / `HUB_EVENTS_WEBHOOK_SECRET` (HMAC-SHA256
-  over the raw body, `X-Aditor-Signature` header), fired after commit and never fails the
-  originating comment/upload. FreeFrame stays "dumb" - the hub owns the ping/escalation loop.
+  lane (`POST /upload/complete`). The `client_comment` payload includes a `review_url` - the same
+  absolute `/r/<token>` editor-facing review link used by the editor-submissions list - omitted
+  (never blocking the event) when it can't be resolved. Team comments and auto-review findings
+  never trigger either event. Off by default; configured via `HUB_EVENTS_WEBHOOK_URL` /
+  `HUB_EVENTS_WEBHOOK_SECRET` (HMAC-SHA256 over the raw body, `X-Aditor-Signature` header), fired
+  after commit and never fails the originating comment/upload. FreeFrame stays "dumb" - the hub
+  owns the ping/escalation loop.
 
 ### Changed
 - A cold, signed-out hit to `/login` now redirects straight to the central gate
