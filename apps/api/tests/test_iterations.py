@@ -167,6 +167,28 @@ def test_mode_switch_refuses_existing_uploads(monkeypatch):
     assert exc.value.status_code==409
 
 
+def test_retry_also_requeues_a_failed_checklist(monkeypatch):
+    from apps.api.routers import iterations
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    req=SimpleNamespace(id=uuid.uuid4(),iteration_state={'slots':{'hook':{'status':'error','attempts':3}}})
+    failed=SimpleNamespace(id=uuid.uuid4(),status='failed',error_code='briefing-unavailable',attempts=3,next_attempt_at=None,
+                           registration_attempts=2,registration_error=None,next_registration_at=None)
+    ready=SimpleNamespace(id=uuid.uuid4(),status='ready',error_code=None,attempts=0,next_attempt_at=None,
+                          registration_attempts=0,registration_error=None,next_registration_at=None)
+    db=MagicMock(); db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value=[failed,ready]
+    dispatched=[]
+    monkeypatch.setattr(iterations,'_live_request',lambda *args:req)
+    monkeypatch.setattr(iterations,'locked_request',lambda *args:req)
+    monkeypatch.setattr(iterations,'snapshot',lambda *args:{})
+    monkeypatch.setattr(iterations,'dispatch_binding',dispatched.append)
+    iterations.retry('t',db)
+    assert failed.status=='queued' and failed.attempts==0 and failed.error_code is None and failed.next_attempt_at
+    assert ready.status=='ready'
+    assert dispatched==[failed.id]
+    assert req.iteration_state['slots']['hook']['attempts']==0
+
+
 def test_guest_download_never_exposes_a_held_output(monkeypatch):
     from apps.api.routers import iterations
     from types import SimpleNamespace
