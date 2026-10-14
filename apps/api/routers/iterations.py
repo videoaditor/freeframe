@@ -293,7 +293,8 @@ def create_handin(body:Handin,db:Session=Depends(get_db),current_user:User=Depen
     require_project_role(db,body.project_id,current_user,ProjectRole.editor)
     parsed=urlparse(body.card_url)
     card=re.fullmatch(r'/c/([A-Za-z0-9]{8})(?:/[^?#]*)?/?',parsed.path)
-    if parsed.scheme!='https' or parsed.netloc!='trello.com' or not card or parsed.query or parsed.fragment:
+    # Links copied from Trello often carry ?filter=… or #comment-…; only the card id is used.
+    if parsed.scheme!='https' or parsed.netloc not in ('trello.com','www.trello.com') or not card:
         raise HTTPException(422,'Paste an https://trello.com/c/... card link.')
     card_url=f'https://trello.com/c/{card.group(1)}'
     from sqlalchemy import text

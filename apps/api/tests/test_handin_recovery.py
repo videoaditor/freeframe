@@ -87,3 +87,36 @@ def test_native_parts_registration_uses_frozen_text_and_ref_after_worker_cache_l
     assert calls[0][0][3]=='Frozen briefing'
     assert calls[0][1]['checklist']=={'tenant_id':str(req.project_id),'binding_id':str(binding.id),'context_sha256':'a'*64,'plan_id':'saved-plan','content_sha256':'b'*64}
     assert calls[1][1]['brief_source_token']=='source'
+
+
+@pytest.mark.parametrize('pasted',[
+    'https://trello.com/c/AbCd1234/139-testignore?filter=member:me',
+    'https://trello.com/c/AbCd1234#comment-6712',
+    'https://www.trello.com/c/AbCd1234/139-testignore',
+])
+def test_internal_parts_accepts_card_links_as_copied_from_trello(monkeypatch,pasted):
+    from apps.api.routers import iterations, requests
+    project=SimpleNamespace(id=uuid.uuid4(),is_workspace=True)
+    db=MagicMock();db.query.return_value.filter.return_value.first.return_value=project
+    db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value=None
+    monkeypatch.setattr(iterations,'locked_request',MagicMock(return_value=SimpleNamespace(iteration_state={})))
+    monkeypatch.setattr(iterations,'require_project_role',lambda *a:None)
+    monkeypatch.setattr(iterations.review_bridge,'_call',lambda *a,**k:{'name':'Card'})
+    briefs=[]
+    def create(body,*a):briefs.append(body.brief_url);return {'id':str(uuid.uuid4()),'url':'https://example.test/r/one'}
+    monkeypatch.setattr(requests,'create_request',create)
+    body=iterations.Handin(project_id=project.id,card_url=pasted,idempotency_key=uuid.uuid4())
+    iterations.create_handin(body,db,SimpleNamespace(is_staff=True,id=uuid.uuid4(),name='Editor',email='editor@example.test'))
+    assert briefs==['https://trello.com/c/AbCd1234']
+
+
+@pytest.mark.parametrize('pasted',['http://trello.com/c/AbCd1234','https://evil.test/c/AbCd1234','https://trello.com/b/AbCd1234/board'])
+def test_internal_parts_still_refuses_non_card_links(monkeypatch,pasted):
+    from fastapi import HTTPException
+    from apps.api.routers import iterations
+    project=SimpleNamespace(id=uuid.uuid4(),is_workspace=True)
+    db=MagicMock();db.query.return_value.filter.return_value.first.return_value=project
+    monkeypatch.setattr(iterations,'require_project_role',lambda *a:None)
+    body=iterations.Handin(project_id=project.id,card_url=pasted,idempotency_key=uuid.uuid4())
+    with pytest.raises(HTTPException) as exc:iterations.create_handin(body,db,SimpleNamespace(is_staff=True,id=uuid.uuid4(),name='Editor'))
+    assert exc.value.status_code==422
