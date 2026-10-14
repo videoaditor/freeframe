@@ -1,5 +1,6 @@
 """Owner plan previews, guest progress and current cleared outputs."""
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Literal
 import uuid
 
@@ -12,6 +13,7 @@ from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..middleware.rate_limit import rate_limit
+from ..models.checklist_binding import ChecklistBinding
 from ..models.project import Project, ProjectRole
 from ..models.upload_request import UploadRequest, RequestUpload
 from ..models.user import User
@@ -19,6 +21,7 @@ from ..services import review_bridge, iteration_mixer, s3_service
 from ..services.permissions import require_project_role
 from ..services.iteration_manifest import sign_plan, validate_manifest
 from ..services.iteration_requests import locked_request, snapshot
+from ..services.checklists import dispatch_binding
 from ..services.iteration_flow import current_recipes
 from .requests import _live_request
 
@@ -125,7 +128,17 @@ def retry(token:str,db:Session=Depends(get_db)):
             if item.get('status')=='error':
                 item.update(attempts=0,next_attempt_at=0,error=None,review_generation=item.get('review_generation',0)+1)
     if state.get('delivery',{}).get('status')=='error': state['delivery'].update(attempts=0,next_attempt_at=0,error=None)
-    req.iteration_state=state; db.commit()
+    req.iteration_state=state
+    # A part review waits for the card's checklist. When preparing it failed (e.g. the card had no
+    # briefing yet), resetting only the parts left the submission stuck: retry the checklist too.
+    failed=[b for b in db.query(ChecklistBinding).filter(ChecklistBinding.request_id==req.id).with_for_update().all()
+            if b.status=='failed' or b.registration_error]
+    for b in failed:
+        if b.status=='failed':
+            b.status='queued'; b.error_code=None; b.attempts=0; b.next_attempt_at=datetime.now(timezone.utc)
+        b.registration_attempts=0; b.registration_error=None; b.next_registration_at=None
+    db.commit()
+    for b in failed: dispatch_binding(b.id)
     return snapshot(req,db)
 
 
