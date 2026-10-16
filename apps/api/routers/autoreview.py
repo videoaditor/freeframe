@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from jose import jwt
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -26,18 +26,19 @@ TOKEN_SECONDS = 60
 
 
 def user_brands(db: Session, user: User) -> list[dict]:
-    """Brand slugs of live projects the user created or is an explicit member of; superadmins get
-    every linked brand. The instance-wide staff role deliberately does not count: it would hand
-    every account every brand page."""
-    query = db.query(Project.autoreview_brand_slug, func.min(Project.name)).filter(
-        Project.autoreview_brand_slug.isnot(None), Project.deleted_at.is_(None))
-    if not user.is_superadmin:
-        query = query.outerjoin(ProjectMember, and_(
-            ProjectMember.project_id == Project.id, ProjectMember.user_id == user.id,
-            ProjectMember.deleted_at.is_(None),
-        )).filter(or_(ProjectMember.id.isnot(None), Project.created_by == user.id))
-    rows = query.group_by(Project.autoreview_brand_slug).order_by(Project.autoreview_brand_slug).all()
-    return [{"slug": slug, "name": name} for slug, name in rows]
+    """Brand slugs of live projects the user is a current member of (a live ProjectMember row).
+    Creating a project, being superadmin or the instance-wide staff role grant nothing here: the
+    Worker admits ADMIN_EMAILS on its own. Label = the oldest such project's name."""
+    rows = db.query(Project.autoreview_brand_slug, Project.name).join(ProjectMember, and_(
+        ProjectMember.project_id == Project.id, ProjectMember.user_id == user.id,
+        ProjectMember.deleted_at.is_(None),
+    )).filter(
+        Project.autoreview_brand_slug.isnot(None), Project.deleted_at.is_(None),
+    ).order_by(Project.autoreview_brand_slug, Project.created_at, Project.id).all()
+    brands: dict[str, str] = {}
+    for slug, name in rows:
+        brands.setdefault(slug, name)
+    return [{"slug": slug, "name": name} for slug, name in brands.items()]
 
 
 @router.get("/brands")

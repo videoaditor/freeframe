@@ -62,13 +62,19 @@ def test_skips_project_without_slug(enabled):
     assert tasks.tasks == []
 
 
-def test_skips_automation_reviewer_comments(enabled, monkeypatch):
-    """AutoReview's own findings must not come back to it as client feedback."""
-    monkeypatch.setattr(settings, "automation_guest_emails", "review@aditor.ai")
+def test_skips_non_public_comments(enabled):
+    """Internal staff notes and the automation reviewer's (internal) findings never leave FreeFrame."""
     tasks = BackgroundTasks()
     brand_loop.queue_comment(tasks, _db("audibene-gmbh"), _comment(visibility="internal"), _asset(),
-                             author_email="Review@aditor.ai", author_is_client=True)
+                             author_email="editor@aditor.ai", author_is_client=False)
     assert tasks.tasks == []
+
+
+def test_null_timecode_is_sent_as_null(enabled):
+    tasks = BackgroundTasks()
+    brand_loop.queue_comment(tasks, _db("audibene-gmbh"), _comment(timecode_start=None), _asset(),
+                             author_email="a@b.de", author_is_client=True)
+    assert tasks.tasks[0].args[0]["timecode"] is None
 
 
 def test_lookup_failure_never_raises(enabled):
@@ -180,3 +186,39 @@ def test_signed_in_staff_on_a_share_link_is_not_a_client():
         c.guest_comment("tok", c.GuestCommentCreate(body="intern", version_id=uuid.uuid4()), None, db, user, None,
                         background_tasks=tasks)
     assert queue.call_args.kwargs == {"author_email": "m@x.de", "author_is_client": False, "share_token": "tok"}
+
+
+def test_hook_is_queued_even_when_the_hub_call_raises(enabled):
+    import apps.api.routers.comments as c
+    from apps.api.models.share import SharePermission
+    asset, tasks = _asset(), BackgroundTasks()
+    asset.name = "Hook v3"
+    link = SimpleNamespace(id=uuid.uuid4(), asset_id=asset.id, permission=SharePermission.comment)
+    db = MagicMock()
+    body = c.GuestCommentCreate(body="x", version_id=uuid.uuid4(), guest_email="k@a.de", guest_name="K")
+    with patch.object(c, "validate_share_link_with_session", return_value=link), \
+         patch.object(c, "_get_asset", return_value=asset), patch.object(c, "validate_asset_in_share"), \
+         patch.object(c, "validate_comment_version"), \
+         patch("apps.api.services.hub_events.announce_client_comment", side_effect=RuntimeError("hub")), \
+         patch.object(c.brand_loop, "queue_comment") as queue:
+        with pytest.raises(RuntimeError):
+            c.guest_comment("tok", body, None, db, None, None, background_tasks=tasks)
+    queue.assert_called_once()
+
+
+def test_automation_guest_is_not_a_client(monkeypatch):
+    import apps.api.routers.comments as c
+    from apps.api.models.share import SharePermission
+    monkeypatch.setattr(settings, "automation_guest_emails", "review@aditor.ai")
+    asset, tasks = _asset(), BackgroundTasks()
+    asset.name = "Hook v3"
+    link = SimpleNamespace(id=uuid.uuid4(), asset_id=asset.id, permission=SharePermission.comment)
+    db = MagicMock()
+    body = c.GuestCommentCreate(body="x", version_id=uuid.uuid4(), guest_email="review@aditor.ai", guest_name="Auto Review")
+    with patch.object(c, "validate_share_link_with_session", return_value=link), \
+         patch.object(c, "_get_asset", return_value=asset), patch.object(c, "validate_asset_in_share"), \
+         patch.object(c, "validate_comment_version"), patch.object(c, "_build_comment_response"), \
+         patch("apps.api.services.hub_events.announce_client_comment"), \
+         patch.object(c.brand_loop, "queue_comment") as queue:
+        c.guest_comment("tok", body, None, db, None, None, background_tasks=tasks)
+    assert queue.call_args.kwargs["author_is_client"] is False

@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 
 def _project():
-    return SimpleNamespace(id=uuid.uuid4(), name="audibene-workspace", deleted_at=None, autoreview_brand_slug=None)
+    return SimpleNamespace(id=uuid.uuid4(), name="audibene-workspace", deleted_at=None, is_workspace=True,
+                           autoreview_brand_slug=None)
 
 
 def test_model_has_nullable_slug_column():
@@ -48,3 +49,14 @@ def test_unknown_project_is_404(client, auth_headers, mock_db, test_user):
     mock_db.first.return_value = None
     resp = client.put(f"/admin/projects/{uuid.uuid4()}/autoreview-brand", json={"slug": "audibene-gmbh"}, headers=auth_headers)
     assert resp.status_code == 404
+
+
+def test_only_brand_workspaces_take_a_slug(client, auth_headers, mock_db, test_user):
+    """A per-card project (is_workspace false) is filtered out by the query and answers 404."""
+    from apps.api.models.project import Project
+    test_user.is_superadmin = True
+    mock_db.first.return_value = None
+    resp = client.put(f"/admin/projects/{uuid.uuid4()}/autoreview-brand", json={"slug": "audibene-gmbh"}, headers=auth_headers)
+    assert resp.status_code == 404 and resp.json()["detail"] == "Workspace not found"
+    criteria = [str(c) for call in mock_db.filter.call_args_list for c in call.args]
+    assert any("is_workspace" in c for c in criteria)

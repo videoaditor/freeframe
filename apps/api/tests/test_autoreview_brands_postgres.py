@@ -31,10 +31,11 @@ def db():
 
 
 def test_user_brands(db):
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
     from apps.api.models import User, Project
     from apps.api.models.project import ProjectMember, ProjectRole
     from apps.api.routers.autoreview import user_brands
+    now = datetime.now(timezone.utc)
 
     def user(email, **kw):
         u = User(email=email, name=email, **kw)
@@ -42,24 +43,27 @@ def test_user_brands(db):
         db.flush()
         return u
 
-    owner, client, other, admin = user('o@aditor.ai'), user('k@audibene.de', is_staff=False), user('x@y.de'), user('a@aditor.ai', is_superadmin=True)
+    owner, client, gone, admin = user('o@aditor.ai'), user('k@audibene.de', is_staff=False), user('x@y.de'), user('a@aditor.ai', is_superadmin=True)
 
-    def project(name, slug, **kw):
-        p = Project(name=name, created_by=owner.id, autoreview_brand_slug=slug, **kw)
+    def project(name, slug, age_days, **kw):
+        p = Project(name=name, created_by=owner.id, autoreview_brand_slug=slug, is_workspace=True,
+                    created_at=now - timedelta(days=age_days), **kw)
         db.add(p)
         db.flush()
         return p
 
-    audibene = project('audibene-workspace', 'audibene-gmbh')
-    project('audibene-workspace-old', 'audibene-gmbh')
-    mynd = project('Mynd', 'mynd-organics')
-    project('Gone', 'gone-brand', deleted_at=datetime.now(timezone.utc))
-    project('Unlinked', None)
-    db.add(ProjectMember(project_id=audibene.id, user_id=client.id, role=ProjectRole.reviewer))
-    db.add(ProjectMember(project_id=mynd.id, user_id=other.id, role=ProjectRole.viewer, deleted_at=datetime.now(timezone.utc)))
+    newer = project('audibene-regs', 'audibene-gmbh', 1)
+    oldest = project('audibene-workspace', 'audibene-gmbh', 30)
+    mynd = project('Mynd', 'mynd-organics', 5)
+    deleted = project('Gone', 'gone-brand', 5, deleted_at=now)
+    unlinked = project('Unlinked', None, 5)
+    for p in (newer, oldest, unlinked, deleted):
+        db.add(ProjectMember(project_id=p.id, user_id=client.id, role=ProjectRole.reviewer))
+    db.add(ProjectMember(project_id=mynd.id, user_id=gone.id, role=ProjectRole.viewer, deleted_at=now))
     db.commit()
 
+    # Several workspaces share one slug; the label is the oldest one's name.
     assert user_brands(db, client) == [{'slug': 'audibene-gmbh', 'name': 'audibene-workspace'}]
-    assert user_brands(db, other) == []
-    assert [b['slug'] for b in user_brands(db, owner)] == ['audibene-gmbh', 'mynd-organics']
-    assert [b['slug'] for b in user_brands(db, admin)] == ['audibene-gmbh', 'mynd-organics']
+    assert user_brands(db, gone) == [], 'soft-deleted membership grants nothing'
+    assert user_brands(db, owner) == [], 'creating a project without membership grants nothing'
+    assert user_brands(db, admin) == [], 'superadmin without membership: the Worker admits ADMIN_EMAILS itself'

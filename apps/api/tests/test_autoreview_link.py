@@ -62,3 +62,11 @@ def test_brands_empty_when_not_configured(client, auth_headers):
         resp = client.get("/autoreview/brands", headers=auth_headers)
     assert resp.json() == {"brands": []}
     lookup.assert_not_called()
+
+
+def test_link_403_for_creator_or_lapsed_member(client, auth_headers, enabled):
+    """user_brands returns nothing for a creator without membership or a soft-deleted member
+    (pinned against Postgres in test_autoreview_brands_postgres.py); the route then refuses."""
+    with patch("apps.api.routers.autoreview.user_brands", return_value=[]):
+        resp = client.get("/autoreview/link?brand=audibene-gmbh", headers=auth_headers)
+    assert resp.status_code == 403

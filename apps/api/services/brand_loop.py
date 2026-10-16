@@ -20,14 +20,11 @@ def is_enabled() -> bool:
     return bool(settings.autoreview_url.strip() and settings.brand_loop_secret.strip())
 
 
-def _automation_emails() -> set[str]:
-    return {e.strip().lower() for e in (settings.automation_guest_emails or "").split(",") if e.strip()}
-
-
 def queue_comment(background_tasks, db, comment, asset, *, author_email, author_is_client, share_token=None) -> None:
-    """Call after the comment is committed. Skips projects without an explicit brand slug and the
-    automation reviewer's own comments (AutoReview must not learn from itself)."""
-    if background_tasks is None or not is_enabled() or (author_email or "").lower() in _automation_emails():
+    """Call after the comment is committed. Skips projects without an explicit brand slug and
+    non-public comments: internal staff notes (and the automation reviewer's findings, which are
+    stored internal) never leave FreeFrame."""
+    if background_tasks is None or not is_enabled() or getattr(comment, "visibility", "public") != "public":
         return
     try:
         project = db.query(Project).filter(Project.id == asset.project_id).first()

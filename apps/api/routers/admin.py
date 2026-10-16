@@ -139,11 +139,16 @@ def set_autoreview_brand(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Link a project to its AutoReview brand (Brand Loop). Superadmin only: the slug decides which
-    brand a project's comments teach and which brand page its members may open."""
-    project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()
+    """Link a brand workspace to its AutoReview brand (Brand Loop). Superadmin only: the slug decides
+    which brand the workspace's comments teach and which brand page its members may open.
+
+    Several workspaces may share one slug on purpose (one brand, more than one workspace). Send
+    `{"slug": null}` to unlink; an empty string is rejected, not treated as null."""
+    project = db.query(Project).filter(
+        Project.id == project_id, Project.deleted_at.is_(None), Project.is_workspace.is_(True),
+    ).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="Workspace not found")
     project.autoreview_brand_slug = body.slug
     db.commit()
     return AutoreviewBrandResponse(project_id=project.id, autoreview_brand_slug=project.autoreview_brand_slug)
