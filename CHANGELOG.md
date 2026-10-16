@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- AutoReview Brand Loop: projects carry an explicit `autoreview_brand_slug` (superadmin sets it via
+  `PUT /admin/projects/{id}/autoreview-brand`). Comments on linked projects are sent to
+  `AUTOREVIEW_URL/api/brand-loop/comment` in the background, and members get an "AutoReview" sidebar
+  entry that opens their brand page signed in (`GET /autoreview/link`, 60 s token). Off unless
+  `AUTOREVIEW_URL` and `BRAND_LOOP_SECRET` are both set.
 - Outbound hub events for the hand-in lane, replacing the n8n `freeframe-comment-ping`: a signed
   `client_comment` webhook POST fires when a guest reviewer comments on a hand-in version, and a
   signed `revision_submitted` webhook POST fires when a new version completes through the hand-in

@@ -26,6 +26,7 @@ import { useBrandingStore } from '@/stores/branding-store'
 import { useThemeStore } from '@/stores/theme-store'
 import { Avatar } from '@/components/shared/avatar'
 import { NotificationDrawer } from './notification-drawer'
+import { AutoreviewNav } from './autoreview-nav'
 import useSWR from 'swr'
 import { api } from '@/lib/api'
 import { StorageUsage, StorageRing } from '@/components/shared/storage-usage'
@@ -135,6 +136,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </Link>
           )
         })}
+
+        <AutoreviewNav collapsed={collapsed} />
 
         {/* Notifications button */}
         <button

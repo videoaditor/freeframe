@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import auth, users, projects, upload, events, assets, me, comments, approvals, share, metadata, branding, notifications, admin, setup, folders, hls_proxy, instance_settings, requests as upload_requests
-from .routers import product_feedback, checklists, review_timing
+from .routers import product_feedback, checklists, review_timing, autoreview
 from .services.s3_service import run_startup_bucket_setup
 from .services.email_service import mail_is_configured
 from .middleware.global_rate_limit import GlobalRateLimitMiddleware
@@ -80,6 +80,7 @@ app.include_router(metadata.router)
 app.include_router(branding.router)
 app.include_router(notifications.router)
 app.include_router(admin.router)
+app.include_router(autoreview.router)
 app.include_router(setup.router)
 app.include_router(folders.router)
 app.include_router(hls_proxy.router)
