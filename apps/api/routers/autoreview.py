@@ -60,7 +60,8 @@ def brand_link(
         raise HTTPException(status_code=403, detail="Not a member of this brand")
     token = jwt.encode({
         "v": 1, "iss": "freeframe", "aud": "review:brand", "sub": current_user.email,
-        "brands": slugs, "exp": int(time.time()) + TOKEN_SECONDS,
+        # Only the requested brand: a leaked link opens one brand page, not all of the user's.
+        "brands": [brand], "exp": int(time.time()) + TOKEN_SECONDS,
     }, settings.brand_loop_secret.strip(), algorithm="HS256")
     base = settings.autoreview_url.strip().rstrip("/")
     return {"url": f"{base}/brand/{quote(brand, safe='')}?t={token}"}

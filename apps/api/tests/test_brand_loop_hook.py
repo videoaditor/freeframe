@@ -163,3 +163,20 @@ def test_http_route_injects_background_tasks(client, auth_headers, mock_db, test
         mock_db.first.return_value = SimpleNamespace(id=uuid.uuid4())
         client.post(f"/assets/{uuid.uuid4()}/comments", json={"version_id": str(uuid.uuid4()), "body": "x"}, headers=auth_headers)
     assert isinstance(queue.call_args.args[0], BackgroundTasks)
+
+
+def test_signed_in_staff_on_a_share_link_is_not_a_client():
+    import apps.api.routers.comments as c
+    from apps.api.models.share import SharePermission
+    asset, tasks, user = _asset(), BackgroundTasks(), _member(True)
+    asset.name = "Hook v3"
+    link = SimpleNamespace(id=uuid.uuid4(), asset_id=asset.id, permission=SharePermission.comment)
+    db = MagicMock()
+    with patch.object(c, "validate_share_link_with_session", return_value=link), \
+         patch.object(c, "_get_asset", return_value=asset), patch.object(c, "validate_asset_in_share"), \
+         patch.object(c, "validate_comment_version"), patch.object(c, "_build_comment_response"), \
+         patch("apps.api.services.hub_events.announce_client_comment"), \
+         patch.object(c.brand_loop, "queue_comment") as queue:
+        c.guest_comment("tok", c.GuestCommentCreate(body="intern", version_id=uuid.uuid4()), None, db, user, None,
+                        background_tasks=tasks)
+    assert queue.call_args.kwargs == {"author_email": "m@x.de", "author_is_client": False, "share_token": "tok"}

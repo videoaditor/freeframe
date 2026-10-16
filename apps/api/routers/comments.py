@@ -1101,11 +1101,11 @@ def guest_comment(
     db.add(activity)
     db.commit()
 
-    from ..services import hub_events
-    hub_events.announce_client_comment(db, comment, asset, actor_name)
     brand_loop.queue_comment(background_tasks, db, comment, asset, share_token=token,
                              author_email=current_user.email if current_user else guest_email,
                              author_is_client=not is_staff(current_user) if current_user else True)
+    from ..services import hub_events
+    hub_events.announce_client_comment(db, comment, asset, actor_name)
 
     return _build_comment_response(comment, db)
 

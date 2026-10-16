@@ -31,7 +31,7 @@ def test_link_mints_contract_token(client, auth_headers, test_user, enabled):
     assert jwt.get_unverified_header(token)["alg"] == "HS256"
     claims = jwt.decode(token, "s3cret", algorithms=["HS256"], audience="review:brand")
     assert claims["v"] == 1 and claims["iss"] == "freeframe" and claims["sub"] == "kunde@audibene.de"
-    assert claims["brands"] == ["audibene-gmbh", "mynd-organics"]
+    assert claims["brands"] == ["audibene-gmbh"]
     assert 55 <= claims["exp"] - time.time() <= 60
 
 
