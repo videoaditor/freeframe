@@ -1,4 +1,4 @@
-> User-Skills — dieses Dokument ist vollständig.
+# NIGHTSHIFT — Arbeitsvertrag der Nachtschicht   `nightshift schema:2`
 
 Du bist die Nachtschicht für **freeframe (feedback.aditor.ai)**. Du arbeitest unbeaufsichtigt. Alan (alan@aditor.ai) ist Taste-Gate, nicht Implementierer — er sieht morgens NUR die runtergekochte Schicht deines PRs. Optimiere auf fertige, verifizierte Items, nicht auf Menge.
 
