@@ -11,6 +11,7 @@ import logging
 import httpx
 
 from ..config import settings
+from . import directory_service
 from ..models.project import Project
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,22 @@ def is_enabled() -> bool:
     return bool(settings.autoreview_url.strip() and settings.brand_loop_secret.strip())
 
 
-def queue_comment(background_tasks, db, comment, asset, *, author_email, author_is_client, share_token=None) -> None:
+def is_aditor_staff(email) -> bool:
+    """Aditor staff = an @aditor.ai address or someone the people directory (the roster the OIDC
+    sign-in already checks) lists. Never `User.is_staff`: invited client accounts default to true.
+    Everyone else, guests included, is a client. Directory down = domain rule only."""
+    email = (email or "").strip().lower()
+    if email.endswith("@aditor.ai"):
+        return True
+    if not email or not directory_service.is_configured():
+        return False
+    try:
+        return directory_service.find_person(email) is not None
+    except directory_service.DirectoryUnavailable:
+        return False
+
+
+def queue_comment(background_tasks, db, comment, asset, *, author_email, share_token=None) -> None:
     """Call after the comment is committed. Skips projects without an explicit brand slug and
     non-public comments: internal staff notes (and the automation reviewer's findings, which are
     stored internal) never leave FreeFrame."""
@@ -34,7 +50,7 @@ def queue_comment(background_tasks, db, comment, asset, *, author_email, author_
         payload = {
             "v": 1, "commentId": str(comment.id), "brandSlug": slug, "assetId": str(asset.id),
             "shareToken": share_token, "timecode": comment.timecode_start, "body": comment.body,
-            "authorEmail": author_email, "authorIsClient": author_is_client,
+            "authorEmail": author_email,
             "createdAt": comment.created_at.isoformat(),
         }
     except Exception:  # noqa: BLE001 - the comment is saved; the hook must never fail it
@@ -44,7 +60,9 @@ def queue_comment(background_tasks, db, comment, asset, *, author_email, author_
 
 
 def post_comment(payload: dict) -> None:
+    """Background: the directory lookup behind authorIsClient runs here, off the request path."""
     try:
+        payload = {**payload, "authorIsClient": not is_aditor_staff(payload.get("authorEmail"))}
         r = httpx.post(
             settings.autoreview_url.strip().rstrip("/") + "/api/brand-loop/comment",
             json=payload,

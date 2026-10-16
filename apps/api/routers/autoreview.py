@@ -26,13 +26,16 @@ TOKEN_SECONDS = 60
 
 
 def user_brands(db: Session, user: User) -> list[dict]:
-    """Brand slugs of live projects the user is a current member of (a live ProjectMember row).
-    Creating a project, being superadmin or the instance-wide staff role grant nothing here: the
-    Worker admits ADMIN_EMAILS on its own. Label = the oldest such project's name."""
-    rows = db.query(Project.autoreview_brand_slug, Project.name).join(ProjectMember, and_(
-        ProjectMember.project_id == Project.id, ProjectMember.user_id == user.id,
-        ProjectMember.deleted_at.is_(None),
-    )).filter(
+    """Brand slugs of live projects the user is a current member of (a live ProjectMember row);
+    superadmins get every linked brand. Creating a project or the instance-wide staff role grant
+    nothing here. Label = the oldest such project's name."""
+    query = db.query(Project.autoreview_brand_slug, Project.name)
+    if not user.is_superadmin:
+        query = query.join(ProjectMember, and_(
+            ProjectMember.project_id == Project.id, ProjectMember.user_id == user.id,
+            ProjectMember.deleted_at.is_(None),
+        ))
+    rows = query.filter(
         Project.autoreview_brand_slug.isnot(None), Project.deleted_at.is_(None),
     ).order_by(Project.autoreview_brand_slug, Project.created_at, Project.id).all()
     brands: dict[str, str] = {}

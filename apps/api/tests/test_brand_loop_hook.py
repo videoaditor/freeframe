@@ -40,25 +40,25 @@ def _asset():
 def test_queues_contract_payload(enabled):
     tasks, comment, asset = BackgroundTasks(), _comment(), _asset()
     brand_loop.queue_comment(tasks, _db("audibene-gmbh"), comment, asset,
-                             author_email="kunde@audibene.de", author_is_client=True, share_token="tok")
+                             author_email="kunde@audibene.de", share_token="tok")
     assert len(tasks.tasks) == 1
     assert tasks.tasks[0].args[0] == {
         "v": 1, "commentId": str(comment.id), "brandSlug": "audibene-gmbh", "assetId": str(asset.id),
         "shareToken": "tok", "timecode": 12.4, "body": "Logo zu klein", "authorEmail": "kunde@audibene.de",
-        "authorIsClient": True, "createdAt": "2026-10-16T09:30:00+00:00",
+        "createdAt": "2026-10-16T09:30:00+00:00",
     }
 
 
 def test_disabled_without_env():
     tasks, db = BackgroundTasks(), _db("audibene-gmbh")
-    brand_loop.queue_comment(tasks, db, _comment(), _asset(), author_email="a@b.de", author_is_client=True)
+    brand_loop.queue_comment(tasks, db, _comment(), _asset(), author_email="a@b.de")
     assert tasks.tasks == []
     db.query.assert_not_called()
 
 
 def test_skips_project_without_slug(enabled):
     tasks = BackgroundTasks()
-    brand_loop.queue_comment(tasks, _db(None), _comment(), _asset(), author_email="a@b.de", author_is_client=True)
+    brand_loop.queue_comment(tasks, _db(None), _comment(), _asset(), author_email="a@b.de")
     assert tasks.tasks == []
 
 
@@ -66,14 +66,14 @@ def test_skips_non_public_comments(enabled):
     """Internal staff notes and the automation reviewer's (internal) findings never leave FreeFrame."""
     tasks = BackgroundTasks()
     brand_loop.queue_comment(tasks, _db("audibene-gmbh"), _comment(visibility="internal"), _asset(),
-                             author_email="editor@aditor.ai", author_is_client=False)
+                             author_email="editor@aditor.ai")
     assert tasks.tasks == []
 
 
 def test_null_timecode_is_sent_as_null(enabled):
     tasks = BackgroundTasks()
     brand_loop.queue_comment(tasks, _db("audibene-gmbh"), _comment(timecode_start=None), _asset(),
-                             author_email="a@b.de", author_is_client=True)
+                             author_email="a@b.de")
     assert tasks.tasks[0].args[0]["timecode"] is None
 
 
@@ -81,16 +81,17 @@ def test_lookup_failure_never_raises(enabled):
     db = MagicMock()
     db.query.side_effect = RuntimeError("db gone")
     tasks = BackgroundTasks()
-    brand_loop.queue_comment(tasks, db, _comment(), _asset(), author_email="a@b.de", author_is_client=True)
+    brand_loop.queue_comment(tasks, db, _comment(), _asset(), author_email="a@b.de")
     assert tasks.tasks == []
 
 
 def test_post_uses_bearer_and_3s_timeout(enabled, monkeypatch):
     calls = []
     monkeypatch.setattr(brand_loop.httpx, "post", lambda url, **kw: calls.append((url, kw)) or MagicMock(status_code=202))
-    brand_loop.post_comment({"v": 1})
+    brand_loop.post_comment({"v": 1, "authorEmail": "kunde@audibene.de"})
     assert calls == [("https://review.aditor.ai/api/brand-loop/comment",
-                      {"json": {"v": 1}, "headers": {"authorization": "Bearer s3cret"}, "timeout": 3})]
+                      {"json": {"v": 1, "authorEmail": "kunde@audibene.de", "authorIsClient": True},
+                       "headers": {"authorization": "Bearer s3cret"}, "timeout": 3})]
 
 
 def test_post_swallows_errors(enabled, monkeypatch):
@@ -119,7 +120,7 @@ def test_create_comment_queues_hook(is_staff):
         c.create_comment(asset.id, body, db, user, background_tasks=tasks)
     _, _, comment, got_asset = queue.call_args.args
     assert queue.call_args.args[0] is tasks and got_asset is asset and comment.body == "Musik leiser"
-    assert queue.call_args.kwargs == {"author_email": "m@x.de", "author_is_client": not is_staff}
+    assert queue.call_args.kwargs == {"author_email": "m@x.de"}
 
 
 def test_reply_queues_hook():
@@ -134,7 +135,7 @@ def test_reply_queues_hook():
         c.reply_to_comment(asset.id, parent.id, c.CommentCreate(version_id=parent.version_id, body="ok"), db, user,
                            background_tasks=tasks)
     assert queue.call_args.args[2].parent_id == parent.id
-    assert queue.call_args.kwargs == {"author_email": "m@x.de", "author_is_client": False}
+    assert queue.call_args.kwargs == {"author_email": "m@x.de"}
 
 
 def test_guest_share_comment_queues_hook_as_client():
@@ -153,7 +154,7 @@ def test_guest_share_comment_queues_hook_as_client():
          patch("apps.api.services.hub_events.announce_client_comment"), \
          patch.object(c.brand_loop, "queue_comment") as queue:
         c.guest_comment("tok", body, None, db, None, None, background_tasks=tasks)
-    assert queue.call_args.kwargs == {"author_email": "kunde@audibene.de", "author_is_client": True, "share_token": "tok"}
+    assert queue.call_args.kwargs == {"author_email": "kunde@audibene.de", "share_token": "tok"}
 
 
 def test_http_route_injects_background_tasks(client, auth_headers, mock_db, test_user):
@@ -185,7 +186,7 @@ def test_signed_in_staff_on_a_share_link_is_not_a_client():
          patch.object(c.brand_loop, "queue_comment") as queue:
         c.guest_comment("tok", c.GuestCommentCreate(body="intern", version_id=uuid.uuid4()), None, db, user, None,
                         background_tasks=tasks)
-    assert queue.call_args.kwargs == {"author_email": "m@x.de", "author_is_client": False, "share_token": "tok"}
+    assert queue.call_args.kwargs == {"author_email": "m@x.de", "share_token": "tok"}
 
 
 def test_hook_is_queued_even_when_the_hub_call_raises(enabled):
@@ -206,19 +207,50 @@ def test_hook_is_queued_even_when_the_hub_call_raises(enabled):
     queue.assert_called_once()
 
 
-def test_automation_guest_is_not_a_client(monkeypatch):
+# ── authorIsClient: Aditor staff by email domain or people directory, never User.is_staff ─────
+
+@pytest.mark.parametrize("email,client", [
+    ("kunde@audibene.de", True),     # invited client account (is_staff defaults to true) is a client
+    ("Alan@Aditor.ai", False),
+    ("", True),
+])
+def test_author_is_client_by_domain(email, client, monkeypatch):
+    monkeypatch.setattr(settings, "directory_lookup_url", None)
+    assert brand_loop.is_aditor_staff(email) is (not client)
+
+
+def test_directory_listed_editor_is_staff(monkeypatch):
+    from apps.api.services import directory_service
+    monkeypatch.setattr(settings, "directory_lookup_url", "https://dir/{email}")
+    monkeypatch.setattr(directory_service, "find_person", lambda e: {"status": "active"} if e == "ed@gmail.com" else None)
+    assert brand_loop.is_aditor_staff("ed@gmail.com") is True
+    assert brand_loop.is_aditor_staff("kunde@audibene.de") is False
+
+
+def test_directory_down_falls_back_to_domain(monkeypatch):
+    from apps.api.services import directory_service
+    def down(e):
+        raise directory_service.DirectoryUnavailable("x")
+    monkeypatch.setattr(settings, "directory_lookup_url", "https://dir/{email}")
+    monkeypatch.setattr(directory_service, "find_person", down)
+    assert brand_loop.is_aditor_staff("ed@gmail.com") is False
+
+
+def test_invited_client_account_is_sent_as_client(enabled, monkeypatch):
+    """End to end through the router: an invited @audibene.de account with is_staff=True."""
     import apps.api.routers.comments as c
-    from apps.api.models.share import SharePermission
-    monkeypatch.setattr(settings, "automation_guest_emails", "review@aditor.ai")
+    monkeypatch.setattr(settings, "directory_lookup_url", None)
     asset, tasks = _asset(), BackgroundTasks()
-    asset.name = "Hook v3"
-    link = SimpleNamespace(id=uuid.uuid4(), asset_id=asset.id, permission=SharePermission.comment)
+    user = SimpleNamespace(id=uuid.uuid4(), email="pruefer@audibene.de", name="P", is_staff=True, is_superadmin=False)
+    asset.created_by = user.id
     db = MagicMock()
-    body = c.GuestCommentCreate(body="x", version_id=uuid.uuid4(), guest_email="review@aditor.ai", guest_name="Auto Review")
-    with patch.object(c, "validate_share_link_with_session", return_value=link), \
-         patch.object(c, "_get_asset", return_value=asset), patch.object(c, "validate_asset_in_share"), \
-         patch.object(c, "validate_comment_version"), patch.object(c, "_build_comment_response"), \
-         patch("apps.api.services.hub_events.announce_client_comment"), \
-         patch.object(c.brand_loop, "queue_comment") as queue:
-        c.guest_comment("tok", body, None, db, None, None, background_tasks=tasks)
-    assert queue.call_args.kwargs["author_is_client"] is False
+    db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(autoreview_brand_slug="audibene-gmbh")
+    sent = []
+    monkeypatch.setattr(brand_loop.httpx, "post", lambda url, **kw: sent.append(kw["json"]) or MagicMock(status_code=202))
+    with patch.object(c, "_get_asset", return_value=asset), patch.object(c, "require_asset_access"), \
+         patch.object(c, "_create_mentions"), patch.object(c, "_build_comment_response"), \
+         patch.object(db, "refresh", side_effect=lambda o: setattr(o, "created_at", datetime(2026, 10, 16, tzinfo=timezone.utc))):
+        c.create_comment(asset.id, c.CommentCreate(version_id=uuid.uuid4(), body="Logo größer"), db, user, background_tasks=tasks)
+    for task in tasks.tasks:
+        task.func(*task.args, **task.kwargs)
+    assert sent and sent[0]["authorIsClient"] is True and sent[0]["authorEmail"] == "pruefer@audibene.de"

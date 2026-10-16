@@ -66,4 +66,4 @@ def test_user_brands(db):
     assert user_brands(db, client) == [{'slug': 'audibene-gmbh', 'name': 'audibene-workspace'}]
     assert user_brands(db, gone) == [], 'soft-deleted membership grants nothing'
     assert user_brands(db, owner) == [], 'creating a project without membership grants nothing'
-    assert user_brands(db, admin) == [], 'superadmin without membership: the Worker admits ADMIN_EMAILS itself'
+    assert [b['slug'] for b in user_brands(db, admin)] == ['audibene-gmbh', 'mynd-organics']

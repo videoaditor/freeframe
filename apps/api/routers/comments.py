@@ -45,7 +45,7 @@ from ..schemas.comment import (
 from ..services import brand_loop, s3_service
 from ..services import comment_export
 from ..services.permissions import (
-    is_staff, require_asset_access, can_access_asset, validate_share_link_with_session, validate_asset_in_share,
+    require_asset_access, can_access_asset, validate_share_link_with_session, validate_asset_in_share,
 )
 from ..tasks.email_tasks import send_mention_email, send_comment_email
 from ..tasks.celery_app import send_task_safe
@@ -400,8 +400,7 @@ def create_comment(
 
     db.commit()
     db.refresh(comment)
-    brand_loop.queue_comment(background_tasks, db, comment, asset,
-                             author_email=current_user.email, author_is_client=not is_staff(current_user))
+    brand_loop.queue_comment(background_tasks, db, comment, asset, author_email=current_user.email)
     return _build_comment_response(comment, db, current_user_id=current_user.id)
 
 
@@ -445,8 +444,7 @@ def reply_to_comment(
 
     db.commit()
     db.refresh(reply)
-    brand_loop.queue_comment(background_tasks, db, reply, asset,
-                             author_email=current_user.email, author_is_client=not is_staff(current_user))
+    brand_loop.queue_comment(background_tasks, db, reply, asset, author_email=current_user.email)
     return _build_comment_response(reply, db, current_user_id=current_user.id)
 
 
@@ -1102,9 +1100,7 @@ def guest_comment(
     db.commit()
 
     brand_loop.queue_comment(background_tasks, db, comment, asset, share_token=token,
-                             author_email=current_user.email if current_user else guest_email,
-                             author_is_client=(not is_staff(current_user)) if current_user
-                             else guest_email not in _automation_guest_emails())
+                             author_email=current_user.email if current_user else guest_email)
     from ..services import hub_events
     hub_events.announce_client_comment(db, comment, asset, actor_name)
 
