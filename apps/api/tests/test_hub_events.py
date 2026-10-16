@@ -1,5 +1,6 @@
-"""Outbound hub events: a guest comment on a hand-in version, and a version completed through the
-hand-in lane. Modelled on test_folder_handins.py's direct service-level style for automation_share.
+"""Outbound hub events: a guest (client) comment routes to the responsible editor for ANY asset, and
+a completed version resolves the open revisions on that asset. Service-level, mock-driven, like
+test_folder_handins.py's style for automation_share.
 """
 import hashlib
 import hmac
@@ -10,21 +11,41 @@ from unittest.mock import MagicMock
 
 from apps.api.config import settings
 
+FRONTEND = "https://feedback.aditor.ai"
 
-def _handin_request(card_url="https://trello.com/c/abc12345", folder_id=None, editor_email="editor@aditor.ai", token=None):
-    req = SimpleNamespace(
+
+def _handin_request(card_url="https://feedback.aditor.ai/review/abc12345", folder_id=None, editor_email="editor@aditor.ai"):
+    return SimpleNamespace(
         folder_id=folder_id or uuid.uuid4(),
         iteration_state={"internal_handin": {"card_url": card_url, "editor_name": "Editor"}},
         last_uploader_email=editor_email,
     )
-    if token:
-        req.token = token
-    return req
 
 
 def _db_with_request(req):
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = req
+    return db
+
+
+def _db_non_handin(editor_email="luk@aditor.ai", project_name="AgelessRx"):
+    """A db with no hand-in request, resolving AssetVersion -> User -> email and Project -> name via
+    db.get (dispatched by model name, matching hub_events' lazy imports)."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    uploader_id = uuid.uuid4()
+
+    def fake_get(model, pk):
+        name = getattr(model, "__name__", str(model))
+        if name == "AssetVersion":
+            return SimpleNamespace(created_by=uploader_id) if pk is not None else None
+        if name == "User":
+            return SimpleNamespace(email=editor_email) if pk is not None else None
+        if name == "Project":
+            return SimpleNamespace(name=project_name) if pk is not None else None
+        return None
+
+    db.get.side_effect = fake_get
     return db
 
 
@@ -36,7 +57,7 @@ def test_webhook_is_off_by_default():
     hub_events.announce_revision_submitted(MagicMock(), MagicMock(), uuid.uuid4())  # must not raise
 
 
-def test_a_guest_comment_on_a_handin_version_posts_a_signed_client_comment_event(monkeypatch):
+def test_a_guest_comment_on_a_handin_version_posts_a_signed_flat_client_comment_event(monkeypatch):
     from apps.api.services import hub_events
     settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
     settings.hub_events_webhook_secret = "s3cret"
@@ -44,7 +65,7 @@ def test_a_guest_comment_on_a_handin_version_posts_a_signed_client_comment_event
         folder_id = uuid.uuid4()
         req = _handin_request(folder_id=folder_id)
         db = _db_with_request(req)
-        asset = SimpleNamespace(folder_id=folder_id)
+        asset = SimpleNamespace(folder_id=folder_id)  # no project_id/name -> no asset-page fallback, no enrichment
         version_id = uuid.uuid4()
         comment = SimpleNamespace(id=uuid.uuid4(), body="Make the logo bigger", guest_author_id=uuid.uuid4(),
                                   visibility="public", version_id=version_id)
@@ -64,9 +85,11 @@ def test_a_guest_comment_on_a_handin_version_posts_a_signed_client_comment_event
         payload = json.loads(sent["content"])
         assert payload == {
             "event": "client_comment",
-            "card_url": "https://trello.com/c/abc12345",
+            "card_url": "https://feedback.aditor.ai/review/abc12345",
             "editor_email": "editor@aditor.ai",
-            "comment": {"id": str(comment.id), "body": "Make the logo bigger", "author_name": "A Client"},
+            "comment_id": str(comment.id),
+            "comment_body": "Make the logo bigger",
+            "author_name": "A Client",
             "version_id": str(version_id),
         }
         expected_sig = hmac.new(b"s3cret", sent["content"], hashlib.sha256).hexdigest()
@@ -76,67 +99,44 @@ def test_a_guest_comment_on_a_handin_version_posts_a_signed_client_comment_event
         settings.hub_events_webhook_secret = ""
 
 
-def test_client_comment_includes_the_editor_review_url_when_the_request_has_a_token(monkeypatch):
-    """review_url is the same absolute /r/<token> link the editor-submissions list uses, covered by
-    the same HMAC signature as the rest of the payload."""
+def test_a_guest_comment_outside_any_handin_still_routes_to_the_asset_editor(monkeypatch):
+    """The fix: delivery path must not matter. A comment on a plain share (no hand-in request) is
+    keyed on the asset page and routed to whoever uploaded the version."""
     from apps.api.services import hub_events
     settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
     settings.hub_events_webhook_secret = "s3cret"
-    original_frontend_url = settings.frontend_url
-    settings.frontend_url = "https://feedback.aditor.ai"
+    settings.frontend_url = FRONTEND
     try:
-        folder_id = uuid.uuid4()
-        req = _handin_request(folder_id=folder_id, token="tok_abc123")
-        db = _db_with_request(req)
-        asset = SimpleNamespace(folder_id=folder_id)
+        db = _db_non_handin(editor_email="luk@aditor.ai", project_name="AgelessRx")
+        project_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        asset = SimpleNamespace(folder_id=uuid.uuid4(), project_id=project_id, id=asset_id,
+                                name="sarah-bennet_nad_ugc.mp4", created_by=uuid.uuid4())
         version_id = uuid.uuid4()
-        comment = SimpleNamespace(id=uuid.uuid4(), body="Make the logo bigger", guest_author_id=uuid.uuid4(),
-                                  visibility="public", version_id=version_id)
+        comment = SimpleNamespace(id=uuid.uuid4(), body="cut the intro, fix the logo",
+                                  guest_author_id=uuid.uuid4(), visibility="public", version_id=version_id)
 
         sent = {}
+        monkeypatch.setattr(hub_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+        hub_events.announce_client_comment(db, comment, asset, "Mike")
 
-        def fake_post(url, content=None, headers=None, timeout=None):
-            sent["content"] = content
-            sent["headers"] = headers
-            return MagicMock(status_code=200)
-
-        monkeypatch.setattr(hub_events.httpx, "post", fake_post)
-        hub_events.announce_client_comment(db, comment, asset, "A Client")
-
-        payload = json.loads(sent["content"])
-        assert payload["review_url"] == "https://feedback.aditor.ai/r/tok_abc123"
-        expected_sig = hmac.new(b"s3cret", sent["content"], hashlib.sha256).hexdigest()
-        assert sent["headers"]["X-Aditor-Signature"] == expected_sig
+        page = f"{FRONTEND}/projects/{project_id}/assets/{asset_id}"
+        assert sent == {
+            "event": "client_comment",
+            "card_url": page,
+            "editor_email": "luk@aditor.ai",
+            "comment_id": str(comment.id),
+            "comment_body": "cut the intro, fix the logo",
+            "author_name": "Mike",
+            "version_id": str(version_id),
+            "review_url": page,
+            "client": "AgelessRx",
+            "title": "sarah-bennet_nad_ugc.mp4",
+        }
     finally:
         settings.hub_events_webhook_url = ""
         settings.hub_events_webhook_secret = ""
-        settings.frontend_url = original_frontend_url
-
-
-def test_client_comment_omits_review_url_when_the_request_has_no_token(monkeypatch):
-    """If the review link can't be resolved, the event still sends - just without review_url."""
-    from apps.api.services import hub_events
-    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
-    try:
-        folder_id = uuid.uuid4()
-        req = _handin_request(folder_id=folder_id)  # no token
-        db = _db_with_request(req)
-        asset = SimpleNamespace(folder_id=folder_id)
-        comment = SimpleNamespace(id=uuid.uuid4(), body="Make the logo bigger", guest_author_id=uuid.uuid4(),
-                                  visibility="public", version_id=uuid.uuid4())
-
-        sent = {}
-
-        def fake_post(url, content=None, headers=None, timeout=None):
-            sent.update(json.loads(content))
-            return MagicMock(status_code=200)
-
-        monkeypatch.setattr(hub_events.httpx, "post", fake_post)
-        hub_events.announce_client_comment(db, comment, asset, "A Client")
-
-        assert "review_url" not in sent
-    finally:
-        settings.hub_events_webhook_url = ""
 
 
 def test_an_internal_author_comment_emits_nothing(monkeypatch):
@@ -170,17 +170,19 @@ def test_an_auto_review_finding_emits_nothing(monkeypatch):
         settings.hub_events_webhook_url = ""
 
 
-def test_a_guest_comment_outside_any_handin_emits_nothing(monkeypatch):
-    """A plain project/folder share comment with no hand-in request behind it is skipped, not errored."""
+def test_a_comment_with_no_resolvable_editor_emits_nothing(monkeypatch):
+    """No hand-in request and no uploader/creator email to resolve -> stay silent, never error."""
     from apps.api.services import hub_events
     settings.hub_events_webhook_url = "https://example.invalid/hook"
+    settings.frontend_url = FRONTEND
     try:
         post = MagicMock()
         monkeypatch.setattr(hub_events.httpx, "post", post)
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = None  # no UploadRequest for this folder
-        asset = SimpleNamespace(folder_id=uuid.uuid4())
-        comment = SimpleNamespace(id=uuid.uuid4(), body="Nice!", guest_author_id=uuid.uuid4(),
+        db.query.return_value.filter.return_value.first.return_value = None
+        db.get.return_value = None  # AssetVersion / User / Project all unresolved
+        asset = SimpleNamespace(folder_id=None, project_id=uuid.uuid4(), id=uuid.uuid4(), name="x.mp4", created_by=None)
+        comment = SimpleNamespace(id=uuid.uuid4(), body="please change this", guest_author_id=uuid.uuid4(),
                                   visibility="public", version_id=uuid.uuid4())
         hub_events.announce_client_comment(db, comment, asset, "A Client")
         post.assert_not_called()
@@ -206,7 +208,7 @@ def test_a_completed_handin_version_posts_a_signed_revision_submitted_event(monk
 
         assert sent == {
             "event": "revision_submitted",
-            "card_url": "https://trello.com/c/abc12345",
+            "card_url": "https://feedback.aditor.ai/review/abc12345",
             "editor_email": "editor@aditor.ai",
             "version_id": str(version_id),
         }
@@ -215,19 +217,33 @@ def test_a_completed_handin_version_posts_a_signed_revision_submitted_event(monk
         settings.hub_events_webhook_secret = ""
 
 
-def test_a_version_outside_any_handin_emits_nothing(monkeypatch):
+def test_a_completed_version_outside_any_handin_resolves_by_asset(monkeypatch):
     from apps.api.services import hub_events
-    settings.hub_events_webhook_url = "https://example.invalid/hook"
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    settings.hub_events_webhook_secret = "s3cret"
+    settings.frontend_url = FRONTEND
     try:
-        post = MagicMock()
-        monkeypatch.setattr(hub_events.httpx, "post", post)
-        db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = None
-        asset = SimpleNamespace(folder_id=None)  # a plain (non-request) upload has no folder here
-        hub_events.announce_revision_submitted(db, asset, uuid.uuid4())
-        post.assert_not_called()
+        db = _db_non_handin(editor_email="luk@aditor.ai")
+        project_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        asset = SimpleNamespace(folder_id=None, project_id=project_id, id=asset_id, name="x.mp4", created_by=uuid.uuid4())
+        version_id = uuid.uuid4()
+
+        sent = {}
+        monkeypatch.setattr(hub_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+        hub_events.announce_revision_submitted(db, asset, version_id)
+
+        page = f"{FRONTEND}/projects/{project_id}/assets/{asset_id}"
+        assert sent == {
+            "event": "revision_submitted",
+            "card_url": page,
+            "editor_email": "luk@aditor.ai",
+            "version_id": str(version_id),
+        }
     finally:
         settings.hub_events_webhook_url = ""
+        settings.hub_events_webhook_secret = ""
 
 
 def test_a_failing_webhook_never_breaks_the_comment_or_upload(monkeypatch):
@@ -248,21 +264,13 @@ def test_a_failing_webhook_never_breaks_the_comment_or_upload(monkeypatch):
         settings.hub_events_webhook_url = ""
 
 
-def test_a_version_with_no_folder_emits_nothing():
+def test_handin_helper_edges():
     from apps.api.services import hub_events
-    settings.hub_events_webhook_url = "https://example.invalid/hook"
-    try:
-        assert hub_events._handin_request_for_asset(MagicMock(), None) is None
-        assert hub_events._handin_request_for_asset(MagicMock(), SimpleNamespace(folder_id=None)) is None
-    finally:
-        settings.hub_events_webhook_url = ""
-
-
-def test_a_request_without_internal_handin_is_not_treated_as_one():
-    """A regular (external editor) file request has no `internal_handin` key - never emits."""
-    from apps.api.services import hub_events
+    # No folder -> not a hand-in.
+    assert hub_events._handin_request_for_asset(MagicMock(), None) is None
+    assert hub_events._handin_request_for_asset(MagicMock(), SimpleNamespace(folder_id=None)) is None
+    # A regular (external editor) file request has no `internal_handin` key - never a hand-in.
     folder_id = uuid.uuid4()
     req = SimpleNamespace(folder_id=folder_id, iteration_state={"submitted": True}, last_uploader_email="x@y.com")
     db = _db_with_request(req)
-    asset = SimpleNamespace(folder_id=folder_id)
-    assert hub_events._handin_request_for_asset(db, asset) is None
+    assert hub_events._handin_request_for_asset(db, SimpleNamespace(folder_id=folder_id)) is None
