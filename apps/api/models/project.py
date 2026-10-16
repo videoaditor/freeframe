@@ -34,6 +34,10 @@ class Project(Base):
     is_workspace: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Explicit owner-confirmed identity for future staff assignments; never inferred or backfilled.
     review_brand_binding: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # AutoReview Brand Loop: the review.aditor.ai brand this workspace's comments feed and its members
+    # may open. Set explicitly by a superadmin; never inferred from the name, never backfilled.
+    # Deliberately NOT unique: one brand can have several workspaces (audibene has more than one).
+    autoreview_brand_slug: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -221,6 +221,11 @@ class Settings(BaseSettings):
         return ','.join(str(uuid.UUID(part.strip())) for part in value.split(',') if part.strip())
 
     review_bridge_url: str = ""
+    # AutoReview Brand Loop (contract: feedback-agent 2026-10-16-brand-loop-CONTRACT.md). Comments on
+    # projects with an autoreview_brand_slug are POSTed to AUTOREVIEW_URL, and the sidebar's
+    # AutoReview link is a 60 s token signed with BRAND_LOOP_SECRET. Either unset = both off.
+    autoreview_url: str = ""
+    brand_loop_secret: str = ""
     review_bridge_secret: str = ""
     mixer_iterations_url: str = ""
     mixer_iterations_secret: str = ""

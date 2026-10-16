@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import text, and_, or_
@@ -42,7 +42,7 @@ from ..schemas.comment import (
     ReviewCommentCreate,
     public_review_source,
 )
-from ..services import s3_service
+from ..services import brand_loop, s3_service
 from ..services import comment_export
 from ..services.permissions import (
     require_asset_access, can_access_asset, validate_share_link_with_session, validate_asset_in_share,
@@ -349,6 +349,7 @@ def create_comment(
     body: CommentCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None,
 ):
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
@@ -399,6 +400,7 @@ def create_comment(
 
     db.commit()
     db.refresh(comment)
+    brand_loop.queue_comment(background_tasks, db, comment, asset, author_email=current_user.email)
     return _build_comment_response(comment, db, current_user_id=current_user.id)
 
 
@@ -409,6 +411,7 @@ def reply_to_comment(
     body: CommentCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None,
 ):
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
@@ -441,6 +444,7 @@ def reply_to_comment(
 
     db.commit()
     db.refresh(reply)
+    brand_loop.queue_comment(background_tasks, db, reply, asset, author_email=current_user.email)
     return _build_comment_response(reply, db, current_user_id=current_user.id)
 
 
@@ -971,6 +975,7 @@ def guest_comment(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
     authorization: Optional[str] = Header(default=None),
+    background_tasks: BackgroundTasks = None,
 ):
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
@@ -1094,6 +1099,8 @@ def guest_comment(
     db.add(activity)
     db.commit()
 
+    brand_loop.queue_comment(background_tasks, db, comment, asset, share_token=token,
+                             author_email=current_user.email if current_user else guest_email)
     from ..services import hub_events
     hub_events.announce_client_comment(db, comment, asset, actor_name)
 

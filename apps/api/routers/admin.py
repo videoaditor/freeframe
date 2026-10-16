@@ -6,12 +6,13 @@ import uuid
 
 from ..database import get_db
 from ..middleware.auth import get_current_user
+from ..models.project import Project
 from ..models.user import User, UserStatus
 from ..schemas.auth import UserResponse, AdminUserResponse, UpdateUserRoleRequest
 from .users import require_admin
 from ..tasks.celery_app import send_task_safe
 from ..tasks.cleanup_tasks import cleanup_soft_deleted
-from ..schemas.admin import PurgeStartResponse
+from ..schemas.admin import AutoreviewBrandResponse, AutoreviewBrandUpdate, PurgeStartResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -129,3 +130,25 @@ def purge_now(current_user: User = Depends(require_admin)):
         status="started",
         detail="Retention garbage collection is running in the background; see worker logs for reclaimed counts.",
     )
+
+
+@router.put("/projects/{project_id}/autoreview-brand", response_model=AutoreviewBrandResponse)
+def set_autoreview_brand(
+    project_id: uuid.UUID,
+    body: AutoreviewBrandUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Link a brand workspace to its AutoReview brand (Brand Loop). Superadmin only: the slug decides
+    which brand the workspace's comments teach and which brand page its members may open.
+
+    Several workspaces may share one slug on purpose (one brand, more than one workspace). Send
+    `{"slug": null}` to unlink; an empty string is rejected, not treated as null."""
+    project = db.query(Project).filter(
+        Project.id == project_id, Project.deleted_at.is_(None), Project.is_workspace.is_(True),
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    project.autoreview_brand_slug = body.slug
+    db.commit()
+    return AutoreviewBrandResponse(project_id=project.id, autoreview_brand_slug=project.autoreview_brand_slug)
