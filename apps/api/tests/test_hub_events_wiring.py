@@ -69,21 +69,24 @@ def test_complete_upload_announces_revision_submitted_for_a_handin(monkeypatch):
         settings.hub_events_webhook_url = ""
 
 
-def test_complete_upload_announces_nothing_for_a_plain_upload(monkeypatch):
-    """No hand-in behind the asset (an ordinary project upload) - the webhook stays silent."""
+def test_complete_upload_announces_revision_submitted_for_a_plain_upload(monkeypatch):
+    """Delivery path must not matter: an ordinary (non hand-in) upload still announces, keyed on the
+    asset page so the hub resolves the client revisions on that asset."""
     import apps.api.routers.upload as upload_module
     from apps.api.services import hub_events
 
-    settings.hub_events_webhook_url = "https://example.invalid/hook"
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    settings.frontend_url = "https://feedback.aditor.ai"
     try:
         user_id = uuid.uuid4()
         asset_id = uuid.uuid4()
         version_id = uuid.uuid4()
+        project_id = uuid.uuid4()
 
         version = SimpleNamespace(id=version_id, asset_id=asset_id, created_by=user_id,
                                   processing_status=ProcessingStatus.uploading)
         media = SimpleNamespace(version_id=version_id, s3_key_raw="raw/key")
-        asset = SimpleNamespace(id=asset_id, folder_id=None, project_id=uuid.uuid4())
+        asset = SimpleNamespace(id=asset_id, folder_id=None, project_id=project_id, name="hook3.mp4", created_by=user_id)
 
         def fake_query(model):
             q = MagicMock()
@@ -91,24 +94,44 @@ def test_complete_upload_announces_nothing_for_a_plain_upload(monkeypatch):
             q.filter.return_value.first.return_value = table.get(model)
             return q
 
+        def fake_get(model, _id):
+            name = getattr(model, "__name__", "")
+            if model is Asset:
+                return asset
+            if name == "AssetVersion":
+                return SimpleNamespace(created_by=user_id)
+            if name == "User":
+                return SimpleNamespace(email="luk@aditor.ai")
+            if name == "Project":
+                return SimpleNamespace(name="AgelessRx")
+            return None
+
         db = MagicMock()
         db.query = MagicMock(side_effect=fake_query)
-        db.get = MagicMock(side_effect=lambda model, _id: asset if model is Asset else None)
+        db.get = MagicMock(side_effect=fake_get)
 
         monkeypatch.setattr(upload_module, "_campaign_upload_access", lambda db, version: None)
         monkeypatch.setattr(upload_module, "require_unmanaged", lambda asset: None)
         monkeypatch.setattr(upload_module, "complete_multipart_upload", lambda *a, **k: None)
 
-        post = MagicMock()
-        monkeypatch.setattr(hub_events.httpx, "post", post)
+        sent = {}
+        monkeypatch.setattr(hub_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
 
         body = upload_module.CompleteUploadRequest(
             s3_key="raw/key", upload_id="up1", asset_id=asset_id, version_id=version_id, parts=[],
         )
         current_user = SimpleNamespace(id=user_id)
-        upload_module.complete_upload(body, BackgroundTasks(), db, current_user)
+        response = upload_module.complete_upload(body, BackgroundTasks(), db, current_user)
 
-        post.assert_not_called()
+        page = f"https://feedback.aditor.ai/projects/{project_id}/assets/{asset_id}"
+        assert response.status == "processing"
+        assert sent == {
+            "event": "revision_submitted",
+            "card_url": page,
+            "editor_email": "luk@aditor.ai",
+            "version_id": str(version_id),
+        }
     finally:
         settings.hub_events_webhook_url = ""
 
@@ -118,15 +141,17 @@ def test_guest_comment_on_a_handin_version_announces_client_comment(monkeypatch)
     from apps.api.services import hub_events
 
     settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    settings.frontend_url = "https://feedback.aditor.ai"
     try:
         folder_id = uuid.uuid4()
         asset_id = uuid.uuid4()
         version_id = uuid.uuid4()
+        project_id = uuid.uuid4()
 
         link = SimpleNamespace(id=uuid.uuid4(), asset_id=asset_id, permission=SharePermission.comment)
-        asset = SimpleNamespace(id=asset_id, folder_id=folder_id, name="cut.mp4")
-        req = SimpleNamespace(folder_id=folder_id, last_uploader_email="editor@aditor.ai",
-                              iteration_state={"internal_handin": {"card_url": "https://trello.com/c/abc12345"}})
+        asset = SimpleNamespace(id=asset_id, folder_id=folder_id, name="cut.mp4", project_id=project_id)
+        req = SimpleNamespace(folder_id=folder_id, last_uploader_email="editor@aditor.ai", token="rtok123",
+                              iteration_state={"internal_handin": {"card_url": "https://feedback.aditor.ai/review/abc12345"}})
 
         monkeypatch.setattr(comments_module, "validate_share_link_with_session", lambda *a, **k: link)
         monkeypatch.setattr(comments_module, "_get_asset", lambda db, asset_id_: asset)
@@ -150,6 +175,7 @@ def test_guest_comment_on_a_handin_version_announces_client_comment(monkeypatch)
 
         db = MagicMock()
         db.query = MagicMock(side_effect=fake_query)
+        db.get = MagicMock(side_effect=lambda model, _id: SimpleNamespace(name="AgelessRx") if getattr(model, "__name__", "") == "Project" else None)
 
         sent = {}
         monkeypatch.setattr(hub_events.httpx, "post",
@@ -163,10 +189,15 @@ def test_guest_comment_on_a_handin_version_announces_client_comment(monkeypatch)
 
         assert sent == {
             "event": "client_comment",
-            "card_url": "https://trello.com/c/abc12345",
+            "card_url": "https://feedback.aditor.ai/review/abc12345",
             "editor_email": "editor@aditor.ai",
-            "comment": {"id": sent["comment"]["id"], "body": "Make the logo bigger", "author_name": "A Client"},
+            "comment_id": sent["comment_id"],
+            "comment_body": "Make the logo bigger",
+            "author_name": "A Client",
             "version_id": str(version_id),
+            "review_url": "https://feedback.aditor.ai/r/rtok123",
+            "client": "AgelessRx",
+            "title": "cut.mp4",
         }
     finally:
         settings.hub_events_webhook_url = ""
