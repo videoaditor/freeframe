@@ -43,10 +43,12 @@ import {
   type GateCard,
   type GateReview,
   type DeliveryStatus,
+  type OpenBlocker,
 } from "@/lib/handin";
 import { HandinResult, ProcessingFailureNotice } from "@/components/handin/handin-result";
 import { computeStages, isTerminalReview, type FileFacts, type ReviewFacts, type StageView } from "@/lib/stages";
 import { DeliverButton } from "@/components/handin/deliver-button";
+import { HandinHeld } from "@/components/handin/handin-held";
 import { WorkspacePicker, type WorkspaceChoice } from "@/components/handin/workspace-picker";
 import { UploadZone } from "@/components/upload/upload-zone";
 import { Button } from "@/components/ui/button";
@@ -423,7 +425,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
           body: JSON.stringify({ share_token: token, editor_name: user?.name || "" }),
         });
         const dj = (await dr.json().catch(() => ({}))) as {
-          posted?: boolean; reason?: string; openBlockers?: { assetId?: string; name: string; findings: string[] }[];
+          posted?: boolean; reason?: string; openBlockers?: OpenBlocker[];
         };
         if (dr.ok && (dj.posted || dj.reason === "already-delivered")) setDelivery({ state: "delivered" });
         else if (dj.reason === "held") setDelivery({ state: "held", openBlockers: dj.openBlockers ?? [] });
@@ -508,31 +510,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
               Delivered to the Trello card, with your name.
             </section>
           ) : delivery?.state === "held" ? (
-            <section
-              data-testid="handin-held"
-              className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm"
-            >
-              <p className="font-medium text-text-primary">Not delivered yet.</p>
-              <p className="mt-1 text-text-secondary">
-                Something mandatory is still open. Fix it and upload a V2 into the same card - or, if a
-                note is wrong, reply to it in FreeFrame and it will be checked and withdrawn. Delivery
-                happens on its own once everything mandatory is cleared.
-              </p>
-              <ul className="mt-3 space-y-3">
-                {delivery.openBlockers.map((b, i) => (
-                  <li key={b.assetId ?? i}>
-                    {assets.length > 1 && (
-                      <p className="truncate text-xs font-medium text-text-tertiary">{b.name}</p>
-                    )}
-                    <ul className="mt-1 space-y-1">
-                      {b.findings.map((f, j) => (
-                        <li key={j} className="text-text-secondary">{f}</li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <HandinHeld blockers={delivery.openBlockers} showNames={assets.length > 1} />
           ) : delivery?.state === "reviewing" || delivery?.state === "clear" ? (
             <section
               data-testid="handin-reviewing"
