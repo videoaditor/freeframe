@@ -49,7 +49,7 @@ describe("HandinHeld", () => {
       guidancePending: true, revisionUrl: "/projects/p1/assets/a1" }]} />);
     const links = screen.getAllByRole("link", { name: /open revision/i });
     expect(links).toHaveLength(1);
-    expect(links[0].getAttribute("href")).toBe("/projects/p1/assets/a1");
+    expect(links[0].getAttribute("href")).toBe(`${window.location.origin}/projects/p1/assets/a1`);
     const mustFix = screen.getByTestId("handin-mustfix");
     expect(mustFix.compareDocumentPosition(links[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

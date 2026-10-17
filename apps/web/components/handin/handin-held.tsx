@@ -25,7 +25,7 @@ export function HandinHeld({ blockers, showNames, folderHref = null }: {
   const correction = blockers.some((b) => b.guidanceHolds);
   // What to do comes first, the lists second, the way out of a wrong note last and quiet.
   return (
-    <section data-testid="handin-held" className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+    <section data-testid="handin-held" aria-live="polite" className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
       <p className="font-medium text-text-primary">Not delivered yet.</p>
       <p data-testid="handin-v2-rule" className="mt-1 text-text-secondary">
         {!split

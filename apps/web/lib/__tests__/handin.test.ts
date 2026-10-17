@@ -94,7 +94,10 @@ describe('two-pass delivery status', () => {
 
   it('follows a revision link only on this origin, else falls back', () => {
     const origin = 'https://frame.aditor.ai'
-    expect(revisionHref('/projects/p1/assets/a1', '/f', origin)).toBe('/projects/p1/assets/a1')
+    expect(revisionHref('/projects/p1/assets/a1', '/f', origin)).toBe('https://frame.aditor.ai/projects/p1/assets/a1')
+    expect(revisionHref('/\t/evil.example/x', '/f', origin)).toBe('/f')
+    expect(revisionHref('/\n/evil.example/x', '/f', origin)).toBe('/f')
+    expect(revisionHref('\t//evil.example/x', '/f', origin)).toBe('/f')
     expect(revisionHref('https://frame.aditor.ai/projects/p1/assets/a1?v=2', '/f', origin))
       .toBe('https://frame.aditor.ai/projects/p1/assets/a1?v=2')
     expect(revisionHref('https://evil.example/x', '/f', origin)).toBe('/f')

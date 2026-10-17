@@ -156,9 +156,10 @@ export interface ReviewProgress {
  */
 export function revisionHref(revisionUrl: string | undefined, fallback: string | null, origin: string): string | null {
   if (!revisionUrl) return fallback
-  if (/^\/(?![/\\])/.test(revisionUrl)) return revisionUrl
+  // Resolve the way a browser would (it strips tabs/newlines, reads "/\\" as "//"), then compare origins.
   try {
-    return new URL(revisionUrl).origin === origin ? revisionUrl : fallback
+    const u = new URL(revisionUrl, origin)
+    return u.origin === origin ? u.href : fallback
   } catch {
     return fallback
   }
