@@ -105,6 +105,7 @@ def invalidate_outputs(db,req,state,slot_id):
         output=state.get('outputs',{}).get(key,{})
         if slot_id not in recipe['slots'] or not output.get('asset_id'):continue
         output.update(status='reviewing',review_generation=output.get('review_generation',0)+1,attempts=0,next_attempt_at=0)
+        output.pop('review_claim',None)
         asset=db.query(Asset).filter(Asset.id==uuid.UUID(output['asset_id']),Asset.project_id==req.project_id,Asset.deleted_at.is_(None)).first()
         if asset:
             asset.iteration_pending=True;asset.folder_id=None;asset.status=AssetStatus.in_review

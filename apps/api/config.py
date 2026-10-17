@@ -230,6 +230,12 @@ class Settings(BaseSettings):
     mixer_iterations_url: str = ""
     mixer_iterations_secret: str = ""
     iterations_enabled: bool = False
+    # Split-upload and checklist tasks mostly wait on the review bridge (up to 240 s per call).
+    # A dedicated queue keeps them from waiting behind video transcodes; "default" keeps them
+    # on the main worker for deployments without an iteration worker.
+    iteration_queue: str = "default"
+    # Reviews of one request that may run at the same time (1 = one after another).
+    iteration_parallel_reviews: int = 6
 
     # Machine access. A caller presenting SERVICE_API_KEY in X-API-Key is treated
     # as the user named by SERVICE_API_KEY_EMAIL, so every existing per-project

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Split upload: the parts of one request and its assembled ads are reviewed side by side (up to
+  `ITERATION_PARALLEL_REVIEWS`, default 6) instead of one after another. Iteration and checklist tasks
+  can run on their own Celery queue (`ITERATION_QUEUE`); the Coolify stack adds an `iteration_worker`
+  for it, so they no longer wait behind video transcodes.
 - Hand-in, two-pass review: the held panel puts "Open revision" right under the Must-fix (the worker's
   `revisionUrl` when it is on this FreeFrame, else the hand-in folder) and scrolls into view the moment
   the hold is decided. Guidance notes show once, even when repeated. The asset page re-fetches a fresh

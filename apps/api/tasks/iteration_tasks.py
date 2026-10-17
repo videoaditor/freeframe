@@ -6,7 +6,7 @@ from .celery_app import celery_app
 from ..config import settings
 from ..database import SessionLocal
 from ..models.upload_request import UploadRequest
-from ..services.iteration_runner import run_step
+from ..services.iteration_runner import run_review, run_step
 
 
 @celery_app.task(name='advance_iteration_request', soft_time_limit=310, time_limit=330)
@@ -16,6 +16,18 @@ def advance_iteration_request(request_id):
         changed=run_step(db,uuid.UUID(request_id))
     if changed:
         advance_iteration_request.apply_async(args=[request_id],countdown=2)
+
+
+@celery_app.task(name='review_iteration_step', soft_time_limit=310, time_limit=330)
+def review_iteration_step(request_id, action, claim_token):
+    """One claimed review; several of the same request run side by side."""
+    if not settings.iterations_enabled: return
+    try:
+        with SessionLocal() as db:
+            run_review(db,uuid.UUID(request_id),action,claim_token)
+    finally:
+        # Continue with whatever this result unlocked (next review, render, delivery).
+        advance_iteration_request.apply_async(args=[request_id],countdown=1)
 
 
 @celery_app.task(name='sweep_iteration_requests')
