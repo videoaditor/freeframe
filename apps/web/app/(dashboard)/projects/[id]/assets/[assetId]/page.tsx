@@ -133,7 +133,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     deleteComment,
     addReaction,
     removeReaction,
-  } = useComments(asset?.id || '', currentVersion?.id || '')
+  } = useComments(asset?.id || '', currentVersion?.id || '', currentVersion?.created_at)
 
   // Keep the version list live: when a new version transcodes, revalidate so it
   // appears/updates in the switcher without a hard refresh (#118). The review

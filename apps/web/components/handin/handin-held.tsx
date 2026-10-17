@@ -45,7 +45,7 @@ export function HandinHeld({ blockers, showNames, folderHref = null }: {
                 <FindingList
                   testId="handin-guidance"
                   title={b.guidanceHolds ? "Guidance from V1 · still open" : "Guidance · optional on this version"}
-                  items={b.guidance ?? []}
+                  items={freshGuidance(b)}
                   holds={!!b.guidanceHolds}
                 />
                 {b.guidancePending && <GuidanceComing />}
@@ -91,6 +91,13 @@ function GuidanceComing() {
       More guidance is coming. Start on the Must-fix.
     </p>
   );
+}
+
+/** Guidance streams in poll by poll (two-pass) and goes to every editor. A note repeated by the worker, or
+ *  one already standing as a Must-fix, is shown once. */
+function freshGuidance(b: OpenBlocker): string[] {
+  const seen = new Set((b.mustFix ?? []).map(stripMust));
+  return (b.guidance ?? []).filter((g) => !seen.has(g) && !!seen.add(g));
 }
 
 /** The heading already says "Must fix", so the worker's "Must fix — " prefix on each note is noise here. */

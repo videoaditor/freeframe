@@ -62,7 +62,22 @@ export function insertCommentIntoTree(
   )
 }
 
-export function useComments(assetId: string | null, versionId: string | null) {
+/** How long after a version is uploaded its AutoReview comments may still arrive (two-pass review:
+ *  Guidance lands ~85-100 s after upload, today's single pass p90 is 208 s), and how often to look. */
+const LIVE_WINDOW_MS = 10 * 60_000
+const LIVE_POLL_MS = 5000
+
+/**
+ * The review bridge posts comments without an SSE event (see docs/design/handin-revision-handoff.md, C1),
+ * so a fresh version's list is re-fetched every 5 s for its first 10 minutes, then never again.
+ * Unknown or unreadable dates do not poll.
+ */
+export function commentPollMs(versionCreatedAt: string | undefined, now: number): number {
+  const at = versionCreatedAt ? Date.parse(versionCreatedAt) : NaN
+  return now - at <= LIVE_WINDOW_MS ? LIVE_POLL_MS : 0
+}
+
+export function useComments(assetId: string | null, versionId: string | null, versionCreatedAt?: string) {
   const swrKey = buildSWRKey(assetId, versionId)
 
   const { data, error, isLoading, mutate } = useSWR<CommentWithReplies[]>(
@@ -70,6 +85,8 @@ export function useComments(assetId: string | null, versionId: string | null) {
     (key: string) => api.get<CommentWithReplies[]>(key),
     {
       revalidateOnFocus: false,
+      // A function, so the window closes on its own without a re-render.
+      refreshInterval: () => commentPollMs(versionCreatedAt, Date.now()),
     },
   )
 
