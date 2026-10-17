@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
-import type { OpenBlocker } from "@/lib/handin";
+import { Loader2, PlayCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { revisionHref, type OpenBlocker } from "@/lib/handin";
 
 /**
  * The "Not delivered yet" panel. Must-fix and Guidance are listed apart, because only one of them holds
@@ -11,8 +12,15 @@ import type { OpenBlocker } from "@/lib/handin";
  *     has to clear every point from V1, Guidance included. Said up front, so it is not a surprise on V2.
  *   - V2+ of a held V1: the V1 Guidance that is still there holds too.
  * A worker that predates the split sends only `findings`; those render as one list, as before.
+ *
+ * Two-pass review: the hold is decided at pass 1, before the taste read. Right under each video's Must-fix
+ * sits the one thing to do, "Open revision" - the worker's `revisionUrl` when it is on this FreeFrame,
+ * else the hand-in folder. With several videos only the first button is primary.
  */
-export function HandinHeld({ blockers, showNames }: { blockers: OpenBlocker[]; showNames: boolean }) {
+export function HandinHeld({ blockers, showNames, folderHref = null }: {
+  blockers: OpenBlocker[]; showNames: boolean; folderHref?: string | null;
+}) {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
   const split = blockers.some((b) => Array.isArray(b.mustFix));
   const correction = blockers.some((b) => b.guidanceHolds);
   // What to do comes first, the lists second, the way out of a wrong note last and quiet.
@@ -33,6 +41,7 @@ export function HandinHeld({ blockers, showNames }: { blockers: OpenBlocker[]; s
             {split ? (
               <>
                 <FindingList testId="handin-mustfix" title="Must fix" items={(b.mustFix ?? []).map(stripMust)} holds />
+                <OpenRevision href={revisionHref(b.revisionUrl, folderHref, origin)} primary={i === 0} />
                 <FindingList
                   testId="handin-guidance"
                   title={b.guidanceHolds ? "Guidance from V1 · still open" : "Guidance · optional on this version"}
@@ -42,9 +51,12 @@ export function HandinHeld({ blockers, showNames }: { blockers: OpenBlocker[]; s
                 {b.guidancePending && <GuidanceComing />}
               </>
             ) : (
-              <ul className="mt-1 space-y-1">
-                {b.findings.map((f, j) => <li key={j} className="text-text-secondary">{f}</li>)}
-              </ul>
+              <>
+                <ul className="mt-1 space-y-1">
+                  {b.findings.map((f, j) => <li key={j} className="text-text-secondary">{f}</li>)}
+                </ul>
+                <OpenRevision href={revisionHref(b.revisionUrl, folderHref, origin)} primary={i === 0} />
+              </>
             )}
           </li>
         ))}
@@ -54,6 +66,19 @@ export function HandinHeld({ blockers, showNames }: { blockers: OpenBlocker[]; s
         happens on its own once everything is cleared.
       </p>
     </section>
+  );
+}
+
+/** Where the comments sit on the timeline. Same tab: the hand-in page has nothing left to do while held. */
+function OpenRevision({ href, primary }: { href: string | null; primary: boolean }) {
+  if (!href) return null;
+  return (
+    <Button asChild variant={primary ? "primary" : "secondary"} className="mt-3 [@media(pointer:coarse)]:h-11">
+      <a href={href}>
+        <PlayCircle aria-hidden className="h-4 w-4" />
+        Open revision
+      </a>
+    </Button>
   );
 }
 

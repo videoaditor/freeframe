@@ -42,9 +42,9 @@ comment can never appear twice. Publishing `new_comment` from the API is a separ
 
 ## 3. Content hierarchy (held panel, top → bottom)
 1. "Not delivered yet." + the V2 rule (one line)
-2. **Open revision** (primary) — per video when several are held
-3. Must fix (full contrast) → Guidance (secondary) → pending line (quiet)
-4. "A note is wrong?" (tertiary)
+2. Per video: Must fix (full contrast) → **Open revision** right under it (primary; secondary for the
+   2nd+ video) → Guidance (secondary text) → pending line (quiet)
+3. "A note is wrong?" (tertiary)
 
 The "Open folder in FreeFrame" link below the share link is hidden while held: the panel's button
 already goes there (or one level deeper), and two look-alike links would compete (Von Restorff).
