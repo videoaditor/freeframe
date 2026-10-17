@@ -41,4 +41,48 @@ describe("HandinHeld", () => {
       mustFix: ["Must fix — Logo missing."], guidance: ["Pacing. Slow at 0:04."], guidanceHolds: false, version: 1 }]} />);
     expect(screen.queryByTestId("handin-guidance-pending")).toBeNull();
   });
+
+  // Two-pass C3: the hold is decided at pass 1, so the editor gets straight to the fix.
+  it("revision: Must-fix first, then ONE primary action that opens the revision", () => {
+    render(<HandinHeld showNames={false} folderHref="/projects/p1?folder=f1" blockers={[{ name: "Hook 1.mp4",
+      findings: ["Must fix — Logo missing."], mustFix: ["Must fix — Logo missing."], guidance: [], version: 1,
+      guidancePending: true, revisionUrl: "/projects/p1/assets/a1" }]} />);
+    const links = screen.getAllByRole("link", { name: /open revision/i });
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute("href")).toBe(`${window.location.origin}/projects/p1/assets/a1`);
+    const mustFix = screen.getByTestId("handin-mustfix");
+    expect(mustFix.compareDocumentPosition(links[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("revision: without a usable revisionUrl the action opens the hand-in folder", () => {
+    render(<HandinHeld showNames={false} folderHref="/projects/p1?folder=f1" blockers={[
+      { name: "Hook 1.mp4", findings: ["Must fix: captions"] },
+      { name: "Hook 2.mp4", findings: ["x"], mustFix: ["x"], revisionUrl: "https://elsewhere.example/a" },
+    ]} />);
+    const links = screen.getAllByRole("link", { name: /open revision/i });
+    expect(links.map((l) => l.getAttribute("href"))).toEqual(["/projects/p1?folder=f1", "/projects/p1?folder=f1"]);
+  });
+
+  it("revision: no link at all when there is nowhere to go", () => {
+    render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["x"], mustFix: ["x"] }]} />);
+    expect(screen.queryByRole("link", { name: /open revision/i })).toBeNull();
+  });
+
+  // Two-pass C4: Guidance arrives poll by poll and goes to every editor; a note never shows twice.
+  it("guidance: a repeated note, or one already listed as Must-fix, shows once", () => {
+    render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Must fix — Logo missing."],
+      mustFix: ["Must fix — Logo missing."], guidance: ["Pacing. Slow at 0:04.", "Pacing. Slow at 0:04.", "Logo missing."],
+      version: 1, guidancePending: true }]} />);
+    expect(screen.getAllByText("Pacing. Slow at 0:04.")).toHaveLength(1);
+    expect(screen.getAllByText("Logo missing.")).toHaveLength(1);
+  });
+
+  it("guidance: new notes from the next poll appear in place, and the pending line goes", () => {
+    const b = { name: "Hook 1.mp4", findings: ["x"], mustFix: ["x"], guidance: [] as string[], version: 1 };
+    const { rerender } = render(<HandinHeld showNames={false} blockers={[{ ...b, guidancePending: true }]} />);
+    expect(screen.queryByTestId("handin-guidance")).toBeNull();
+    rerender(<HandinHeld showNames={false} blockers={[{ ...b, guidance: ["Hook needs a face by 0:01."], guidancePending: false }]} />);
+    expect(screen.getByTestId("handin-guidance").textContent).toContain("Hook needs a face by 0:01.");
+    expect(screen.queryByTestId("handin-guidance-pending")).toBeNull();
+  });
 });

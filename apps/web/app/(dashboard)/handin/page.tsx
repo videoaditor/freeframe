@@ -291,6 +291,20 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
   }, [phase, shareToken]);
 
   /**
+   * Two-pass review: the hold is decided at pass 1, while the taste read still runs. The moment it turns
+   * `held`, bring the panel (Must-fix + "Open revision") into view - once, so later polls that only add
+   * Guidance never yank the page while the editor reads. The folder link above hides while held: the
+   * panel's button already goes there or deeper, and two look-alike actions would compete.
+   */
+  const heldRef = React.useRef<HTMLDivElement>(null);
+  const isHeld = delivery?.state === "held";
+  React.useEffect(() => {
+    if (!isHeld) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    heldRef.current?.scrollIntoView?.({ behavior: still ? "auto" : "smooth", block: "start" });
+  }, [isHeld]);
+
+  /**
    * Wait for the bytes to land, then hand back the asset id.
    *
    * The store records `assetId` as soon as the upload is initiated, but a link
@@ -488,7 +502,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
           />
           {/* A way back into FreeFrame itself: open the folder these videos landed in, inside the
               brand workspace. The share link above is for the client; this is for the editor. */}
-          {folderHref && (
+          {folderHref && delivery?.state !== "held" && (
             <Link
               href={folderHref}
               className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
@@ -510,7 +524,9 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
               Delivered to the Trello card, with your name.
             </section>
           ) : delivery?.state === "held" ? (
-            <HandinHeld blockers={delivery.openBlockers} showNames={assets.length > 1} />
+            <div ref={heldRef}>
+              <HandinHeld blockers={delivery.openBlockers} showNames={assets.length > 1} folderHref={folderHref} />
+            </div>
           ) : delivery?.state === "reviewing" || delivery?.state === "clear" ? (
             <section
               data-testid="handin-reviewing"
