@@ -124,7 +124,14 @@ export async function fetchReview(assetId: string): Promise<GateReview> {
 export interface OpenBlocker {
   assetId?: string
   name: string
+  /** Everything holding this video. */
   findings: string[]
+  /** The split, from workers that send it (feedback-agent #109): Must-fix, Guidance, and whether the
+   *  Guidance is part of the hold (a V2+ of a held V1) or only optional (V1). */
+  mustFix?: string[]
+  guidance?: string[]
+  guidanceHolds?: boolean
+  version?: number
 }
 
 /**

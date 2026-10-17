@@ -1,0 +1,31 @@
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { HandinHeld } from "../handin-held";
+
+// Alan, 2026-10-17: only a Must-fix holds a V1; after one, V2 must clear every V1 point, Guidance included.
+describe("HandinHeld", () => {
+  it("V1: lists Must-fix and optional Guidance apart, and says V2 must clear both", () => {
+    render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Must fix — CTA missing."],
+      mustFix: ["Must fix — CTA missing."], guidance: ["Captions a touch small."], guidanceHolds: false, version: 1 }]} />);
+    expect(screen.getByTestId("handin-mustfix").textContent).toContain("CTA missing");
+    expect(screen.getByTestId("handin-guidance").textContent).toMatch(/optional/i);
+    expect(screen.getByTestId("handin-guidance").textContent).toContain("Captions a touch small.");
+    expect(screen.getByTestId("handin-v2-rule").textContent).toMatch(/V2 has to fix every point from V1/);
+  });
+
+  it("V2+: the still-open V1 Guidance is shown as holding, without a Must-fix block", () => {
+    render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Captions a touch small."],
+      mustFix: [], guidance: ["Captions a touch small."], guidanceHolds: true, version: 2 }]} />);
+    expect(screen.queryByTestId("handin-mustfix")).toBeNull();
+    expect(screen.getByTestId("handin-guidance").textContent).toMatch(/Guidance from V1 - still open/);
+    expect(screen.getByText(/Your V2 has to fix every point from V1/)).toBeTruthy();
+    expect(screen.queryByTestId("handin-v2-rule")).toBeNull();
+  });
+
+  it("an older worker without the split still shows every finding as one list", () => {
+    render(<HandinHeld showNames blockers={[{ name: "Hook 2.mp4", findings: ["Must fix: captions"] }]} />);
+    expect(screen.getByText("Hook 2.mp4")).toBeTruthy();
+    expect(screen.getByText("Must fix: captions")).toBeTruthy();
+    expect(screen.queryByTestId("handin-mustfix")).toBeNull();
+  });
+});
