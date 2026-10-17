@@ -73,6 +73,10 @@ x-app-env: &app-env
   WHOP_APP_ID: ${WHOP_APP_ID:-}
   REVIEW_BRIDGE_URL: ${REVIEW_BRIDGE_URL:-}
   REVIEW_BRIDGE_SECRET: ${REVIEW_BRIDGE_SECRET:-}
+  # Brand Loop: client comments -> AutoReview, plus the sidebar's AutoReview link.
+  # Off unless both are set; see apps/api/config.py.
+  AUTOREVIEW_URL: ${AUTOREVIEW_URL:-}
+  BRAND_LOOP_SECRET: ${BRAND_LOOP_SECRET:-}
   # Parts hand-in (split upload). Off unless all three are set; see
   # docs/integrations/handin-components.md.
   ITERATIONS_ENABLED: ${ITERATIONS_ENABLED:-false}
