@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Hand-in, two-pass review: the held panel puts "Open revision" right under the Must-fix (the worker's
+  `revisionUrl` when it is on this FreeFrame, else the hand-in folder) and scrolls into view the moment
+  the hold is decided. Guidance notes show once, even when repeated. The asset page re-fetches a fresh
+  version's comments every 5 s for its first 10 minutes, so AutoReview notes appear without a reload.
 - AutoReview Brand Loop: projects carry an explicit `autoreview_brand_slug` (superadmin sets it via
   `PUT /admin/projects/{id}/autoreview-brand`). Comments on linked projects are sent to
   `AUTOREVIEW_URL/api/brand-loop/comment` in the background, and members get an "AutoReview" sidebar
