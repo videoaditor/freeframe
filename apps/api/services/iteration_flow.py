@@ -14,7 +14,16 @@ def retryable(item, now):
     return item.get('attempts', 0) < 3 and item.get('next_attempt_at', 0) <= now
 
 
-def next_action(request_id, manifest, state, ratio, now):
+def claimed(item, now):
+    """A review handed to its own task; it expires so a lost task is retried."""
+    return (item.get('review_claim') or {}).get('until', 0) > now
+
+
+def active_reviews(state, now):
+    return sum(claimed(item, now) for category in ('slots', 'outputs') for item in state.get(category, {}).values())
+
+
+def next_action(request_id, manifest, state, ratio, now, reviews=True):
     slots = state.get('slots', {})
     outputs = state.get('outputs', {})
     for recipe, key in (current_recipes(request_id, manifest, state, ratio) if state.get('submitted') is True else []):
@@ -29,10 +38,12 @@ def next_action(request_id, manifest, state, ratio, now):
         if not output.get('asset_id'):
             return {'kind': 'poll_render', **common}
         if output.get('status') in ('reviewing', 'held', 'error'):
+            if not reviews or claimed(output, now):
+                continue
             return {'kind': 'review_output', 'review_generation':output.get('review_generation',0), **common}
     for slot in manifest['slots']:
         entry = slots.get(slot['id'], {})
-        if entry.get('status') in ('ready', 'error', 'held') and retryable(entry, now):
+        if reviews and entry.get('status') in ('ready', 'error', 'held') and retryable(entry, now) and not claimed(entry, now):
             return {'kind': 'review_part', 'slot_id': slot['id'], 'slot': slot, 'version_id': entry['version_id'],'review_generation':entry.get('review_generation',0)}
     if batch_ready(request_id,manifest,state,ratio) and 'internal_handin' in state:
         delivery=state.get('delivery',{})

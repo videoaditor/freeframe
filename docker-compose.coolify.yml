@@ -82,6 +82,10 @@ x-app-env: &app-env
   ITERATIONS_ENABLED: ${ITERATIONS_ENABLED:-false}
   MIXER_ITERATIONS_URL: ${MIXER_ITERATIONS_URL:-}
   MIXER_ITERATIONS_SECRET: ${MIXER_ITERATIONS_SECRET:-}
+  # Split-upload + checklist tasks run on iteration_worker (own queue), not behind transcodes.
+  # ITERATION_QUEUE=default moves them back onto the main worker.
+  ITERATION_QUEUE: ${ITERATION_QUEUE:-iterations}
+  ITERATION_PARALLEL_REVIEWS: ${ITERATION_PARALLEL_REVIEWS:-6}
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
   SELF_SIGNUP_ENABLED: ${SELF_SIGNUP_ENABLED:-false}
@@ -192,6 +196,23 @@ services:
     stop_grace_period: 5m
     cpus: "12.0"
     mem_limit: 8g
+    restart: unless-stopped
+
+  # Review and checklist steps mostly wait on HTTP (review bridge up to 240 s per call), so
+  # several slots cost little CPU. Must consume $ITERATION_QUEUE.
+  iteration_worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.prod
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "exec celery -A apps.api.tasks.celery_app worker -Q $${ITERATION_QUEUE:-iterations} -c $${ITERATION_CONCURRENCY:-8} --loglevel=warning"
+    stop_grace_period: 5m
+    mem_limit: 3g
     restart: unless-stopped
 
   email_worker:

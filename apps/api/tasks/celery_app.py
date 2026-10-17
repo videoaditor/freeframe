@@ -49,6 +49,7 @@ celery_app.conf.update(
         Queue("transcoding"),
         Queue("email_high"),  # Invites - immediate
         Queue("email_low"),   # Mentions, comments - can be delayed
+        *([Queue(settings.iteration_queue)] if settings.iteration_queue not in ("default", "transcoding", "email_high", "email_low") else []),
     ),
     task_default_queue="default",
     # Route tasks to queues
@@ -61,6 +62,9 @@ celery_app.conf.update(
         "apps.api.tasks.email_tasks.send_share_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_approval_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_project_added_email": {"queue": "email_low"},
+        **{name: {"queue": settings.iteration_queue} for name in (
+            "advance_iteration_request", "review_iteration_step", "sweep_iteration_requests",
+            "prepare_checklist", "resume_checklists")},
     },
     # Rate limiting for email queues (SES limits)
     task_annotations={

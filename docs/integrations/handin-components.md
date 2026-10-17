@@ -40,6 +40,8 @@ Only authenticated project owners can list/download private originals through Fr
 | FreeFrame API/worker | `MIXER_ITERATIONS_URL` | HTTPS service origin only, for example `https://mixer.example.test`; FreeFrame appends `/api/internal/iterations`. |
 | FreeFrame API/worker | `MIXER_ITERATIONS_SECRET` | Must match Mixer's private Bearer secret. |
 | FreeFrame API/worker | `REVIEW_BRIDGE_URL`, `REVIEW_BRIDGE_SECRET` | Exact review and delivery adapter, matching AutoReview's service authentication. |
+| FreeFrame API/worker | `ITERATION_PARALLEL_REVIEWS` (default 6) | Part and output reviews of one request that run at the same time; each runs as its own `review_iteration_step` task under an expiring claim, and only the current claim may apply its result. `1` restores one-after-another. |
+| FreeFrame worker | `ITERATION_QUEUE` (default `default`) | Celery queue for iteration and checklist tasks. The Coolify stack sets `iterations`, consumed by `iteration_worker` (`ITERATION_CONCURRENCY`, default 8) so reviews never wait behind transcodes. A worker must consume this queue. |
 | FreeFrame web build | `NEXT_PUBLIC_HANDIN_COMPONENTS_ENABLED=true` | Exposes internal parts hand-in, owner request option and private parts library. Build-time public flag, no secret. |
 | Mixer | `MIXER_ITERATIONS_SECRET`, `MIXER_ITERATIONS_MEDIA_HOSTS`, durable `MIXER_DATA_DIR` | Service auth, exact source-host allowlist and persistent private jobs/originals. |
 

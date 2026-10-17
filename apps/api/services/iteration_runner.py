@@ -19,11 +19,14 @@ from ..models.project import Project
 from ..models.share import ShareLink, SharePermission
 from ..models.upload_request import UploadRequest
 from . import iteration_mixer, review_bridge, s3_service
-from .iteration_flow import action_current, next_action, batch_ready, current_recipes
+from .iteration_flow import action_current, active_reviews, next_action, batch_ready, current_recipes
 from .iteration_manifest import digest, review_result
 from .iteration_requests import locked_request, invalidate_outputs
 
 LEASE_SECONDS=360
+REVIEW_KINDS=('review_part','review_output')
+# Covers queue wait plus the review task's 330 s hard limit; a lost task is retried after this.
+REVIEW_CLAIM_SECONDS=600
 
 
 def claim(db, request_id):
@@ -62,6 +65,7 @@ def refresh_sources(db, req, state):
             if getattr(req,'iteration_manifest',None):invalidate_outputs(db,req,state,slot_id)
             entry.update(version_id=str(version.id),version_number=version.version_number,
                 status='uploading',bytes_stored=False,findings=[],attempts=0,next_attempt_at=0,processing_queued_at=0,error=None)
+            entry.pop('review_claim',None)
         status=version.processing_status
         if status==ProcessingStatus.ready or (status==ProcessingStatus.processing and getattr(version,'iteration_review_ready',False) is True):
             if entry.get('status') in ('uploading','processing'):
@@ -264,6 +268,62 @@ def apply_effect(db, req, action, effect):
     return True
 
 
+def queue_output_processing(req, action, effect, processing):
+    if action['kind'] in ('review_part','deliver_batch'): return
+    out=(req.iteration_state or {}).get('outputs',{}).get(action['key'],{})
+    if out.get('asset_id') and (effect.get('version_id') or effect.get('requeue_processing')):
+        if out.get('processing_queued_at',0) < time.time()-600:
+            updated=deepcopy(req.iteration_state);updated['outputs'][action['key']]['processing_queued_at']=time.time()
+            req.iteration_state=updated;processing.append((out['asset_id'],out['version_id']))
+
+
+def review_target(state, action):
+    if action['kind']=='review_part': return state.get('slots',{}).get(action['slot_id'])
+    return state.get('outputs',{}).get(action['key'])
+
+
+def claim_matches(state, action, claim_token):
+    return ((review_target(state,action) or {}).get('review_claim') or {}).get('token')==claim_token
+
+
+def trigger_processing(processing):
+    if processing:
+        from ..routers.requests import _trigger_processing
+        for asset_id,version_id in set(processing):
+            _trigger_processing(uuid.UUID(asset_id),uuid.UUID(version_id))
+
+
+def run_review(db, request_id, action, claim_token):
+    """A claimed review runs beside the other steps of its request. Only the task holding the
+    current claim applies its result, so an expired or replaced claim cannot overwrite newer state."""
+    req=db.query(UploadRequest).filter(UploadRequest.id==request_id).first()
+    if not req or not claim_matches(req.iteration_state or {},action,claim_token) or not live_project(db,req):
+        db.rollback(); return False
+    db.commit()
+    try: effect=perform(db,req,action)
+    except Exception:
+        effect={'status':'error','error':'This step could not finish. Your files are saved; automatic retry is scheduled.'}
+    processing=[]
+    try:
+        req=locked_request(db,request_id)
+        if not claim_matches(req.iteration_state or {},action,claim_token): db.rollback();return False
+        if req.revoked_at or (req.expires_at and req.expires_at<=datetime.now(timezone.utc)) or not live_project(db,req):
+            db.rollback();return False
+        state=deepcopy(req.iteration_state or {});processing.extend(refresh_sources(db,req,state));req.iteration_state=state
+        applied=apply_effect(db,req,action,effect)
+        if applied: queue_output_processing(req,action,effect,processing)
+        state=deepcopy(req.iteration_state or {})
+        target=review_target(state,action)
+        if target and (target.get('review_claim') or {}).get('token')==claim_token: target.pop('review_claim')
+        req.iteration_state=state
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    trigger_processing(processing)
+    return applied
+
+
 def run_step(db, request_id):
     token=claim(db,request_id)
     if not token: return False
@@ -273,7 +333,9 @@ def run_step(db, request_id):
         if not live_project(db,req):
             req.iteration_lease_token=None;req.iteration_lease_until=None;db.commit();return False
         state=deepcopy(req.iteration_state or {});processing.extend(refresh_sources(db,req,state));req.iteration_state=state
-        action=next_action(str(req.id),req.iteration_manifest,state,req.iteration_ratio,time.time())
+        now=time.time()
+        action=next_action(str(req.id),req.iteration_manifest,state,req.iteration_ratio,now,
+            reviews=active_reviews(state,now)<max(1,settings.iteration_parallel_reviews))
         if action and action['kind']=='deliver_batch':
             delivery=state.setdefault('delivery',{})
             if not delivery.get('share_token'):
@@ -287,6 +349,17 @@ def run_step(db, request_id):
             if 'review_context' not in out:
                 out['review_context']=output_context(db,req,action['recipe'],state)
                 req.iteration_state=deepcopy(state)  # Freeze before the first call, including timeout retries.
+        if action and action['kind'] in REVIEW_KINDS:
+            # Hand the review to its own task and free the request for the next step.
+            claim_token=secrets.token_hex(16)
+            review_target(state,action)['review_claim']={'token':claim_token,'until':time.time()+REVIEW_CLAIM_SECONDS}
+            req.iteration_state=deepcopy(state)
+            req.iteration_lease_token=None;req.iteration_lease_until=None
+            db.commit()
+            from ..tasks.iteration_tasks import review_iteration_step
+            review_iteration_step.apply_async(args=[str(request_id),action,claim_token])
+            trigger_processing(processing)
+            return True
         db.commit()
         if action:
             try: effect=perform(db,req,action)
@@ -299,12 +372,7 @@ def run_step(db, request_id):
                 req.iteration_lease_token=None;req.iteration_lease_until=None;db.commit();return False
             state=deepcopy(req.iteration_state or {});processing.extend(refresh_sources(db,req,state));req.iteration_state=state
             applied=apply_effect(db,req,action,effect)
-            if applied and action['kind'] not in ('review_part','deliver_batch'):
-                out=(req.iteration_state or {}).get('outputs',{}).get(action['key'],{})
-                if out.get('asset_id') and (effect.get('version_id') or effect.get('requeue_processing')):
-                    if out.get('processing_queued_at',0) < time.time()-600:
-                        updated=deepcopy(req.iteration_state);updated['outputs'][action['key']]['processing_queued_at']=time.time()
-                        req.iteration_state=updated;processing.append((out['asset_id'],out['version_id']))
+            if applied: queue_output_processing(req,action,effect,processing)
         else: req=locked_request(db,request_id)
         if batch_ready(str(req.id),req.iteration_manifest,req.iteration_state or {},req.iteration_ratio):
             state=req.iteration_state or {}
@@ -314,10 +382,7 @@ def run_step(db, request_id):
         if req.iteration_lease_token==token:
             req.iteration_lease_token=None;req.iteration_lease_until=None
         db.commit()
-        if processing:
-            from ..routers.requests import _trigger_processing
-            for asset_id,version_id in set(processing):
-                _trigger_processing(uuid.UUID(asset_id),uuid.UUID(version_id))
+        trigger_processing(processing)
         return bool(action)
     except Exception:
         db.rollback()
