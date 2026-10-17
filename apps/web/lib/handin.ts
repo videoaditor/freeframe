@@ -132,6 +132,9 @@ export interface OpenBlocker {
   guidance?: string[]
   guidanceHolds?: boolean
   version?: number
+  /** Two-pass review (feedback-agent spec 2026-10-17-two-pass-review): the Must-fix is final, the
+   *  taste read is still running and more Guidance will appear here on a later poll. */
+  guidancePending?: boolean
 }
 
 /**

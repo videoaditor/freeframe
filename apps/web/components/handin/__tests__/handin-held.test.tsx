@@ -28,4 +28,17 @@ describe("HandinHeld", () => {
     expect(screen.getByText("Must fix: captions")).toBeTruthy();
     expect(screen.queryByTestId("handin-mustfix")).toBeNull();
   });
+
+  it("two-pass: while Guidance is still coming, says so quietly and points at the Must-fix", () => {
+    render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Must fix — Logo missing."],
+      mustFix: ["Must fix — Logo missing."], guidance: [], guidanceHolds: false, version: 1, guidancePending: true }]} />);
+    expect(screen.getByTestId("handin-mustfix").textContent).toContain("Logo missing");
+    expect(screen.getByTestId("handin-guidance-pending").textContent).toMatch(/More guidance is coming. Start on the Must-fix./);
+  });
+
+  it("no pending line once pass 2 is done (or from a worker without two-pass)", () => {
+    render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Must fix — Logo missing."],
+      mustFix: ["Must fix — Logo missing."], guidance: ["Pacing. Slow at 0:04."], guidanceHolds: false, version: 1 }]} />);
+    expect(screen.queryByTestId("handin-guidance-pending")).toBeNull();
+  });
 });

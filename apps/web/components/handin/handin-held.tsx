@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Loader2 } from "lucide-react";
 import type { OpenBlocker } from "@/lib/handin";
 
 /**
@@ -38,6 +39,7 @@ export function HandinHeld({ blockers, showNames }: { blockers: OpenBlocker[]; s
                   items={b.guidance ?? []}
                   holds={!!b.guidanceHolds}
                 />
+                {b.guidancePending && <GuidanceComing />}
               </>
             ) : (
               <ul className="mt-1 space-y-1">
@@ -52,6 +54,17 @@ export function HandinHeld({ blockers, showNames }: { blockers: OpenBlocker[]; s
         happens on its own once everything is cleared.
       </p>
     </section>
+  );
+}
+
+/** Two-pass: the hold is decided, the taste read is not. Quiet, below the lists - it must never
+ *  compete with the Must-fix, and it tells the editor not to wait for it. */
+function GuidanceComing() {
+  return (
+    <p data-testid="handin-guidance-pending" role="status" className="mt-3 flex items-center gap-1.5 text-xs text-text-tertiary">
+      <Loader2 aria-hidden className="h-3 w-3 motion-safe:animate-spin" />
+      More guidance is coming. Start on the Must-fix.
+    </p>
   );
 }
 
