@@ -8,18 +8,18 @@ describe("HandinHeld", () => {
     render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Must fix — CTA missing."],
       mustFix: ["Must fix — CTA missing."], guidance: ["Captions a touch small."], guidanceHolds: false, version: 1 }]} />);
     expect(screen.getByTestId("handin-mustfix").textContent).toContain("CTA missing");
+    expect(screen.getByTestId("handin-mustfix").textContent).not.toContain("Must fix —");
     expect(screen.getByTestId("handin-guidance").textContent).toMatch(/optional/i);
     expect(screen.getByTestId("handin-guidance").textContent).toContain("Captions a touch small.");
-    expect(screen.getByTestId("handin-v2-rule").textContent).toMatch(/V2 has to fix every point from V1/);
+    expect(screen.getByTestId("handin-v2-rule").textContent).toMatch(/V2 has to fix every point below, Guidance included/);
   });
 
   it("V2+: the still-open V1 Guidance is shown as holding, without a Must-fix block", () => {
     render(<HandinHeld showNames={false} blockers={[{ name: "Hook 1.mp4", findings: ["Captions a touch small."],
       mustFix: [], guidance: ["Captions a touch small."], guidanceHolds: true, version: 2 }]} />);
     expect(screen.queryByTestId("handin-mustfix")).toBeNull();
-    expect(screen.getByTestId("handin-guidance").textContent).toMatch(/Guidance from V1 - still open/);
-    expect(screen.getByText(/Your V2 has to fix every point from V1/)).toBeTruthy();
-    expect(screen.queryByTestId("handin-v2-rule")).toBeNull();
+    expect(screen.getByTestId("handin-guidance").textContent).toMatch(/Guidance from V1 · still open/);
+    expect(screen.getByTestId("handin-v2-rule").textContent).toMatch(/Your V2 has to fix every point from V1/);
   });
 
   it("an older worker without the split still shows every finding as one list", () => {
