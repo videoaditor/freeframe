@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { lookUpCard, fetchReview } from '../handin'
+import { lookUpCard, fetchReview, fetchDeliveryStatus, revisionHref } from '../handin'
 
 /**
  * The gate client. Both endpoints exist to help an editor hand in, so neither
@@ -70,5 +70,38 @@ describe('fetching the review', () => {
     vi.stubGlobal('fetch', spy as unknown as typeof fetch)
     await fetchReview('a 1&x=2')
     expect(String(spy.mock.calls[0]?.[0])).toContain('asset=a%201%26x%3D2')
+  })
+})
+
+// Two-pass review (feedback-agent contract C5): additive fields, and a revision link the page may follow.
+describe('two-pass delivery status', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('passes the new fields through untouched', async () => {
+    const held = {
+      state: 'held',
+      openBlockers: [{ name: 'Hook 1.mp4', findings: ['x'], mustFix: ['x'], guidancePending: true,
+        revisionUrl: '/projects/p1/assets/a1' }],
+      review: { pipeline: 'two-pass', pass1At: 1, pass2: 'running' },
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => held })) as unknown as typeof fetch)
+    const s = await fetchDeliveryStatus('tok')
+    expect(s.state).toBe('held')
+    if (s.state !== 'held') return
+    expect(s.openBlockers[0].revisionUrl).toBe('/projects/p1/assets/a1')
+    expect(s.review?.pass2).toBe('running')
+  })
+
+  it('follows a revision link only on this origin, else falls back', () => {
+    const origin = 'https://frame.aditor.ai'
+    expect(revisionHref('/projects/p1/assets/a1', '/f', origin)).toBe('/projects/p1/assets/a1')
+    expect(revisionHref('https://frame.aditor.ai/projects/p1/assets/a1?v=2', '/f', origin))
+      .toBe('https://frame.aditor.ai/projects/p1/assets/a1?v=2')
+    expect(revisionHref('https://evil.example/x', '/f', origin)).toBe('/f')
+    expect(revisionHref('//evil.example/x', '/f', origin)).toBe('/f')
+    expect(revisionHref('/\\evil.example/x', '/f', origin)).toBe('/f')
+    expect(revisionHref('javascript:alert(1)', '/f', origin)).toBe('/f')
+    expect(revisionHref(undefined, '/f', origin)).toBe('/f')
+    expect(revisionHref(undefined, null, origin)).toBeNull()
   })
 })

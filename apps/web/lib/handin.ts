@@ -68,7 +68,9 @@ export interface GateCard {
 
 export type GateReview =
   | { state: 'pending'; note?: string; stage?: ReviewStageData; unreachable?: boolean }
-  | { state: 'ready'; score?: number; worthFixing?: string[]; niceToHave?: string[]; stage?: ReviewStageData }
+  | { state: 'ready'; score?: number; worthFixing?: string[]; niceToHave?: string[]; stage?: ReviewStageData
+      /** Two-pass: pass 2 is still adding Guidance to `niceToHave`. */
+      guidancePending?: boolean }
 
 /**
  * Resolve a pasted Trello link.
@@ -135,6 +137,31 @@ export interface OpenBlocker {
   /** Two-pass review (feedback-agent spec 2026-10-17-two-pass-review): the Must-fix is final, the
    *  taste read is still running and more Guidance will appear here on a later poll. */
   guidancePending?: boolean
+  /** The FreeFrame review page of this version, where the comments sit on the timeline. */
+  revisionUrl?: string
+}
+
+/** Which review pipeline decided the hold, and whether its taste read (pass 2) is still running. */
+export interface ReviewProgress {
+  pipeline: 'single' | 'two-pass'
+  /** ms epoch the hold was decided. */
+  pass1At?: number
+  pass2: 'running' | 'done' | 'none'
+}
+
+/**
+ * Where "Open revision" goes. The worker's `revisionUrl` is followed only when it stays on this
+ * FreeFrame (a root-relative path, or an absolute URL on `origin`); anything else - another host,
+ * a protocol-relative or script URL, or nothing at all - falls back to the hand-in folder.
+ */
+export function revisionHref(revisionUrl: string | undefined, fallback: string | null, origin: string): string | null {
+  if (!revisionUrl) return fallback
+  if (/^\/(?![/\\])/.test(revisionUrl)) return revisionUrl
+  try {
+    return new URL(revisionUrl).origin === origin ? revisionUrl : fallback
+  } catch {
+    return fallback
+  }
 }
 
 /**
@@ -149,9 +176,9 @@ export interface OpenBlocker {
  */
 export type DeliveryStatus =
   | { state: 'delivered'; deliveredAt?: number | null }
-  | { state: 'held'; openBlockers: OpenBlocker[] }
-  | { state: 'reviewing'; openBlockers?: OpenBlocker[] }
-  | { state: 'clear' }
+  | { state: 'held'; openBlockers: OpenBlocker[]; review?: ReviewProgress }
+  | { state: 'reviewing'; openBlockers?: OpenBlocker[]; review?: ReviewProgress }
+  | { state: 'clear'; review?: ReviewProgress }
 
 /**
  * Poll the delivery state. A fetch failure is reported as `reviewing` - the calm,
