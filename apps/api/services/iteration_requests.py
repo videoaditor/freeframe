@@ -1,5 +1,6 @@
 """Projection and upload helpers shared by the request routes and background worker."""
 from copy import deepcopy
+import time
 import uuid
 
 from fastapi import HTTPException
@@ -7,7 +8,7 @@ from fastapi import HTTPException
 from ..config import settings
 from ..models.asset import Asset, AssetStatus, AssetVersion, MediaFile
 from ..models.upload_request import UploadRequest
-from .iteration_flow import current_recipes, progress
+from .iteration_flow import claimed, current_recipes, progress
 from .review_timing import iteration_review_progress
 from . import s3_service
 
@@ -31,12 +32,22 @@ def upload_slot(req, slot_id, mime):
     return slot
 
 
+def presented(item, now=None):
+    """What the browser sees: a retry that is already running shows as reviewing, not as a failure
+    with a Retry button. The claim token itself stays server-side."""
+    running=claimed(item, time.time() if now is None else now)
+    item={k:v for k,v in item.items() if k!='review_claim'}
+    if running and item.get('status') in ('ready','error'):
+        item.update(status='reviewing',error=None)
+    return item
+
+
 def request_fields(req):
     if not enabled(req):
         return {'receive_iterations': False}
     state = req.iteration_state or {}
-    slots = [state.get('slots', {}).get(s['id'], {'status':'waiting'}) for s in req.iteration_manifest['slots']]
-    outputs = [state.get('outputs', {}).get(key, {}) for _, key in current_recipes(str(req.id), req.iteration_manifest, state, req.iteration_ratio)]
+    slots = [presented(state.get('slots', {}).get(s['id'], {'status':'waiting'})) for s in req.iteration_manifest['slots']]
+    outputs = [presented(state.get('outputs', {}).get(key, {})) for _, key in current_recipes(str(req.id), req.iteration_manifest, state, req.iteration_ratio)]
     st = progress(slots, outputs, len(req.iteration_manifest['recipes']))
     if st['state']=='delivered' and 'internal_handin' in state and state.get('delivery',{}).get('status')!='delivered':
         st['state']='error' if state.get('delivery',{}).get('status')=='error' else 'delivering'
@@ -53,7 +64,7 @@ def request_fields(req):
 def snapshot(req, db=None):
     manifest = req.iteration_manifest or {'slots':[], 'recipes':[]}
     state = req.iteration_state or {}
-    slots = [{'slot_id':s['id'], **state.get('slots', {}).get(s['id'], {'status':'waiting','findings':[]})} for s in manifest['slots']]
+    slots = [{'slot_id':s['id'], **presented(state.get('slots', {}).get(s['id'], {'status':'waiting','findings':[]}))} for s in manifest['slots']]
     slots = [{k:v for k,v in s.items() if k not in ('render_payload','review_key')} for s in slots]
     if db is not None:
         for entry in slots:
@@ -71,7 +82,7 @@ def snapshot(req, db=None):
     current = {r['id']:key for r,key in current_recipes(str(req.id),manifest,state,req.iteration_ratio)}
     for recipe in manifest['recipes']:
         key=current.get(recipe['id'])
-        data=state.get('outputs',{}).get(key,{})
+        data=presented(state.get('outputs',{}).get(key,{}))
         item={'id':key or recipe['id'],'recipe_id':recipe['id'],'slot_ids':recipe['slots'],'label':recipe['label'],'status':data.get('status','waiting'),
               'findings':data.get('findings',[])}
         if data.get('error'): item['error']=data['error']

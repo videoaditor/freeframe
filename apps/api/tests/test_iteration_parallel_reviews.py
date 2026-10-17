@@ -123,3 +123,18 @@ def test_iteration_tasks_follow_the_configured_queue():
     routes=celery_app.conf.task_routes
     for name in ('advance_iteration_request','review_iteration_step','sweep_iteration_requests','prepare_checklist','resume_checklists'):
         assert routes[name]=={'queue':settings.iteration_queue}
+
+
+def test_running_retry_shows_as_reviewing_and_hides_the_claim():
+    from apps.api.services.iteration_requests import snapshot
+    state=ready_state()
+    state['slots']['opening-a'].update(status='error',error='Review unavailable.',review_claim={'token':'secret','until':10**12})
+    state['slots']['opening-b'].update(status='held',findings=[{'body':'Fix','must_fix':True}],review_claim={'token':'t2','until':10**12})
+    state['slots']['body'].update(status='error',error='Review unavailable.',review_claim={'token':'old','until':1})
+    req=request(state); req.iteration_mode='components'; req.receive_iterations=True
+    view=snapshot(req)
+    by={s['slot_id']:s for s in view['slots']}
+    assert by['opening-a']['status']=='reviewing' and not by['opening-a']['error']
+    assert by['opening-b']['status']=='held'      # a held part keeps its Must-fix while re-checked
+    assert by['body']['status']=='error'          # expired claim: the failure and Retry are real again
+    assert 'secret' not in str(view) and 'review_claim' not in str(view)
