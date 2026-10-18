@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     # payloads.
     hub_events_webhook_url: str = ""
     hub_events_webhook_secret: str = ""
+    # Outbound hand-in events to the Aditor PORTAL (app.aditor.ai), separate from the hub above:
+    # on every hand-in upload-complete the portal learns the card's FreeFrame folder and its direct
+    # editor upload link (/r/<token>), so a later revision deep-links straight to that exact folder -
+    # the editor can never file a revision in the wrong place. Empty (default) sends nothing. Signed
+    # HMAC-SHA256 over the raw body on `X-Aditor-Signature`, same scheme as the hub events.
+    portal_events_webhook_url: str = ""
+    portal_events_webhook_secret: str = ""
     # Extra browser origins allowed by CORS, comma-separated (in addition to the
     # frontend + localhost defaults). Set to "*" to allow any origin — handy for
     # testing on a LAN via a machine's IP; do not use "*" in production.
