@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   password sign-in) is now the sole way to sign in to FreeFrame.
 
 ### Fixed
+- Video processing downloads the original before encoding instead of streaming it from storage. A valid MP4 with audio and video stored far apart (some editors' exports) made every seek a new range request: a 9-minute file never finished and failed with "Processing failed"; it now processes in about two minutes. `FFMPEG_INPUT_RW_TIMEOUT_SECONDS` is gone (the download has its own timeout and retries).
 - Preserve briefing notes alongside one document link or attachment in requests, setup and brand rules. Read common TXT encodings correctly and reject empty, unreadable or oversized text with clear limits.
 - Show failed briefing preparation on request cards and shared-link dialogs, with a retry for the same request; file uploads remain available.
 - Accept Word (`.docx`) briefings and brand guidelines up to 10 MB, preserving their text in the review checklist and removing the extension from suggested project names.

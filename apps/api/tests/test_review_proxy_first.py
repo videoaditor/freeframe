@@ -171,13 +171,11 @@ def _transcode(make_thumbnail):
     return [c for c in mock_run.call_args_list if "yuvj420p" in c[0][0]]
 
 
-def test_poster_read_is_capped_and_protected_against_a_stalled_download():
-    from packages.transcoder.ffmpeg_transcoder import FFMPEG_INPUT_RW_TIMEOUT_SECONDS
+def test_poster_read_is_capped_and_reads_the_local_copy():
     (call,) = _transcode(True)
     cmd = call[0][0]
     assert call[1]["timeout"] == 600
-    assert cmd.index("-rw_timeout") < cmd.index("-i")
-    assert cmd[cmd.index("-rw_timeout") + 1] == str(FFMPEG_INPUT_RW_TIMEOUT_SECONDS * 1_000_000)
+    assert not cmd[cmd.index("-i") + 1].startswith("http")
 
 
 def test_no_poster_when_the_job_says_so():

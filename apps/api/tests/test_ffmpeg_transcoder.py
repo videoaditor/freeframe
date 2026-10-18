@@ -410,23 +410,29 @@ def test_thread_cap_is_at_least_one():
     importlib.reload(mod)
 
 
-# ─── stalled-download protection and encode time cap ──────────────────────────
-# A version sat in "Processing" for ~4 hours (2026-10-02). The encode reads its input over HTTP
-# with no read timeout, so a stalled connection hung ffmpeg until the flat 4-hour cap, holding one
-# of only two transcoding slots. Reproduced with real ffmpeg against a server that sends part of a
-# file and then goes silent: without these flags it hangs indefinitely, with them it gives up in
-# a few seconds and the job is retried.
+# ─── local input and encode time cap ──────────────────────────────────────────
+# The encode used to stream its input over HTTP. A valid MP4 with audio and video far apart in the
+# file (2026-10-18) turned that into 32k range requests and a timed-out 25-minute read of a
+# 9-minute video. The original is now downloaded first and every ffmpeg/ffprobe reads that copy.
 
-def test_input_read_timeout_and_reconnect_precede_the_input():
-    from packages.transcoder.ffmpeg_transcoder import FFMPEG_INPUT_RW_TIMEOUT_SECONDS
+def test_encode_reads_a_downloaded_local_copy_not_a_url():
+    with patch("subprocess.run", side_effect=_mock_probe_side_effect(1920, 1080)) as mock_run:
+        s3_mock = MagicMock()
+        with patch("builtins.open", MagicMock()), patch("pathlib.Path.glob", return_value=[]), \
+             patch("pathlib.Path.rglob", return_value=[]), patch("pathlib.Path.mkdir"), \
+             patch("shutil.rmtree"):
+            result = asyncio.run(FFmpegTranscoder(s3_mock, "test-bucket").transcode(_make_job(["720p"])))
 
-    cmd = _transcode_and_get_cmd(["720p"])
-
-    i = cmd.index("-i")
-    assert cmd[cmd.index("-rw_timeout") + 1] == str(FFMPEG_INPUT_RW_TIMEOUT_SECONDS * 1_000_000)
-    for flag in ("-rw_timeout", "-reconnect", "-reconnect_streamed", "-reconnect_delay_max"):
-        assert flag in cmd, f"{flag} missing"
-        assert cmd.index(flag) < i, f"{flag} must precede -i to apply to the input"
+    assert result.success is True
+    s3_mock.generate_presigned_url.assert_not_called()
+    (bucket, key, local), _ = s3_mock.download_file.call_args
+    assert (bucket, key) == ("test-bucket", _make_job(["720p"]).input_s3_key)
+    for call in mock_run.call_args_list:
+        cmd = call[0][0]
+        assert not any(str(a).startswith("http") for a in cmd), cmd
+        assert "-reconnect" not in cmd
+    cmd = _get_ffmpeg_cmd(mock_run)
+    assert cmd[cmd.index("-i") + 1] == local
 
 
 def test_encode_timeout_scales_with_duration_within_bounds():
