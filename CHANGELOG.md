@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Comment history for the AutoReview Brand Loop backfill: `GET /internal/review/comments-export` (review bridge secret) pages through every public comment, oldest first (`after` + `after_id` cursor, `limit` up to 1000), in the row shape of feedback-agent's `scripts/brand-loop-backfill.mjs`, with the brand slug, asset, version, timecode, resolved flag and whether the author is a client. Only the author's email domain is returned; internal comments are never included.
 - Split upload: the parts of one request and its assembled ads are reviewed side by side (up to
   `ITERATION_PARALLEL_REVIEWS`, default 6) instead of one after another. Iteration and checklist tasks
   can run on their own Celery queue (`ITERATION_QUEUE`); the Coolify stack adds an `iteration_worker`
