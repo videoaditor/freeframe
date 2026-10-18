@@ -118,7 +118,7 @@ export function LoginForm() {
 
       <form onSubmit={handleClassicLogin} className="flex flex-col gap-4">
         {classicError && (
-          <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
+          <div role="alert" className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
             {classicError}
           </div>
         )}

@@ -30,6 +30,10 @@ def is_enabled() -> bool:
     return bool((getattr(settings, "hub_events_webhook_url", "") or "").strip())
 
 
+def portal_is_enabled() -> bool:
+    return bool((getattr(settings, "portal_events_webhook_url", "") or "").strip())
+
+
 def _handin_request_for_asset(db: Session, asset) -> Optional[UploadRequest]:
     """The hand-in request this asset's folder belongs to, with a card to report against - None for
     a plain upload/comment that is not part of a hand-in (a staff hand-in folder holds at most one
@@ -133,20 +137,20 @@ def _asset_report_context(db: Session, asset, version_id) -> Optional[dict]:
         review_url = page
     if not editor_email or not card_url:
         return None
+    folder_id = getattr(asset, "folder_id", None)
     return {
         "editor_email": editor_email,
         "card_url": card_url,
         "review_url": review_url,
         "client": client,
         "title": title,
+        # The card's FreeFrame folder - the portal keys its "this card's folder" memory on this so a
+        # later revision deep-links to the exact folder. None for a non-hand-in asset.
+        "folder_id": str(folder_id) if folder_id else None,
     }
 
 
-def _post(event: dict) -> None:
-    url = (getattr(settings, "hub_events_webhook_url", "") or "").strip()
-    if not url:
-        return
-    secret = (getattr(settings, "hub_events_webhook_secret", "") or "").strip()
+def _deliver(url: str, secret: str, event: dict) -> None:
     body = json.dumps(event).encode("utf-8")
     headers = {"content-type": "application/json"}
     if secret:
@@ -154,7 +158,22 @@ def _post(event: dict) -> None:
     try:
         httpx.post(url, content=body, headers=headers, timeout=10)
     except Exception:  # noqa: BLE001 - a webhook must never fail the comment/upload it reports
-        logger.warning("hub events webhook failed for event %r", event.get("event"), exc_info=True)
+        logger.warning("webhook %s failed for event %r", url, event.get("event"), exc_info=True)
+
+
+def _post(event: dict) -> None:
+    url = (getattr(settings, "hub_events_webhook_url", "") or "").strip()
+    if not url:
+        return
+    _deliver(url, (getattr(settings, "hub_events_webhook_secret", "") or "").strip(), event)
+
+
+def _post_portal(event: dict) -> None:
+    """Deliver a hand-in event to the Aditor portal (separate consumer/secret from the hub)."""
+    url = (getattr(settings, "portal_events_webhook_url", "") or "").strip()
+    if not url:
+        return
+    _deliver(url, (getattr(settings, "portal_events_webhook_secret", "") or "").strip(), event)
 
 
 def _comment_author_user(db: Session, comment):
@@ -226,8 +245,12 @@ def announce_client_comment(db: Session, comment, asset, author_name: Optional[s
 def announce_revision_submitted(db: Session, asset, version_id) -> None:
     """A new version completed (routers/upload.py `complete`) - the stop signal that answers the open
     client revisions on this asset, whatever path it came through. Keyed on the same per-asset url as
-    the comment event so the hub resolves the matching rows."""
-    if not is_enabled():
+    the comment event so the hub resolves the matching rows.
+
+    Also tells the Aditor portal (when configured) the card's FreeFrame folder and the editor's
+    direct upload link for it, on EVERY completed version including the first hand-in. The portal
+    records that so a later revision deep-links straight to this exact folder's upload."""
+    if not is_enabled() and not portal_is_enabled():
         return
     ctx = _asset_report_context(db, asset, version_id)
     if ctx is None:
@@ -238,3 +261,15 @@ def announce_revision_submitted(db: Session, asset, version_id) -> None:
         "editor_email": ctx["editor_email"],
         "version_id": str(version_id),
     })
+    # The portal wants the folder + the editor upload link (/r/<token>) so it can route a later
+    # revision there directly. Only a hand-in asset carries a folder_id (a real Trello card_url).
+    if portal_is_enabled() and ctx.get("folder_id"):
+        _post_portal({
+            "event": "handin_uploaded",
+            "card_url": ctx["card_url"],
+            "editor_email": ctx["editor_email"],
+            "version_id": str(version_id),
+            "folder_id": ctx["folder_id"],
+            # The editor's direct upload surface for this folder - where a revision must land.
+            "handin_url": ctx["review_url"],
+        })

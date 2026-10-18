@@ -362,6 +362,86 @@ def test_a_failing_webhook_never_breaks_the_comment_or_upload(monkeypatch):
         settings.hub_events_webhook_url = ""
 
 
+def test_a_completed_handin_version_also_posts_a_signed_portal_handin_event(monkeypatch):
+    """When the portal webhook is configured, a completed hand-in version tells the portal the card's
+    folder and the editor's direct upload link (/r/<token>) so a later revision deep-links to it.
+    Fires even when the hub webhook is off - they are independent consumers."""
+    from apps.api.services import hub_events
+    settings.hub_events_webhook_url = ""  # hub off; portal on
+    settings.portal_events_webhook_url = "https://app.aditor.ai/api/freeframe/handin-webhook"
+    settings.portal_events_webhook_secret = "portalsecret"
+    settings.frontend_url = FRONTEND
+    try:
+        folder_id = uuid.uuid4()
+        card = "https://trello.com/c/AbCd1234"
+        req = SimpleNamespace(folder_id=folder_id, token="tok_abc123",
+                              iteration_state={"internal_handin": {"card_url": card, "editor_name": "Editor"}},
+                              last_uploader_email="editor@aditor.ai")
+        db = _db_with_request(req)
+        asset = SimpleNamespace(folder_id=folder_id, project_id=None, id=None, name=None, created_by=None)
+        version_id = uuid.uuid4()
+
+        sent = {}
+
+        def fake_post(url, content=None, headers=None, timeout=None):
+            sent["url"] = url
+            sent["content"] = content
+            sent["headers"] = headers
+            return MagicMock(status_code=200)
+
+        monkeypatch.setattr(hub_events.httpx, "post", fake_post)
+        hub_events.announce_revision_submitted(db, asset, version_id)
+
+        assert sent["url"] == "https://app.aditor.ai/api/freeframe/handin-webhook"
+        payload = json.loads(sent["content"])
+        assert payload == {
+            "event": "handin_uploaded",
+            "card_url": card,
+            "editor_email": "editor@aditor.ai",
+            "version_id": str(version_id),
+            "folder_id": str(folder_id),
+            "handin_url": f"{FRONTEND}/r/tok_abc123",
+        }
+        expected_sig = hmac.new(b"portalsecret", sent["content"], hashlib.sha256).hexdigest()
+        assert sent["headers"]["X-Aditor-Signature"] == expected_sig
+    finally:
+        settings.portal_events_webhook_url = ""
+        settings.portal_events_webhook_secret = ""
+
+
+def test_portal_handin_event_is_off_by_default_and_skips_non_handin(monkeypatch):
+    """No portal webhook configured -> nothing to the portal. And a non-hand-in upload (no folder_id)
+    never posts a portal event even when it is configured."""
+    from apps.api.services import hub_events
+    settings.hub_events_webhook_url = ""
+    settings.frontend_url = FRONTEND
+
+    # Off by default: no portal URL.
+    settings.portal_events_webhook_url = ""
+    assert hub_events.portal_is_enabled() is False
+    post = MagicMock()
+    monkeypatch.setattr(hub_events.httpx, "post", post)
+    folder_id = uuid.uuid4()
+    db = _db_with_request(SimpleNamespace(folder_id=folder_id, token="t",
+                          iteration_state={"internal_handin": {"card_url": "https://trello.com/c/AbCd1234"}},
+                          last_uploader_email="e@aditor.ai"))
+    hub_events.announce_revision_submitted(db, SimpleNamespace(folder_id=folder_id, project_id=None, id=None, name=None, created_by=None), uuid.uuid4())
+    post.assert_not_called()
+
+    # Configured, but a non-hand-in upload (no hand-in request -> no card/folder) sends nothing.
+    settings.portal_events_webhook_url = "https://app.aditor.ai/api/freeframe/handin-webhook"
+    try:
+        post2 = MagicMock()
+        monkeypatch.setattr(hub_events.httpx, "post", post2)
+        db2 = _db_non_handin(editor_email="luk@aditor.ai")
+        asset = SimpleNamespace(folder_id=None, project_id=uuid.uuid4(), id=uuid.uuid4(), name="x.mp4", created_by=uuid.uuid4())
+        hub_events.announce_revision_submitted(db2, asset, uuid.uuid4())
+        # The asset-page event has no folder_id, so no portal post.
+        assert not any(c.args and "app.aditor.ai" in str(c.args[0]) for c in post2.call_args_list)
+    finally:
+        settings.portal_events_webhook_url = ""
+
+
 def test_handin_helper_edges():
     from apps.api.services import hub_events
     # No folder -> not a hand-in.
