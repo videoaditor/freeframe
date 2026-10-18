@@ -157,18 +157,54 @@ def _post(event: dict) -> None:
         logger.warning("hub events webhook failed for event %r", event.get("event"), exc_info=True)
 
 
+def _comment_author_user(db: Session, comment):
+    """The authenticated user who wrote the comment, or None for an anonymous guest."""
+    author_id = getattr(comment, "author_id", None)
+    if not author_id:
+        return None
+    try:
+        from ..models.user import User
+        return db.get(User, author_id)
+    except Exception:  # noqa: BLE001 - best effort; a miss just means we can't confirm a client
+        return None
+
+
+def _is_client_comment(db: Session, comment) -> bool:
+    """A client (reviewer) ask, not a team member's comment. A guest comment always is. An
+    authenticated comment is a client ask only when its author is a non-staff account - a
+    platform-v2 self-signed-up customer (`is_staff=False`); editors/internal staff (is_staff
+    defaulting True) never ping an editor over their own project chatter. Auto-review findings are
+    stored `visibility="internal"` (`_guest_comment_visibility` / `publish_review_comment`) and are
+    never a client ask."""
+    if getattr(comment, "visibility", "public") == "internal":
+        return False
+    if getattr(comment, "guest_author_id", None) is not None:
+        return True
+    user = _comment_author_user(db, comment)
+    if user is None:
+        return False
+    return getattr(user, "is_staff", True) is False
+
+
 def announce_client_comment(db: Session, comment, asset, author_name: Optional[str]) -> None:
-    """A guest-reviewer (client) comment on any asset routes to the responsible editor. Never fires
-    for a team comment (`author_id` set, `guest_author_id` None) or an auto-review finding (stored
-    `visibility="internal"` at write time by `_guest_comment_visibility` / `publish_review_comment` -
-    see routers/comments.py). The hub webhook reads these fields FLAT (comment_id / comment_body)."""
+    """A client comment on any asset routes to the responsible editor, whether the client commented
+    anonymously through a share link (guest) or while logged in to the app (a non-staff account).
+    Never fires for a team member's comment or an auto-review finding. The hub webhook reads these
+    fields FLAT (comment_id / comment_body)."""
     if not is_enabled():
         return
-    if comment.guest_author_id is None or getattr(comment, "visibility", "public") == "internal":
+    if not _is_client_comment(db, comment):
         return
     ctx = _asset_report_context(db, asset, getattr(comment, "version_id", None))
     if ctx is None:
         return
+    # Never ping someone about their own comment - in a customer-owned workspace the commenter can
+    # also be the version uploader, and the responsible editor must be someone other than the client.
+    author = _comment_author_user(db, comment)
+    if author is not None:
+        author_email = (getattr(author, "email", None) or "").strip().lower()
+        if author_email and author_email == ctx["editor_email"].strip().lower():
+            return
     event = {
         "event": "client_comment",
         "card_url": ctx["card_url"],

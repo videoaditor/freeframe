@@ -401,6 +401,10 @@ def create_comment(
     db.commit()
     db.refresh(comment)
     brand_loop.queue_comment(background_tasks, db, comment, asset, author_email=current_user.email)
+    # A logged-in client (non-staff account) commenting in the app routes to the responsible editor,
+    # same as an anonymous share-link comment. announce_client_comment no-ops for team members.
+    from ..services import hub_events
+    hub_events.announce_client_comment(db, comment, asset, current_user.name)
     return _build_comment_response(comment, db, current_user_id=current_user.id)
 
 
@@ -445,6 +449,9 @@ def reply_to_comment(
     db.commit()
     db.refresh(reply)
     brand_loop.queue_comment(background_tasks, db, reply, asset, author_email=current_user.email)
+    # A logged-in client's reply is still client feedback - route it to the editor too.
+    from ..services import hub_events
+    hub_events.announce_client_comment(db, reply, asset, current_user.name)
     return _build_comment_response(reply, db, current_user_id=current_user.id)
 
 

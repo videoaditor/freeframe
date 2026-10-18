@@ -203,6 +203,79 @@ def test_guest_comment_on_a_handin_version_announces_client_comment(monkeypatch)
         settings.hub_events_webhook_url = ""
 
 
+def test_create_comment_from_a_logged_in_client_announces_client_comment(monkeypatch):
+    """The authenticated in-app path: a logged-in customer (is_staff=False) posting to
+    /assets/{id}/comments routes to the version's uploader, just like a share-link guest comment.
+    A staff member's comment on the same route must stay silent (covered at the service level)."""
+    import apps.api.routers.comments as comments_module
+    from apps.api.services import hub_events
+
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    settings.frontend_url = "https://feedback.aditor.ai"
+    try:
+        client_id = uuid.uuid4()
+        uploader_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        project_id = uuid.uuid4()
+
+        asset = SimpleNamespace(id=asset_id, folder_id=None, project_id=project_id,
+                                name="hook3.mp4", created_by=uploader_id)
+        version = SimpleNamespace(id=version_id, asset_id=asset_id, created_by=uploader_id)
+
+        def fake_query(model):
+            q = MagicMock()
+            if model is AssetVersion:
+                q.filter.return_value.first.return_value = version
+            elif model is UploadRequest:
+                q.filter.return_value.first.return_value = None
+            else:
+                q.filter.return_value.first.return_value = None
+            return q
+
+        def fake_get(model, pk):
+            name = getattr(model, "__name__", str(model))
+            if name == "AssetVersion":
+                return version
+            if name == "User":
+                if pk == client_id:
+                    return SimpleNamespace(email="brand@customer.com", is_staff=False)
+                return SimpleNamespace(email="luk@aditor.ai", is_staff=True)
+            if name == "Project":
+                return SimpleNamespace(name="AgelessRx")
+            return None
+
+        db = MagicMock()
+        db.query = MagicMock(side_effect=fake_query)
+        db.get = MagicMock(side_effect=fake_get)
+
+        monkeypatch.setattr(comments_module, "_get_asset", lambda db_, aid: asset)
+        monkeypatch.setattr(comments_module, "require_asset_access", lambda *a, **k: None)
+        monkeypatch.setattr(comments_module, "_create_mentions", lambda *a, **k: None)
+        monkeypatch.setattr(comments_module, "_build_comment_response", lambda *a, **k: {"ok": True})
+        monkeypatch.setattr(comments_module.brand_loop, "queue_comment", lambda *a, **k: None)
+
+        sent = {}
+        monkeypatch.setattr(hub_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+
+        from apps.api.schemas.comment import CommentCreate
+        body = CommentCreate(version_id=version_id, body="please cut the intro")
+        current_user = SimpleNamespace(id=client_id, name="Brand Owner", email="brand@customer.com")
+        comments_module.create_comment(asset_id, body, db, current_user, BackgroundTasks())
+
+        page = f"https://feedback.aditor.ai/projects/{project_id}/assets/{asset_id}"
+        assert sent["event"] == "client_comment"
+        assert sent["card_url"] == page
+        assert sent["editor_email"] == "luk@aditor.ai"
+        assert sent["comment_body"] == "please cut the intro"
+        assert sent["author_name"] == "Brand Owner"
+        assert sent["client"] == "AgelessRx"
+        assert sent["title"] == "hook3.mp4"
+    finally:
+        settings.hub_events_webhook_url = ""
+
+
 def test_guest_comment_from_the_automation_reviewer_announces_nothing(monkeypatch):
     """The craft reviewer posts as a guest too, but its comments are stored visibility="internal" -
     never a client ask, so the webhook must stay silent even though guest_author_id is set."""

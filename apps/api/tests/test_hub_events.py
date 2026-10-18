@@ -139,16 +139,114 @@ def test_a_guest_comment_outside_any_handin_still_routes_to_the_asset_editor(mon
         settings.hub_events_webhook_secret = ""
 
 
-def test_an_internal_author_comment_emits_nothing(monkeypatch):
-    """A team member's comment (`author_id` set, no `guest_author_id`) is never a client ask."""
+def test_a_staff_author_comment_emits_nothing(monkeypatch):
+    """A team member's comment (`author_id` set to a staff account, no `guest_author_id`) is never a
+    client ask - not even when made while logged in to the app."""
     from apps.api.services import hub_events
     settings.hub_events_webhook_url = "https://example.invalid/hook"
     try:
         post = MagicMock()
         monkeypatch.setattr(hub_events.httpx, "post", post)
-        comment = SimpleNamespace(id=uuid.uuid4(), body="Looks good", guest_author_id=None,
-                                  visibility="public", version_id=uuid.uuid4())
-        hub_events.announce_client_comment(MagicMock(), comment, MagicMock(), "A Teammate")
+        db = MagicMock()
+        db.get.side_effect = lambda model, pk: (
+            SimpleNamespace(email="editor@aditor.ai", is_staff=True)
+            if getattr(model, "__name__", "") == "User" else None
+        )
+        comment = SimpleNamespace(id=uuid.uuid4(), body="Looks good", author_id=uuid.uuid4(),
+                                  guest_author_id=None, visibility="public", version_id=uuid.uuid4())
+        hub_events.announce_client_comment(db, comment, MagicMock(), "A Teammate")
+        post.assert_not_called()
+    finally:
+        settings.hub_events_webhook_url = ""
+
+
+def test_an_authenticated_client_comment_routes_to_the_editor(monkeypatch):
+    """Platform v2: a logged-in customer (is_staff=False) commenting in the app is a client ask and
+    routes to the version's uploader, exactly like an anonymous guest comment."""
+    from apps.api.services import hub_events
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    settings.hub_events_webhook_secret = "s3cret"
+    settings.frontend_url = FRONTEND
+    try:
+        client_id = uuid.uuid4()
+        uploader_id = uuid.uuid4()
+        project_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+
+        def fake_get(model, pk):
+            name = getattr(model, "__name__", str(model))
+            if name == "AssetVersion":
+                return SimpleNamespace(created_by=uploader_id)
+            if name == "User":
+                if pk == client_id:
+                    return SimpleNamespace(email="brand@customer.com", is_staff=False)
+                return SimpleNamespace(email="luk@aditor.ai", is_staff=True)
+            if name == "Project":
+                return SimpleNamespace(name="AgelessRx")
+            return None
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None  # no hand-in request
+        db.get.side_effect = fake_get
+
+        asset = SimpleNamespace(folder_id=None, project_id=project_id, id=asset_id,
+                                name="hook3.mp4", created_by=uploader_id)
+        comment = SimpleNamespace(id=uuid.uuid4(), body="please cut the intro", author_id=client_id,
+                                  guest_author_id=None, visibility="public", version_id=version_id)
+
+        sent = {}
+        monkeypatch.setattr(hub_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+        hub_events.announce_client_comment(db, comment, asset, "Brand Owner")
+
+        page = f"{FRONTEND}/projects/{project_id}/assets/{asset_id}"
+        assert sent == {
+            "event": "client_comment",
+            "card_url": page,
+            "editor_email": "luk@aditor.ai",
+            "comment_id": str(comment.id),
+            "comment_body": "please cut the intro",
+            "author_name": "Brand Owner",
+            "version_id": str(version_id),
+            "review_url": page,
+            "client": "AgelessRx",
+            "title": "hook3.mp4",
+        }
+    finally:
+        settings.hub_events_webhook_url = ""
+        settings.hub_events_webhook_secret = ""
+
+
+def test_a_client_who_is_also_the_uploader_is_not_pinged_about_their_own_comment(monkeypatch):
+    """Customer-owned workspace edge: the commenter is also the version's uploader, so there is no
+    separate editor to ping - stay silent rather than ping the client about their own comment."""
+    from apps.api.services import hub_events
+    settings.hub_events_webhook_url = "https://example.invalid/hook"
+    settings.frontend_url = FRONTEND
+    try:
+        post = MagicMock()
+        monkeypatch.setattr(hub_events.httpx, "post", post)
+        person_id = uuid.uuid4()
+
+        def fake_get(model, pk):
+            name = getattr(model, "__name__", str(model))
+            if name == "AssetVersion":
+                return SimpleNamespace(created_by=person_id)
+            if name == "User":
+                return SimpleNamespace(email="brand@customer.com", is_staff=False)
+            if name == "Project":
+                return SimpleNamespace(name="Brand")
+            return None
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        db.get.side_effect = fake_get
+        asset = SimpleNamespace(folder_id=None, project_id=uuid.uuid4(), id=uuid.uuid4(),
+                                name="x.mp4", created_by=person_id)
+        comment = SimpleNamespace(id=uuid.uuid4(), body="change this", author_id=person_id,
+                                  guest_author_id=None, visibility="public", version_id=uuid.uuid4())
+        hub_events.announce_client_comment(db, comment, asset, "Brand Owner")
         post.assert_not_called()
     finally:
         settings.hub_events_webhook_url = ""
