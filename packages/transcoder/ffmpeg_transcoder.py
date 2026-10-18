@@ -27,18 +27,13 @@ logger = logging.getLogger("transcoder.ffmpeg")
 # box, where starving the pool would cost real throughput.
 FFMPEG_THREADS = max(1, int(os.getenv("FFMPEG_THREADS", "2")))
 
-# The encode reads its input straight from storage over HTTP (a presigned URL). With no read
-# timeout, a stalled connection leaves ffmpeg waiting until the whole-encode timeout below - up to
-# 4 hours - while holding one of the few transcoding slots, and the editor's version sits in
-# "Processing" the entire time. A read that makes no progress for FFMPEG_INPUT_RW_TIMEOUT_SECONDS
-# now fails (and Celery retries the job) instead of hanging; short drops are reconnected
-# transparently. Only long-standing options (reconnect* since ffmpeg 3.x, rw_timeout older),
-# because the production image installs Debian's ffmpeg, not the newest one.
-FFMPEG_INPUT_RW_TIMEOUT_SECONDS = max(5, int(os.getenv("FFMPEG_INPUT_RW_TIMEOUT_SECONDS", "60")))
-INPUT_NET_ARGS = [
-    "-rw_timeout", str(FFMPEG_INPUT_RW_TIMEOUT_SECONDS * 1_000_000),  # microseconds
-    "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30",
-]
+# transcode() downloads the original before encoding and reads it from local disk. It used to
+# stream it over HTTP (a presigned URL), where every seek is a fresh range request: a valid MP4
+# whose audio and video sit far apart in the file (some editors' exports, 2026-10-18: up to 186 MB
+# apart, 32k jumps) took over 25 minutes to read a 9-minute 581 MB video and hit the encode
+# timeout, while the download alone took 3 s and the local encode about a minute. A stalled
+# transfer is now boto3's to catch (60 s read timeout plus retries), so the job still fails and is
+# retried instead of holding a transcoding slot - what -rw_timeout/-reconnect did for the stream.
 
 # Wall-clock cap for the whole encode. It used to be a flat 4 hours, so a hung or crawling ffmpeg
 # kept a transcoding slot (of only 2) busy for 4 hours. The cap now scales with the video's
@@ -157,20 +152,20 @@ class FFmpegTranscoder(BaseTranscoder):
 
     async def transcode(self, job: TranscodeJob) -> TranscodeResult:
         """
-        Transcode video using streaming input from S3.
-        FFmpeg reads directly from presigned URL - no full download needed.
-        Only output files are written to disk, reducing disk usage by ~2/3.
+        Transcode video from a local copy of the S3 original.
+        The original is downloaded into the work dir first and deleted with it.
         """
         work_dir = Path(tempfile.mkdtemp(prefix=f"transcode_{job.version_id}_"))
-        
-        # Generate presigned URL for streaming input (2 hour expiry for large files)
-        input_url = self._get_presigned_url(job.input_s3_key, expires_in=7200)
 
         try:
-            # 1. Get video metadata via streaming (no download)
+            # Local copy of the original - see the note below FFMPEG_THREADS.
+            input_path = str(work_dir / f"input{Path(job.input_s3_key).suffix or '.mp4'}")
+            self.s3.download_file(self.bucket, job.input_s3_key, input_path)
+
+            # 1. Get video metadata
             cmd = [
                 "ffprobe", "-v", "error", "-print_format", "json",
-                "-show_streams", "-select_streams", "v:0", "-show_format", input_url,
+                "-show_streams", "-select_streams", "v:0", "-show_format", input_path,
             ]
             vid_info = self._run(cmd, timeout=120, label="ffprobe")
             meta = parse_probe_metadata(json.loads(vid_info))
@@ -178,7 +173,7 @@ class FFmpegTranscoder(BaseTranscoder):
             # 2. Check if input has an audio stream
             audio_cmd = [
                 "ffprobe", "-v", "error", "-print_format", "json",
-                "-show_streams", "-select_streams", "a", input_url,
+                "-show_streams", "-select_streams", "a", input_path,
             ]
             audio_result = self._run(audio_cmd, timeout=120, label="ffprobe")
             has_audio = bool(json.loads(audio_result).get("streams"))
@@ -216,8 +211,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 "ffmpeg", "-y",
                 # Applies to the next file specified, i.e. the input decoder.
                 "-threads", str(FFMPEG_THREADS),
-                *INPUT_NET_ARGS,
-                "-i", input_url,
+                "-i", input_path,
                 "-filter_complex", filter_complex,
                 "-filter_complex_threads", str(FFMPEG_THREADS),
             ]
@@ -326,10 +320,10 @@ class FFmpegTranscoder(BaseTranscoder):
             if job.make_thumbnail:
                 try:
                     thumb_path = work_dir / "thumb_0001.jpg"
-                    # Same stalled-read protection as the encode, and a cap: without either, a hung
-                    # read here held one of the two transcoding slots with no limit at all.
+                    # Reads the local copy; the cap stays: without it, a hung ffmpeg here held one
+                    # of the two transcoding slots with no limit at all.
                     thumb_cmd = [
-                        "ffmpeg", "-y", *INPUT_NET_ARGS, "-i", input_url,
+                        "ffmpeg", "-y", "-i", input_path,
                         "-vf", "fps=0.1", "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1",
                         str(work_dir / "thumb_%04d.jpg"),
                     ]
