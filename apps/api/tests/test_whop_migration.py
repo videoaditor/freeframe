@@ -9,7 +9,8 @@ def test_whop_migrations_follow_live_n8n_head_without_branching():
     config = Config()
     config.set_main_option("script_location", str(Path(__file__).parents[1] / "alembic"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ["c9e1a2b3d4f5"]
+    assert scripts.get_heads() == ["d1a2b3c4e5f6"]
+    assert scripts.get_revision("d1a2b3c4e5f6").down_revision == "c9e1a2b3d4f5"
     assert scripts.get_revision("c9e1a2b3d4f5").down_revision == "b8d8a10b2026"
     assert set(scripts.get_revision("b8d8a10b2026").down_revision) == {"a8d8a10b2026", "f1d8a10b2026"}
     assert scripts.get_revision("a8d8a10b2026").down_revision == "d5d7e10b2026"
@@ -38,3 +39,15 @@ def test_campaign_migrations_load_through_production_alembic_entrypoint():
     assert 'CREATE TABLE product_feedback' in result.stdout
     assert 'ALTER TABLE users ADD COLUMN suite_campaign' in result.stdout
     assert 'CREATE TABLE campaign_reviews' in result.stdout
+
+
+def test_workspace_brand_links_render_and_never_overwrite():
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, '-m', 'alembic', 'upgrade', 'c9e1a2b3d4f5:d1a2b3c4e5f6', '--sql'],
+        cwd=Path(__file__).parents[1], capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "SET autoreview_brand_slug = 'audibene-gmbh' WHERE name = 'Audibene - Workspace'" in result.stdout
+    assert result.stdout.count('AND autoreview_brand_slug IS NULL') == 12
