@@ -45,6 +45,7 @@ jobs:
       S3_REGION: us-east-1
       JWT_SECRET: ci-test-secret-key-not-for-production
       FRONTEND_URL: http://localhost:3000
+      PORTAL_FREEFRAME_HMAC_SECRET: ci-test-portal-hmac-secret
 
     services:
       postgres:

@@ -24,6 +24,7 @@ os.environ.setdefault("S3_SECRET_KEY", "testsecret")
 os.environ.setdefault("S3_REGION", "us-east-1")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-tests-only")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
+os.environ.setdefault("PORTAL_FREEFRAME_HMAC_SECRET", "test-portal-hmac-secret")
 
 
 _FAKE_HASH = "$2b$12$fakehashfortestsonlythisisnotrealatall000000000000000"
@@ -165,6 +166,7 @@ _REAL_DB_ONLY_FILES = {
     "test_cleanup_soft_deleted.py",
     "test_n8n_feedback_events_postgres.py",
     "test_orphan_sweep.py",
+    "test_portal_delivery_folder.py",
     "test_reap_stale_uploads.py",
     "test_share_link_expiry.py",
     "test_storage_usage_integration.py",

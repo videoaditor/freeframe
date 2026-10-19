@@ -304,6 +304,19 @@ class Settings(BaseSettings):
     # gate login requests.
     oidc_scope: str = "freeframe.read"
 
+    # Server-to-server hand-in orchestration for the Aditor portal (POST
+    # /integrations/portal/delivery-folder): the portal finds-or-creates a hand-in folder without a
+    # human behind a browser, so it needs a write-capable machine credential - the read-only
+    # SERVICE_API_KEY above deliberately cannot do this. Trust is inbound HMAC-SHA256 over the raw
+    # request body on X-Aditor-Signature, the same scheme FreeFrame already uses as the sender of the
+    # hub/portal webhooks above, just verified here instead of produced. Unset (the default) fails
+    # the endpoint closed - it never falls open.
+    portal_freeframe_hmac_secret: str = ""
+    # The FreeFrame staff account every portal-created folder, share link and upload request is
+    # attributed to - never a human user. Unset (the default) leaves the endpoint answering 503
+    # rather than guessing an owner.
+    portal_freeframe_service_email: str = ""
+
     @model_validator(mode="after")
     def _check_s3_endpoint_consistency(self):
         """Fail loud on `S3_STORAGE=s3` + a real custom (non-AWS) `S3_ENDPOINT`.

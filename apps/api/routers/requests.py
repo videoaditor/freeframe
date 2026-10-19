@@ -59,6 +59,10 @@ router = APIRouter(tags=["requests"])
 # Auto Review comments as this guest (feedback-agent src/freeframe-agent.ts postGuestComment).
 REVIEWER_EMAIL = "review@aditor.ai"
 
+# An internal hand-in card, in the exact shape Aditor files on a folder's description. Capturing
+# (not `(?:...)`) so a caller can also pull out the bare card id/short-link as the dedup key.
+CARD_URL = re.compile(r'https://trello\.com/c/([A-Za-z0-9]{8}|[A-Fa-f0-9]{24})(?:/[^?#\s]*)?/?')
+
 
 # ── Pure helpers (tested directly) ─────────────────────────────────────────────
 
@@ -231,19 +235,19 @@ def create_request(body: RequestCreate, db: Session = Depends(get_db), current_u
     return _request_out(req, project, binding=binding)
 
 
-@router.post('/folders/{folder_id}/editor-request')
-def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
-                          current_user: User = Depends(get_current_user)):
-    """Give a staff hand-in its native editor without moving files or widening a share."""
-    if getattr(current_user, 'is_staff', False) is not True:
-        raise HTTPException(403, 'Internal hand-in is available to staff.')
-    folder = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).with_for_update().first()
-    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first() if folder else None
-    if not project or not project.is_workspace:
-        raise HTTPException(404, 'Workspace hand-in not found')
-    require_project_role(db, project.id, current_user, ProjectRole.editor)
-    if not re.fullmatch(r'https://trello\.com/c/(?:[A-Za-z0-9]{8}|[A-Fa-f0-9]{24})(?:/[^?#\s]*)?/?', (folder.description or '').strip()):
-        raise HTTPException(409, 'This folder is not an internal card hand-in.')
+def ensure_folder_assignment(db: Session, folder: Folder, project: Project, actor_id: uuid.UUID,
+                             *, create_share_if_missing: bool = False) -> tuple[UploadRequest, Optional[ChecklistBinding]]:
+    """Find-or-create the ONE upload request (and surface its one checklist binding, if any) for a
+    hand-in folder - idempotent, and never more than one of either. Shared by the interactive
+    conversion route below and the portal's server-to-server delivery-folder endpoint, so both give
+    exactly the same guarantees: a single live assignment, the brand still matching, and the
+    standing review share actually usable before anyone is handed a token for it.
+
+    `create_share_if_missing` only matters for a folder with no standing share at all (the portal
+    endpoint creates folders itself, so there is no earlier step that would have made one); the
+    interactive route's folders always already got one at folder-creation, so it defaults to the
+    original behavior of 409'ing rather than ever creating.
+    """
     requests = db.query(UploadRequest).filter(UploadRequest.folder_id == folder.id).limit(2).all()
     bindings = db.query(ChecklistBinding).filter(ChecklistBinding.folder_id == folder.id,
         ChecklistBinding.project_id == project.id, ChecklistBinding.deleted_at.is_(None)).limit(2).all()
@@ -267,16 +271,36 @@ def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
         ShareLink.title == 'Auto Review', ShareLink.permission == SharePermission.comment).all()
     wanted = req.review_share_token if req else binding.review_share_token if binding else None
     share = next((s for s in shares if s.token == wanted), None) if wanted else shares[0] if len(shares) == 1 else None
+    if share is None and not shares and create_share_if_missing:
+        from ..services.automation_share import create_standing_folder_link
+        share = create_standing_folder_link(db, project.id, folder.id, actor_id, bound_review=True)
     if not share or not share.is_enabled or share.password_hash or share.visibility != 'public' or (share.expires_at and share.expires_at <= datetime.now(timezone.utc)):
         raise HTTPException(409, 'The review share link is unavailable. Open the project to check its sharing settings.')
     if req is None:
         req = UploadRequest(token=secrets.token_urlsafe(24), project_id=project.id, folder_id=folder.id,
-            created_by=current_user.id, title=folder.name, brand_slug=project_brand(db, project),
+            created_by=actor_id, title=folder.name, brand_slug=project_brand(db, project),
             review_share_token=share.token, brief_excerpt=folder.description,
             iteration_state={'internal_handin': {'card_url': folder.description}})
         db.add(req); db.flush()
     if binding:
         binding.request_id = req.id
+    return req, binding
+
+
+@router.post('/folders/{folder_id}/editor-request')
+def folder_editor_request(folder_id: uuid.UUID, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    """Give a staff hand-in its native editor without moving files or widening a share."""
+    if getattr(current_user, 'is_staff', False) is not True:
+        raise HTTPException(403, 'Internal hand-in is available to staff.')
+    folder = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).with_for_update().first()
+    project = db.query(Project).filter(Project.id == folder.project_id, Project.deleted_at.is_(None)).populate_existing().with_for_update().first() if folder else None
+    if not project or not project.is_workspace:
+        raise HTTPException(404, 'Workspace hand-in not found')
+    require_project_role(db, project.id, current_user, ProjectRole.editor)
+    if not CARD_URL.fullmatch((folder.description or '').strip()):
+        raise HTTPException(409, 'This folder is not an internal card hand-in.')
+    req, binding = ensure_folder_assignment(db, folder, project, current_user.id)
     if not components(req):
         req = locked_request(db, req.id)
         for asset in _submitted_assets(db, req):
