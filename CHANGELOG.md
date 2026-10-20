@@ -37,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a finished request (`handin.finished`), an editor's answer to an open client note
   (`revision.responded`) and a second-or-later version on the same asset (`version.resubmitted`)
   each POST to the company DB's `log_workflow_event` RPC with the request's brand, card
-  reference and editor (email, or the resolved person when known). Best effort, after commit,
+  reference and editor email (the RPC resolves it to a person on the company side; FreeFrame's
+  least-privilege role never reads the company directory itself). Best effort, after commit,
   bearer-JWT authenticated (no HMAC); a complete no-op until `COMPANYDB_WORKFLOW_JWT` is set.
 
 ### Changed
