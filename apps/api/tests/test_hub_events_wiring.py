@@ -315,3 +315,59 @@ def test_guest_comment_from_the_automation_reviewer_announces_nothing(monkeypatc
     finally:
         settings.hub_events_webhook_url = ""
         settings.automation_guest_emails = original_automation_guest_emails
+
+
+def test_guest_complete_announces_revision_submitted_for_a_split_handin(monkeypatch):
+    """The editor's /r/<token> upload (Split upload parts, the fix for an assembled ad) is a
+    revision answer too: it must reach the hub with the hand-in's Trello card_url, otherwise the
+    open client revisions on that card stay open and escalate to a Trust deduction."""
+    import apps.api.routers.requests as requests_module
+    from apps.api.services import hub_events
+
+    settings.hub_events_webhook_url = "https://hub.aditor.ai/api/revision/freeframe-webhook"
+    try:
+        asset_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
+        version = SimpleNamespace(id=version_id, asset_id=asset_id, processing_status=ProcessingStatus.uploading)
+        asset = SimpleNamespace(id=asset_id, folder_id=folder_id, project_id=uuid.uuid4(), name="boddy fixed.mp4")
+        req = SimpleNamespace(id=uuid.uuid4(), folder_id=folder_id, completed_at=None,
+                              last_uploader_email="editor@aditor.ai",
+                              iteration_state={"internal_handin": {"card_url": "https://trello.com/c/abc12345"}})
+
+        def fake_query(model):
+            q = MagicMock()
+            q.filter.return_value.first.return_value = {UploadRequest: req}.get(model)
+            q.filter.return_value.populate_existing.return_value.with_for_update.return_value.one.return_value = version
+            return q
+
+        db = MagicMock()
+        db.query = MagicMock(side_effect=fake_query)
+        db.get = MagicMock(side_effect=lambda model, _id: asset if model is Asset else None)
+
+        monkeypatch.setattr(requests_module, "_live_request", lambda *a, **k: req)
+        monkeypatch.setattr(requests_module, "locked_request", lambda *a: req)
+        monkeypatch.setattr(requests_module, "_owned_media", lambda *a: (MagicMock(), version))
+        monkeypatch.setattr(requests_module, "_record_uploader", lambda *a: None)
+        monkeypatch.setattr(requests_module, "freeze_submission_timing", lambda *a: None)
+        monkeypatch.setattr(requests_module, "complete_multipart_upload", lambda *a, **k: None)
+        monkeypatch.setattr(requests_module, "components", lambda r: False)
+        monkeypatch.setattr(requests_module.s3_service, "get_s3_client",
+                            lambda: MagicMock(head_object=lambda **k: {"ContentLength": 1}))
+
+        sent = {}
+        monkeypatch.setattr(hub_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+
+        body = requests_module.GuestComplete(s3_key="raw/key", upload_id="up1", parts=[])
+        response = requests_module.guest_complete("tok", body, BackgroundTasks(), db)
+
+        assert response["status"] == "processing"
+        assert sent == {
+            "event": "revision_submitted",
+            "card_url": "https://trello.com/c/abc12345",
+            "editor_email": "editor@aditor.ai",
+            "version_id": str(version_id),
+        }
+    finally:
+        settings.hub_events_webhook_url = ""
