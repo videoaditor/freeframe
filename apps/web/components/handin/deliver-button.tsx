@@ -67,6 +67,17 @@ export function DeliverButton({
         setPhase("error");
         return;
       }
+      // Only a real post (or one already on the card) is "delivered". A 200 that is held / reviewing /
+      // anything else is NOT: never claim a comment that was not posted.
+      if (!data.posted && data.reason !== "already-delivered") {
+        setMessage(
+          data.reason === "held" || data.reason === "reviewing"
+            ? "Not delivered yet - the review is still open. It posts by itself once it is clear, or post the link on the card by hand."
+            : "Not delivered - nothing was posted to the card. Post the link on the card by hand.",
+        );
+        setPhase("error");
+        return;
+      }
       setMessage(
         data.reason === "already-delivered"
           ? "Already delivered - the comment is on the card."
