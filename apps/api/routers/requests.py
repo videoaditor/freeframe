@@ -689,6 +689,10 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     if components(req): stored_upload(req,version)
     version.processing_status = ProcessingStatus.processing
     db.commit()
+    # The editor's answer to open client revisions (e.g. a fixed Split-upload part): same stop signal
+    # as routers/upload.py `complete`, which this /r/<token> path never goes through.
+    from ..services import hub_events
+    hub_events.announce_revision_submitted(db, db.get(Asset, version.asset_id), version.id)
     background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
     return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
 
