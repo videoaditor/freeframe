@@ -198,6 +198,34 @@ def test_a_plain_upload_resolves_its_linked_staff_handin_request(monkeypatch):
         _disable()
 
 
+def test_a_plain_upload_staff_handin_falls_back_to_the_versions_uploader(monkeypatch):
+    """The staff hand-in lane (`folder_editor_request`) never sets `last_uploader_email` on the
+    request - only the guest flow does - so the email must fall back to whoever uploaded this
+    version, the same resolution hub_events uses for its own non-guest editor lookups."""
+    from apps.api.services import workflow_events
+    _enable()
+    try:
+        folder_id = uuid.uuid4()
+        uploader_id = uuid.uuid4()
+        req = _req(folder_id=folder_id, last_uploader_email=None,
+                  iteration_state={"internal_handin": {"card_url": "https://trello.com/c/AbCd1234"}})
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.side_effect = [req, None]
+        db.get.return_value = SimpleNamespace(email="staffer@aditor.ai")
+        asset = SimpleNamespace(id=uuid.uuid4(), folder_id=folder_id)
+        version = SimpleNamespace(id=uuid.uuid4(), version_number=1, created_by=uploader_id)
+
+        sent = {}
+        monkeypatch.setattr(workflow_events.httpx, "post",
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+        workflow_events.announce_handin_uploaded(db, None, asset, version)
+
+        assert sent["event"] == "handin.uploaded"
+        assert sent["email"] == "staffer@aditor.ai"
+    finally:
+        _disable()
+
+
 def test_occurred_at_prefers_the_request_uploads_submitted_at(monkeypatch):
     from apps.api.services import workflow_events
     _enable()

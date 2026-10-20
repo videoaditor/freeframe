@@ -58,8 +58,9 @@ def _submission_time(db: Session, req: UploadRequest, asset_id, version) -> date
     return datetime.now(timezone.utc)
 
 
-def _post_event(req: UploadRequest, event: str, props: dict, occurred_at: datetime) -> None:
-    email = (getattr(req, "last_uploader_email", None) or "").strip() or None
+def _post_event(req: UploadRequest, event: str, props: dict, occurred_at: datetime,
+                 email: Optional[str] = None) -> None:
+    email = (email or getattr(req, "last_uploader_email", None) or "").strip() or None
     brand_slug = (getattr(req, "brand_slug", None) or "").strip() or None
     card_ref = _card_ref(req)
     if not email or not brand_slug or not card_ref:
@@ -95,18 +96,24 @@ def announce_handin_uploaded(db: Session, req: Optional[UploadRequest], asset, v
     asset's first version (an editor answering feedback, not the initial hand-in). `req` is passed
     directly by the request-lane caller (it already holds one); the plain `/upload/complete` lane
     resolves it from the asset's folder, the only way that lane can ever be linked to a request
-    (a staff hand-in folder converted via `routers/requests.py` `folder_editor_request`)."""
+    (a staff hand-in folder converted via `routers/requests.py` `folder_editor_request`). That staff
+    lane never records a `last_uploader_email` on the request (only the guest hand-in flow does), so
+    the email falls back to whoever uploaded this version, the same resolution `hub_events` uses for
+    its own non-guest editor lookups."""
     if not is_enabled():
         return
     if req is None:
         req = hub_events._handin_request_for_asset(db, asset)
     if req is None:
         return
+    email = (getattr(req, "last_uploader_email", None) or "").strip() or None
+    if not email:
+        email = hub_events._user_email(db, getattr(version, "created_by", None))
     occurred_at = _submission_time(db, req, asset.id, version)
     props = {"version_no": version.version_number, "version_id": str(version.id)}
-    _post_event(req, "handin.uploaded", props, occurred_at)
+    _post_event(req, "handin.uploaded", props, occurred_at, email=email)
     if version.version_number > 1:
-        _post_event(req, "version.resubmitted", props, occurred_at)
+        _post_event(req, "version.resubmitted", props, occurred_at, email=email)
 
 
 def announce_handin_finished(db: Session, req: UploadRequest) -> None:
