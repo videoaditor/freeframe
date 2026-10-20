@@ -691,8 +691,10 @@ def guest_complete(token: str, body: GuestComplete, background_tasks: Background
     db.commit()
     # The editor's answer to open client revisions (e.g. a fixed Split-upload part): same stop signal
     # as routers/upload.py `complete`, which this /r/<token> path never goes through.
-    from ..services import hub_events
-    hub_events.announce_revision_submitted(db, db.get(Asset, version.asset_id), version.id)
+    from ..services import hub_events, workflow_events
+    completed_asset = db.get(Asset, version.asset_id)
+    hub_events.announce_revision_submitted(db, completed_asset, version.id)
+    workflow_events.announce_handin_uploaded(db, req, completed_asset, version)
     background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
     return {"status": "processing", "asset_id": str(version.asset_id), "version_id": str(version.id)}
 
@@ -867,6 +869,8 @@ def finish_request(token: str, db: Session = Depends(get_db)):
         req.completed_at = datetime.now(timezone.utc)
         req.completion_versions = {a['asset_id']: a['version_id'] for a in review['assets']}
         db.commit()
+        from ..services import workflow_events
+        workflow_events.announce_handin_finished(db, req)
     return {'completed_at': req.completed_at.isoformat(), 'completion_versions': req.completion_versions}
 
 
@@ -927,6 +931,8 @@ def guest_object(token: str, body: GuestObjection, db: Session = Depends(get_db)
         req=locked_request(db,req.id)
         withdraw_finding(req,str(asset.id),str(current.id),body.comment_id)
         db.commit()
+    from ..services import workflow_events
+    workflow_events.announce_revision_responded(db, req, asset, body.comment_id)
     return r
 
 

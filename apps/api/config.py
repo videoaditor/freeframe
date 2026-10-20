@@ -304,6 +304,16 @@ class Settings(BaseSettings):
     # gate login requests.
     oidc_scope: str = "freeframe.read"
 
+    # Outbound editor-workflow events to the owned company-DB store (app.log_workflow_event):
+    # hand-in / revision activity, so the hub and portal can join this tool's steps into the
+    # cross-tool journey. Modelled on hub_events/portal_events above, but the credential is a
+    # scoped JWT bearer (COMPANYDB_WORKFLOW_JWT, role workflow_writer) rather than an HMAC secret -
+    # the same app-JWT-over-PostgREST pattern every other company-DB writer uses. COMPANYDB_URL is
+    # not a secret (the company DB's own public PostgREST endpoint); COMPANYDB_WORKFLOW_JWT unset
+    # (the default) is a complete no-op, so this is safe to deploy before the keystone RPC exists.
+    companydb_url: str = "https://db.aditor.ai"
+    companydb_workflow_jwt: str = ""
+
     # Server-to-server hand-in orchestration for the Aditor portal (POST
     # /integrations/portal/delivery-folder): the portal finds-or-creates a hand-in folder without a
     # human behind a browser, so it needs a write-capable machine credential - the read-only

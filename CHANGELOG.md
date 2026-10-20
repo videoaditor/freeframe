@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HUB_EVENTS_WEBHOOK_SECRET` (HMAC-SHA256 over the raw body, `X-Aditor-Signature` header), fired
   after commit and never fails the originating comment/upload. FreeFrame stays "dumb" - the hub
   owns the ping/escalation loop.
+- Editor-workflow events to the company-DB workflow-events store: a request-lane hand-in
+  (`handin.uploaded`, from both `POST /upload/complete` and `POST /r/<token>/upload/complete`),
+  a finished request (`handin.finished`), an editor's answer to an open client note
+  (`revision.responded`) and a second-or-later version on the same asset (`version.resubmitted`)
+  each POST to the company DB's `log_workflow_event` RPC with the request's brand, card
+  reference and editor (email, or the resolved person when known). Best effort, after commit,
+  bearer-JWT authenticated (no HMAC); a complete no-op until `COMPANYDB_WORKFLOW_JWT` is set.
 
 ### Changed
 - A cold, signed-out hit to `/login` now redirects straight to the central gate
