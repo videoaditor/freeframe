@@ -60,7 +60,7 @@ def test_complete_upload_announces_handin_uploaded_for_a_linked_staff_handin(mon
 
         sent = []
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)["p"]) or MagicMock())
 
         body = upload_module.CompleteUploadRequest(
             s3_key="raw/key", upload_id="up1", asset_id=asset_id, version_id=version_id, parts=[],
@@ -70,7 +70,7 @@ def test_complete_upload_announces_handin_uploaded_for_a_linked_staff_handin(mon
 
         assert response.status == "processing"
         assert len(sent) == 1
-        assert sent[0]["event"] == "handin.uploaded"
+        assert sent[0]["action"] == "handin.uploaded"
         assert sent[0]["card_ref"] == "https://trello.com/c/abc12345"
         assert sent[0]["brand_slug"] == "brand-x"
         assert sent[0]["email"] == "editor@aditor.ai"
@@ -117,14 +117,14 @@ def test_guest_complete_announces_handin_uploaded_for_a_request_lane_handin(monk
 
         sent = []
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)["p"]) or MagicMock())
 
         body = requests_module.GuestComplete(s3_key="raw/key", upload_id="up1", parts=[])
         response = requests_module.guest_complete("tok", body, BackgroundTasks(), db)
 
         assert response["status"] == "processing"
         assert len(sent) == 1
-        assert sent[0]["event"] == "handin.uploaded"
+        assert sent[0]["action"] == "handin.uploaded"
         assert sent[0]["card_ref"] == "https://feedback.aditor.ai/r/tok_xyz"
         assert sent[0]["email"] == "freelancer@example.com"
     finally:
@@ -150,13 +150,13 @@ def test_finish_request_announces_handin_finished(monkeypatch):
 
         sent = []
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)["p"]) or MagicMock())
 
         response = requests_module.finish_request("tok", MagicMock())
 
         assert response["completed_at"] == req.completed_at.isoformat()
         assert len(sent) == 1
-        assert sent[0]["event"] == "handin.finished"
+        assert sent[0]["action"] == "handin.finished"
         assert sent[0]["brand_slug"] == "brand-y"
     finally:
         _disable_workflow_events()
@@ -195,7 +195,7 @@ def test_guest_object_announces_revision_responded(monkeypatch):
 
         sent = []
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.append(json.loads(content)["p"]) or MagicMock())
 
         body = requests_module.GuestObjection(asset_id=asset_id, comment_id="", body="",
                                               text="this is correct, not a real issue")
@@ -203,7 +203,7 @@ def test_guest_object_announces_revision_responded(monkeypatch):
 
         assert result == {"withdrawn": False}
         assert len(sent) == 1
-        assert sent[0]["event"] == "revision.responded"
+        assert sent[0]["action"] == "revision.responded"
         assert sent[0]["brand_slug"] == "brand-z"
         assert sent[0]["props"] == {"asset_id": str(asset_id)}
     finally:
