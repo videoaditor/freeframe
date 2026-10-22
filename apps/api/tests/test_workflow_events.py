@@ -80,12 +80,12 @@ def test_a_request_lane_handin_posts_a_bearer_authenticated_handin_uploaded_even
 
         assert sent["url"] == "https://db.aditor.ai/rpc/log_workflow_event"
         assert sent["headers"]["Authorization"] == "Bearer jwt-token"
-        payload = json.loads(sent["content"])
-        assert payload["event"] == "handin.uploaded"
+        payload = json.loads(sent["content"])["p"]
+        assert payload["action"] == "handin.uploaded"
         assert payload["tool"] == "freeframe"
         assert payload["brand_slug"] == "brand-x"
         assert payload["email"] == "editor@aditor.ai"
-        assert payload["person_id"] is None
+        assert payload["event_id"]  # client-generated uuid; the RPC resolves person_id from email
         assert payload["card_ref"] == f"{FRONTEND}/r/tok_abc123"
         assert payload["props"] == {"version_no": 1, "version_id": str(version.id)}
         # Occurred-at falls back to "now" (ISO 8601, parseable) when no RequestUpload row exists.
@@ -106,7 +106,7 @@ def test_an_internal_handin_card_is_used_as_card_ref_over_the_review_link(monkey
 
         sent = {}
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_uploaded(db, req, asset, version)
 
         assert sent["card_ref"] == card
@@ -125,10 +125,10 @@ def test_a_resubmitted_version_also_emits_version_resubmitted(monkeypatch):
 
         events = []
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: events.append(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: events.append(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_uploaded(db, req, asset, version)
 
-        assert [e["event"] for e in events] == ["handin.uploaded", "version.resubmitted"]
+        assert [e["action"] for e in events] == ["handin.uploaded", "version.resubmitted"]
         assert all(e["props"] == {"version_no": 2, "version_id": str(version.id)} for e in events)
     finally:
         _disable()
@@ -145,10 +145,10 @@ def test_the_first_version_never_emits_version_resubmitted(monkeypatch):
 
         events = []
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: events.append(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: events.append(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_uploaded(db, req, asset, version)
 
-        assert [e["event"] for e in events] == ["handin.uploaded"]
+        assert [e["action"] for e in events] == ["handin.uploaded"]
     finally:
         _disable()
 
@@ -189,10 +189,10 @@ def test_a_plain_upload_resolves_its_linked_staff_handin_request(monkeypatch):
 
         sent = {}
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_uploaded(db, None, asset, version)
 
-        assert sent["event"] == "handin.uploaded"
+        assert sent["action"] == "handin.uploaded"
         assert sent["card_ref"] == "https://trello.com/c/AbCd1234"
     finally:
         _disable()
@@ -217,10 +217,10 @@ def test_a_plain_upload_staff_handin_falls_back_to_the_versions_uploader(monkeyp
 
         sent = {}
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_uploaded(db, None, asset, version)
 
-        assert sent["event"] == "handin.uploaded"
+        assert sent["action"] == "handin.uploaded"
         assert sent["email"] == "staffer@aditor.ai"
     finally:
         _disable()
@@ -240,7 +240,7 @@ def test_occurred_at_prefers_the_request_uploads_submitted_at(monkeypatch):
 
         sent = {}
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_uploaded(db, req, asset, version)
 
         assert sent["occurred_at"] == submitted_at.isoformat()
@@ -257,10 +257,10 @@ def test_handin_finished_posts_with_the_requests_completed_at(monkeypatch):
 
         sent = {}
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_handin_finished(MagicMock(), req)
 
-        assert sent["event"] == "handin.finished"
+        assert sent["action"] == "handin.finished"
         assert sent["brand_slug"] == "brand-y"
         assert sent["occurred_at"] == completed_at.isoformat()
         assert sent["props"] == {}
@@ -277,10 +277,10 @@ def test_revision_responded_posts_with_the_asset_and_comment_id(monkeypatch):
 
         sent = {}
         monkeypatch.setattr(workflow_events.httpx, "post",
-                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)) or MagicMock())
+                            lambda url, content=None, headers=None, timeout=None: sent.update(json.loads(content)["p"]) or MagicMock())
         workflow_events.announce_revision_responded(MagicMock(), req, asset, "c-123")
 
-        assert sent["event"] == "revision.responded"
+        assert sent["action"] == "revision.responded"
         assert sent["props"] == {"asset_id": str(asset.id), "comment_id": "c-123"}
     finally:
         _disable()

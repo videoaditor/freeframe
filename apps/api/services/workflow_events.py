@@ -16,6 +16,7 @@ have (the company directory is deliberately not queried here: the RPC resolves `
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -66,21 +67,24 @@ def _post_event(req: UploadRequest, event: str, props: dict, occurred_at: dateti
     if not email or not brand_slug or not card_ref:
         return
     body = {
-        "event": event,
+        "event_id": str(uuid.uuid4()),
+        "action": event,
         "tool": TOOL,
         "card_ref": card_ref,
         "brand_slug": brand_slug,
         "occurred_at": occurred_at.isoformat(),
-        "person_id": None,
-        "email": email,
+        "email": email,  # the RPC resolves person_id from this (least-privilege for FreeFrame)
         "props": props,
+        "source_event_id": props.get("version_id") or props.get("asset_id"),
     }
     _deliver(body)
 
 
 def _deliver(body: dict) -> None:
     url = f"{(settings.companydb_url or '').strip().rstrip('/')}/rpc/log_workflow_event"
-    content = json.dumps(body).encode("utf-8")
+    # The RPC takes a single jsonb parameter `p`; PostgREST maps top-level JSON
+    # keys to named params, so the event object must be wrapped under "p".
+    content = json.dumps({"p": body}).encode("utf-8")
     headers = {
         "content-type": "application/json",
         "Authorization": f"Bearer {settings.companydb_workflow_jwt}",
@@ -88,7 +92,7 @@ def _deliver(body: dict) -> None:
     try:
         httpx.post(url, content=content, headers=headers, timeout=10)
     except Exception:  # noqa: BLE001 - a company-DB hiccup must never fail the hand-in it reports
-        logger.warning("workflow event %r failed to reach the company DB", body.get("event"), exc_info=True)
+        logger.warning("workflow event %r failed to reach the company DB", body.get("action"), exc_info=True)
 
 
 def announce_handin_uploaded(db: Session, req: Optional[UploadRequest], asset, version) -> None:
