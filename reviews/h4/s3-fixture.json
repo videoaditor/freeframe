@@ -1,0 +1,1 @@
+{"identities":[{"name":"h4","credentials":[{"accessKey":"h4minio","secretKey":"h4minio-isolated"}],"actions":["Admin","Read","Write","List","Tagging"]}]}

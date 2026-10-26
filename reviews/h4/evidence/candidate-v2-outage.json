@@ -1,0 +1,49 @@
+{
+  "assets": [
+    {
+      "asset_id": "e405e125-287f-40b2-8617-709e18ce6d1e",
+      "name": "synthetic",
+      "asset_type": "video",
+      "review_error": null,
+      "version_id": "1c45eba1-fd50-40ee-9054-951add7836be",
+      "version": 2,
+      "processing": "ready",
+      "media_url": true,
+      "thumbnail_url": true,
+      "duration_seconds": 5.0,
+      "comments": [],
+      "review_state": "reviewing",
+      "review_progress": {
+        "stage": "reading",
+        "step": "preparing",
+        "attempts": 1,
+        "startedAgoSeconds": 0,
+        "quietSeconds": 0,
+        "retrying": true,
+        "staleResults": true,
+        "version_id": "1c45eba1-fd50-40ee-9054-951add7836be",
+        "queued_at": "2026-10-07T05:58:59.272614+00:00",
+        "elapsedSeconds": 34.082465
+      },
+      "open_must_fixes": 0,
+      "versions": [
+        {
+          "id": "1c45eba1-fd50-40ee-9054-951add7836be",
+          "version_number": 2,
+          "processing": "ready"
+        },
+        {
+          "id": "2c47bb1f-f81f-406b-84cb-5f1b31b15236",
+          "version_number": 1,
+          "processing": "ready"
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "status": "reviewing",
+    "open_must_fixes": 0
+  },
+  "review_share_token": "jSps-a4WlgTDu9cEV4f5TsRATmGiMciFTljtthLMIQg",
+  "completed_at": null
+}

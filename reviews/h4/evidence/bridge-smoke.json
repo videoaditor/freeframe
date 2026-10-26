@@ -1,0 +1,57 @@
+[
+  {
+    "path": "/api/v1/requests",
+    "status": 401,
+    "body": {
+      "error": "unauthorised"
+    }
+  },
+  {
+    "path": "/api/v1/requests",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "brand": "h4-brand"
+    }
+  },
+  {
+    "path": "/api/v1/requests",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "brand": "h4-brand"
+    }
+  },
+  {
+    "path": "/api/gate/card",
+    "status": 200,
+    "body": {
+      "briefingRef": "https://trello.com/c/H4Card01",
+      "trelloCardId": "H4Card01",
+      "name": "H4 synthetic internal",
+      "brand": "h4-brand",
+      "hasBriefing": true,
+      "briefingChars": 42
+    }
+  },
+  {
+    "path": "/api/gate/card",
+    "status": 200,
+    "body": {
+      "briefingRef": "invalid",
+      "hasBriefing": false,
+      "note": "That does not look like a Trello card link. You can still upload - the review will say what it could not check."
+    }
+  },
+  {
+    "watched": [
+      {
+        "token": "h4-smoke",
+        "brand": "h4-brand",
+        "label": "Synthetic",
+        "enabled": true,
+        "via": "request"
+      }
+    ]
+  }
+]
