@@ -884,6 +884,62 @@ def guest_version(token: str, asset_id: uuid.UUID, version_id: uuid.UUID, db: Se
     return _version_review(db, req, asset, version, reviewer, evidence)
 
 
+# ── Editor: the note to the client that goes with the delivery ─────────────────
+# The portal sends the delivery, so the portal holds the note (`delivery-note-store.ts` there). Nothing
+# is stored here: not on the request, the folder or the brief, which is also why a review cannot read it.
+
+DELIVERY_NOTE_MAX = 500
+
+
+class DeliveryNoteBody(BaseModel):
+    note: str = ""
+
+
+def _request_card_url(req) -> Optional[str]:
+    state = req.iteration_state if isinstance(req.iteration_state, dict) else {}
+    internal = state.get("internal_handin")
+    return ((internal.get("card_url") or "").strip() or None) if isinstance(internal, dict) else None
+
+
+def _note_view(answer: Optional[dict]) -> dict:
+    if answer is None:
+        return {"available": True, "reachable": False, "accepts": False, "status": "unreachable", "note": None, "sent_note": None, "sent_at": None}
+    available = answer.get("status") != "unavailable"
+    return {
+        "available": available, "reachable": True, "accepts": bool(answer.get("accepts")), "status": answer.get("status"),
+        "window": answer.get("window"), "note": answer.get("note"), "sent_note": answer.get("sentNote"), "sent_at": answer.get("sentAt"),
+        "unsent_note": answer.get("unsentNote"),
+    }
+
+
+NO_NOTE = {"available": False, "reachable": True, "accepts": False, "status": "unavailable", "note": None, "sent_note": None, "sent_at": None}
+
+
+@router.get("/r/{token}/note", dependencies=[Depends(rate_limit("request_note", 240, 600))])
+def read_delivery_note(token: str, db: Session = Depends(get_db)):
+    from ..services import hub_events
+    req = _live_request(db, token)
+    card_url = _request_card_url(req)
+    if not card_url or not hub_events.portal_is_enabled():
+        return NO_NOTE
+    return _note_view(hub_events.portal_delivery_note("delivery_note_read", card_url))
+
+
+@router.post("/r/{token}/note", dependencies=[Depends(rate_limit("request_note", 240, 600))])
+def save_delivery_note(token: str, body: DeliveryNoteBody, db: Session = Depends(get_db)):
+    from ..services import hub_events
+    if len(body.note.strip()) > DELIVERY_NOTE_MAX:
+        raise HTTPException(status_code=422, detail=f"Keep the note under {DELIVERY_NOTE_MAX} characters.")
+    req = _live_request(db, token)
+    card_url = _request_card_url(req)
+    if not card_url or not hub_events.portal_is_enabled():
+        return NO_NOTE
+    answer = hub_events.portal_delivery_note("delivery_note_save", card_url, body.note)
+    if answer is None:
+        raise HTTPException(status_code=503, detail="The note could not be saved. Try again.")
+    return _note_view(answer)
+
+
 @router.post("/r/{token}/finish", dependencies=[Depends(rate_limit("request_view", 120, 600))])
 def finish_request(token: str, db: Session = Depends(get_db)):
     req = locked_request(db, _live_request(db, token).id)
