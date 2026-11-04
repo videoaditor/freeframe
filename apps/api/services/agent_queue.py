@@ -9,6 +9,7 @@ from ..models.project import Project
 from ..models.upload_request import UploadRequest
 from ..models.user import GuestUser
 from . import agent_notify, review_bridge
+from .review_phase import phase_of_reviews
 
 STAGES = ("editor", "review", "corrections", "ready")
 
@@ -42,7 +43,7 @@ def queue(db: Session, project_id: uuid.UUID, state: Optional[str] = None) -> li
         if state and stage != state:
             continue
         out.append({"request_id": str(q.id), "title": q.title, "folder_id": str(q.folder_id), "stage": stage,
-                    "upload_token": q.token,
+                    "upload_token": q.token, "review_phase": phase_of_reviews(db, reviews),
                     "assets": [{"asset_id": a["asset_id"], "name": a["name"], "version_id": a["version_id"],
                                 "version_number": a["version"], "review_state": a["review_state"]} for a in reviews]})
     db.commit()  # _review_assets records observed campaign usage
