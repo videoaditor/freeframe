@@ -97,7 +97,7 @@ export function RulesSheet({ roundId, suggestions, onClose }: { roundId: string;
               <Dialog.Title className="text-lg font-semibold text-text-primary">Remember as rules?</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-text-secondary">These came up in your comments. Remembered rules apply to every future review.</Dialog.Description>
             </div>
-            <Dialog.Close aria-label="Close" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-bg-hover"><X size={18} /></Dialog.Close>
+            <Dialog.Close aria-label="Close" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full outline-none hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-text-secondary"><X size={18} /></Dialog.Close>
           </div>
           <ul className="mt-4 divide-y divide-border">
             {suggestions.map(s => (
