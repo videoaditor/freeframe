@@ -115,6 +115,9 @@ describe('status line', () => {
     expect(s).toEqual({ saved: 2, pending: 2, failed: 0, total: 4 })
     expect(statusLine(s)).toMatchObject({ text: '2 saved · 2 sending…', tone: 'pending' })
   })
+  it('still mentions a failed note while others are on their way', () => {
+    expect(statusLine(summarize([e('saved'), e('sending'), e('failed')]))).toMatchObject({ text: '1 saved · 1 sending… · 1 failed', tone: 'error' })
+  })
   it('says All saved when nothing is open', () => {
     expect(statusLine(summarize([e('saved'), e('saved')]))).toMatchObject({ text: 'All saved ✓', tone: 'ok' })
   })

@@ -69,7 +69,7 @@ export const summarize = (entries: OutboxEntry[]): OutboxSummary => ({
 
 export function statusLine(s: OutboxSummary): { text: string; tone: 'pending' | 'ok' | 'error' } | null {
   if (!s.total) return null
-  if (s.pending > 0) return { text: `${s.saved} saved · ${s.pending} sending…`, tone: 'pending' }
+  if (s.pending > 0) return { text: `${s.saved} saved · ${s.pending} sending…${s.failed > 0 ? ` · ${s.failed} failed` : ''}`, tone: s.failed > 0 ? 'error' : 'pending' }
   if (s.failed > 0) return { text: `${s.saved} saved · ${s.failed} failed`, tone: 'error' }
   return { text: 'All saved ✓', tone: 'ok' }
 }

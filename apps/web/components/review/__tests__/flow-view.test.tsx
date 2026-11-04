@@ -51,7 +51,7 @@ describe('FlowView', () => {
     const { props, send } = setup()
     fireEvent.click(screen.getByRole('button', { name: /comment/i }))
     expect(props.onPause).not.toHaveBeenCalled()
-    expect(await screen.findByText(/recording/i)).toBeInTheDocument()
+    expect(await screen.findByRole('status', { name: 'Recording' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /stop/i }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     const [payload, key] = send.mock.calls[0]

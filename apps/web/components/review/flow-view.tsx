@@ -241,7 +241,7 @@ export function FlowView(p: FlowViewProps) {
   return (
     <div ref={rootRef} className="relative flex h-full min-h-0 flex-col bg-bg-primary" style={{ paddingTop: 'env(safe-area-inset-top)' }} data-testid="flow-view">
       {moment && (
-        <div role="dialog" aria-label="Done" className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-bg-primary/95 px-8 text-center backdrop-blur-sm">
+        <div role="dialog" aria-label="Done" className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-bg-primary/96 px-8 text-center backdrop-blur-md">
           <span className="grid h-16 w-16 place-items-center rounded-full bg-status-success/15 text-status-success"><Check size={32} aria-hidden="true" /></span>
           <p className="text-xl font-semibold leading-tight text-text-primary">{moment.title}</p>
           {moment.sub && <p className="text-sm text-text-secondary">{moment.sub}</p>}
@@ -284,17 +284,16 @@ export function FlowView(p: FlowViewProps) {
         )}
       </div>
 
-      {notes.length > 0 && (
+      {notes.some(n => n.status !== 'recording') && (
         <ul aria-label="Your notes" className="max-h-[30dvh] shrink-0 space-y-2 overflow-y-auto border-t border-border bg-bg-secondary px-3 py-2">
-          {notes.map(n => {
+          {notes.filter(n => n.status !== 'recording').map(n => {
             const entry = ob.byId(n.id)
             const replayAll = () => { p.onSeek(n.t); if (n.marks?.length) setReplay({ key: ++replayKey.current, marks: n.marks }) }
             return (
               <li key={n.id} data-testid="note-chip" data-state={entry?.status ?? n.status} className="flex items-start gap-2">
                 <button type="button" onClick={() => p.onSeek(n.t)} aria-label={`Go to ${timecode(n.t)}`} className="press min-h-11 shrink-0 rounded-lg bg-bg-tertiary px-2.5 font-mono text-xs tabular-nums text-text-primary">{timecode(n.t)}</button>
                 <div className="min-w-0 flex-1">
-                  {n.status === 'recording' && <p role="status" className="flex min-h-11 items-center text-sm text-text-secondary">Recording. Talk and draw on the picture, then tap Stop.</p>}
-                  {n.status === 'transcribing' && <p role="status" className="flex min-h-11 items-center gap-2 text-sm text-text-secondary"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Transcribing…</p>}
+                                    {n.status === 'transcribing' && <p role="status" className="flex min-h-11 items-center gap-2 text-sm text-text-secondary"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Transcribing…</p>}
                   {(n.status === 'ready' || n.status === 'failed') && (
                     <>
                       {entry ? (

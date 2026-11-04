@@ -14,12 +14,12 @@ export function LevelMeter({ levelRef, active = true }: { levelRef: React.Mutabl
   }, [active, reduced, levelRef])
   const columns = reduced ? Array.from({ length: METER_COLUMNS }, (_, i) => 0.25 + ((i * 7) % 5) / 12) : history
   return (
-    <div data-testid="level-meter" aria-hidden="true" className="flow-meter flex h-9 min-w-0 flex-1 items-center justify-end gap-[3px]">
+    <div data-testid="level-meter" aria-hidden="true" className="flow-meter flex h-9 min-w-0 flex-1 items-center justify-end gap-1">
       {columns.map((lv, c) => {
         const lit = dotsLit(lv, METER_ROWS)
         return (
-          <div key={c} className="flex flex-col-reverse gap-[3px]">
-            {Array.from({ length: METER_ROWS }, (_, r) => <span key={r} data-lit={r < lit ? '' : undefined} className="block h-[3px] w-[3px] rounded-full bg-text-tertiary/25 data-[lit]:bg-text-primary" />)}
+          <div key={c} className="flex flex-col-reverse gap-1">
+            {Array.from({ length: METER_ROWS }, (_, r) => <span key={r} data-lit={r < lit ? '' : undefined} className="block h-1 w-1 rounded-full bg-text-tertiary/25 data-[lit]:bg-text-primary" />)}
           </div>
         )
       })}
