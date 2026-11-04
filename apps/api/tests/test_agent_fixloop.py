@@ -115,3 +115,31 @@ def test_editor_ranking_labels_agents_with_kind_and_program(env):
     by = {r["email"]: r for r in rows}
     assert (by[agent.who.email]["kind"], by[agent.who.email]["program"]) == ("agent", "hermes")
     assert (by["a@example.test"]["kind"], by["a@example.test"]["program"]) == ("human", None)
+
+
+@needs_pg
+def test_one_event_per_clear_transition_not_per_poll(env):
+    agent = env.pair_agent(env.project_a)
+    req = env.request(env.project_a, env.owner)
+    one = env.asset(req, "Hook 1", versions=2, by=agent.who)
+    v1, v2 = one.versions
+    clear_status, held_status = {"status": "clear", "openMustFixes": 0}, {"status": "held", "openMustFixes": 1}
+    for _ in range(3):
+        poll(env, agent, req, {str(one.id): clear(v2)}, clear_status)
+    assert len(logs(env)) == 1                                              # polling never repeats it
+    poll(env, agent, req, {str(one.id): clear(v2, 1)}, held_status)         # clear -> held -> clear on the SAME version
+    poll(env, agent, req, {str(one.id): clear(v2)}, clear_status)
+    assert len(logs(env)) == 1
+    from apps.api.models.asset import AssetVersion
+    from apps.api.models.upload_request import RequestUpload
+    from datetime import datetime, timezone
+    with env.Session() as db:                                               # a genuinely new version is new news
+        v3 = AssetVersion(asset_id=one.id, version_number=3, processing_status=v2.processing_status, created_by=req.created_by)
+        db.add(v3)
+        db.flush()
+        db.add(RequestUpload(request_id=req.id, asset_id=one.id, version_number=3, uploader_name=agent.who.name,
+                             uploader_email=agent.who.email, submitted_at=datetime.now(timezone.utc)))
+        db.commit()
+        v3_id = v3.id
+    poll(env, agent, req, {str(one.id): {"version_id": str(v3_id), "reviewed": True, "openMustFix": 0}}, clear_status)
+    assert len(logs(env)) == 2

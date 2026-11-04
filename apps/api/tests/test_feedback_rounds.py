@@ -47,15 +47,18 @@ def test_feedback_v1_snapshot():
         "context_url": f"https://review.aditor.ai/api/v1/agents/context?project={pid}"}
 
 
-def test_a_scene_note_never_becomes_a_rule_candidate():
+def test_every_human_note_is_a_rule_candidate_standing_ones_first():
     from apps.api.services.feedback_rounds import rule_candidates
     rid = uuid.uuid4()
     got = rule_candidates(rid, [
         {"comment_id": "c1", "t_start": 3.2, "text": "Hook too slow here"},
         {"comment_id": "c2", "t_start": None, "text": "  Always end on the product shot "},
-        {"comment_id": "c3", "t_start": None, "text": "ok"}])
-    assert [(g["comment_id"], g["text"]) for g in got] == [("c2", "Always end on the product shot")]
-    assert rule_candidates(rid, [{"comment_id": "c2", "t_start": None, "text": "Always end on the product shot"}])[0]["suggestion_id"] == got[0]["suggestion_id"]
+        {"comment_id": "c3", "t_start": 0.0, "text": "ok"},
+        {"comment_id": "c4", "t_start": None, "text": "   "}])
+    assert [(g["comment_id"], g["text"], g["scope"]) for g in got] == [
+        ("c2", "Always end on the product shot", "standing"), ("c1", "Hook too slow here", "scene"), ("c3", "ok", "scene")]
+    assert rule_candidates(rid, [{"comment_id": "c2", "t_start": None, "text": "x"}])[0]["suggestion_id"] == \
+        rule_candidates(rid, [{"comment_id": "c2", "t_start": None, "text": "x"}])[0]["suggestion_id"]
 
 
 # ── Postgres ──────────────────────────────────────────────────────────────────
@@ -186,7 +189,8 @@ def test_close_collects_rule_suggestions_and_accept_forwards_to_the_rules_import
     e.client.post(f"/requests/{e.scene.req.id}/feedback-rounds/close", json={}, headers=e.headers(e.owner))
     rid = rounds(e)[0].id
     got = e.client.get(f"/feedback-rounds/{rid}/rule-suggestions", headers=e.headers(e.owner)).json()
-    assert [g["text"] for g in got] == ["Always end on the product shot"] and got[0]["comment_id"]
+    assert [(g["text"], g["scope"]) for g in got] == [("Always end on the product shot", "standing"), ("Hook too slow here", "scene")]
+    assert got[0]["comment_id"]
     url = f"/feedback-rounds/{rid}/rule-suggestions/{got[0]['suggestion_id']}/accept"
     with patch("apps.api.services.review_bridge.import_rules", return_value=None):
         assert e.client.post(url, headers=e.headers(e.owner)).status_code == 503
@@ -194,7 +198,7 @@ def test_close_collects_rule_suggestions_and_accept_forwards_to_the_rules_import
         assert e.client.post(url, headers=e.headers(e.owner)).status_code == 204
         assert e.client.post(url, headers=e.headers(e.owner)).status_code == 204  # idempotent, forwarded once
     assert imp.call_count == 1 and imp.call_args.args[1] == "Always end on the product shot"
-    assert e.client.get(f"/feedback-rounds/{rid}/rule-suggestions", headers=e.headers(e.owner)).json() == []
+    assert [g["text"] for g in e.client.get(f"/feedback-rounds/{rid}/rule-suggestions", headers=e.headers(e.owner)).json()] == ["Hook too slow here"]
     stranger = e.user("Stranger")
     assert e.client.get(f"/feedback-rounds/{rid}/rule-suggestions", headers=e.headers(stranger)).status_code == 403
 

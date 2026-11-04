@@ -73,7 +73,7 @@ def _round(db: Session, round_id: uuid.UUID, user: User) -> tuple[FeedbackRound,
 @router.get("/feedback-rounds/{round_id}/rule-suggestions")
 def list_suggestions(round_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rnd, _ = _round(db, round_id, current_user)
-    return [{k: s[k] for k in ("suggestion_id", "text", "comment_id")} for s in rnd.rule_suggestions if not s.get("accepted")]
+    return [{k: s[k] for k in ("suggestion_id", "text", "comment_id", "scope")} for s in rnd.rule_suggestions if not s.get("accepted")]
 
 
 @router.post("/feedback-rounds/{round_id}/rule-suggestions/{suggestion_id}/accept", status_code=status.HTTP_204_NO_CONTENT)

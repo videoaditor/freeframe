@@ -23,7 +23,6 @@ logger = logging.getLogger("apps.api.feedback_rounds")
 
 IDLE_AFTER = timedelta(minutes=5)
 SCHEMA = "feedback.v1"
-MIN_RULE_CHARS = 8
 
 
 # ── Pure ───────────────────────────────────────────────────────────────────────
@@ -52,10 +51,13 @@ def build_feedback_v1(*, round_id, request_id, project_id, briefing: str, opened
 
 
 def rule_candidates(round_id, comments: list[dict]) -> list[dict]:
-    """Standing preferences only: a note pinned to a timecode is an instruction for that scene, not a rule.
-    The owner still taps each one; nothing becomes a rule on its own."""
-    return [{"suggestion_id": str(uuid.uuid5(uuid.UUID(str(round_id)), c["comment_id"])), "text": c["text"].strip(), "comment_id": c["comment_id"]}
-            for c in comments if c["t_start"] is None and len(c["text"].strip()) >= MIN_RULE_CHARS]
+    """Every human note is a candidate. `scope` tells the owner's sheet what it is: an untimed note is a
+    `standing` preference, a note pinned to a timecode a `scene` instruction (shown after the standing ones).
+    Nothing becomes a rule without the owner's accept tap."""
+    out = [{"suggestion_id": str(uuid.uuid5(uuid.UUID(str(round_id)), c["comment_id"])), "text": c["text"].strip(),
+            "comment_id": c["comment_id"], "scope": "scene" if c["t_start"] is not None else "standing"}
+           for c in comments if c["text"].strip()]
+    return sorted(out, key=lambda x: x["scope"] != "standing")
 
 
 # ── Which comments count ───────────────────────────────────────────────────────
