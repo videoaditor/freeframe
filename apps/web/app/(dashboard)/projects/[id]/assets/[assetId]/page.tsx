@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
@@ -60,7 +61,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { asset, versions, isLoading, refetchComments, refetchVersions } = useReview()
-  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation, toggleDrawingMode, setIsDrawingMode, setPendingAnnotation } = useReviewStore()
+  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
   const { user } = useAuthStore()
   const setExtraCrumbs = useBreadcrumbStore((s) => s.setExtraCrumbs)
   const setLabel = useBreadcrumbStore((s) => s.setLabel)
@@ -279,7 +280,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     currentVersion?.processing_status === 'processing' ||
     currentVersion?.processing_status === 'uploading'
 
-  const renderMediaViewer = () => {
+  const renderMediaViewer = (inkOverlay?: React.ReactNode) => {
     if (!currentVersion || !versionReady) {
       return (
         <div className="flex-1 flex items-center justify-center">
@@ -336,11 +337,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             overlay={
               <>
                 <AnnotationOverlay key={focusedCommentId ?? 'none'} />
-                {isDrawingMode && (
+                {inkOverlay ?? (isDrawingMode && (
                   <AnnotationCanvas
                     onSave={(data) => setAnnotationData(data)}
                   />
-                )}
+                ))}
               </>
             }
           />
@@ -381,17 +382,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   const flowView = (
     <FlowView
-      media={renderMediaViewer()}
+      renderMedia={(ink) => renderMediaViewer(ink)}
       files={(allAssets ?? [asset]).map((a) => ({ id: a.id, name: a.name }))}
       currentFileId={asset.id}
       onSelectFile={navigateAsset}
       getPlayhead={() => useReviewStore.getState().playheadTime}
       onPause={() => seekTo(useReviewStore.getState().playheadTime, true)}
       onSeek={(t) => seekTo(t, true)}
-      drawing={isDrawingMode}
-      onToggleDrawing={toggleDrawingMode}
-      annotation={annotationData}
-      onAnnotationUsed={() => { setAnnotationData(null); setPendingAnnotation(null); setIsDrawingMode(false) }}
       canComment={canComment}
       onSendNotes={async (notes) => {
         for (const n of notes) await createComment(n.text, n.t, undefined, n.annotation || undefined)

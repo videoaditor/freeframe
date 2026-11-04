@@ -18,6 +18,7 @@ export type NoteAction =
   | { type: 'done'; id: string; text: string }
   | { type: 'failed'; id: string }
   | { type: 'edit'; id: string; text: string }
+  | { type: 'annotate'; id: string; annotation: Record<string, unknown> | null }
   | { type: 'remove'; id: string }
   | { type: 'clear' }
 
@@ -34,6 +35,8 @@ export function notesReducer(state: FlowNote[], a: NoteAction): FlowNote[] {
     case 'edit':
       // Typing over a failed transcription makes the note sendable without the audio.
       return state.map(n => (n.id === a.id ? { ...n, text: a.text, status: n.status === 'failed' && a.text.trim() ? 'ready' : n.status } : n))
+    case 'annotate':
+      return state.map(n => (n.id === a.id ? { ...n, annotation: a.annotation } : n))
     case 'remove':
       return state.filter(n => n.id !== a.id)
     case 'clear':

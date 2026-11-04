@@ -1,29 +1,26 @@
 'use client'
 
 import * as React from 'react'
-import { Check, Loader2, Mic, Pencil, RotateCcw, Send, Square, X } from 'lucide-react'
+import { Check, Loader2, Mic, RotateCcw, Send, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timecode } from '@/lib/platform'
 import { dictate as dictateApi } from '@/lib/agents'
 import { notesReducer, sendBlocked, sendable, type FlowNote } from '@/lib/flow-notes'
+import { buildDrawingData, isInk, type InkMark } from '@/lib/ink'
+import { InkLayer, type InkReplay } from './ink-layer'
 import { startMicRecording, type ActiveRecording, type StartRecording } from '@/lib/recorder'
 
 export interface FlowFile { id: string; name: string; thumbnail_url?: string | null; version?: number | null }
 
 export interface FlowViewProps {
-  /** The existing media viewer (VideoPlayer + annotation overlay). Never cropped: it letterboxes. */
-  media: React.ReactNode
+  /** The existing media viewer; `overlay` (the ink layer) must be mounted inside the video frame. Never cropped: it letterboxes. */
+  renderMedia: (overlay: React.ReactNode) => React.ReactNode
   files: FlowFile[]
   currentFileId: string
   onSelectFile: (id: string) => void
   getPlayhead: () => number
   onPause: () => void
   onSeek: (t: number) => void
-  drawing: boolean
-  onToggleDrawing: () => void
-  /** Drawing made on the frame; attached to the next note, then cleared. */
-  annotation: Record<string, unknown> | null
-  onAnnotationUsed: () => void
   canComment: boolean
   /** Posts every note as a comment. Rejects to keep the notes on screen. */
   onSendNotes: (notes: { text: string; t: number; annotation: Record<string, unknown> | null }[]) => Promise<void>
@@ -52,6 +49,9 @@ export function FlowView(p: FlowViewProps) {
   const [sending, setSending] = React.useState(false)
   const [error, setError] = React.useState('')
   const [messages, setMessages] = React.useState<Record<string, string>>({})
+  const marks = React.useRef<InkMark[]>([])
+  const [replay, setReplay] = React.useState<InkReplay | null>(null)
+  const replayKey = React.useRef(0)
 
   React.useEffect(() => {
     if (!active) { setElapsed(0); return }
@@ -71,13 +71,15 @@ export function FlowView(p: FlowViewProps) {
     if (active) {
       const { id, rec } = active
       setActive(null)
+      dispatch({ type: 'annotate', id, annotation: buildDrawingData(marks.current) })
+      marks.current = []
       await transcribe(id, await rec.stop())
       return
     }
-    p.onPause()
+    // The video keeps playing: talk and draw while it runs (H69).
     const id = newId()
-    dispatch({ type: 'add', id, t: p.getPlayhead(), annotation: p.annotation })
-    if (p.annotation) p.onAnnotationUsed()
+    marks.current = []
+    dispatch({ type: 'add', id, t: p.getPlayhead() })
     try { setActive({ id, rec: await start(), startedAt: Date.now() }) }
     catch {
       dispatch({ type: 'failed', id })
@@ -119,15 +121,24 @@ export function FlowView(p: FlowViewProps) {
       </div>
 
       {/* 9:16 at full height, letterboxed never cropped */}
-      <div className="flex min-h-0 flex-1 flex-col">{p.media}</div>
+      <div className="flex min-h-0 flex-1 flex-col" data-recording={active ? '' : undefined}>
+        {p.renderMedia(
+          <InkLayer
+            active={!!active}
+            onStart={p.onPause}
+            replay={replay}
+            onMark={(k, pts) => { if (active) marks.current.push({ k, pts, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt }) }}
+          />,
+        )}
+      </div>
 
       {notes.length > 0 && (
         <ul aria-label="Your notes" className="max-h-[30dvh] shrink-0 space-y-2 overflow-y-auto border-t border-border bg-bg-secondary px-3 py-2">
           {notes.map(n => (
             <li key={n.id} className="flex items-start gap-2">
-              <button type="button" onClick={() => p.onSeek(n.t)} aria-label={`Go to ${timecode(n.t)}`} className="press min-h-11 shrink-0 rounded-lg bg-bg-tertiary px-2.5 font-mono text-xs tabular-nums text-text-primary">{timecode(n.t)}</button>
+              <button type="button" onClick={() => { p.onSeek(n.t); const d = n.annotation; if (isInk(d)) setReplay({ key: ++replayKey.current, marks: d.marks }) }} aria-label={`Go to ${timecode(n.t)}`} className="press min-h-11 shrink-0 rounded-lg bg-bg-tertiary px-2.5 font-mono text-xs tabular-nums text-text-primary">{timecode(n.t)}</button>
               <div className="min-w-0 flex-1">
-                {n.status === 'recording' && <p role="status" className="flex min-h-11 items-center text-sm text-text-secondary">Recording… tap Stop when you are done.</p>}
+                {n.status === 'recording' && <p role="status" className="flex min-h-11 items-center text-sm text-text-secondary">Recording. Talk and draw on the picture, then tap Stop.</p>}
                 {n.status === 'transcribing' && <p role="status" className="flex min-h-11 items-center gap-2 text-sm text-text-secondary"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Transcribing…</p>}
                 {(n.status === 'ready' || n.status === 'failed') && (
                   <>
@@ -153,10 +164,6 @@ export function FlowView(p: FlowViewProps) {
       <div className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-secondary px-3 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
         {p.canComment ? (
           <>
-            <button type="button" onClick={p.onToggleDrawing} aria-pressed={p.drawing} aria-label={p.drawing ? 'Finish drawing' : 'Draw on frame'}
-              className={cn('press grid h-14 w-14 shrink-0 place-items-center rounded-full border border-border', p.drawing ? 'bg-bg-hover text-text-primary ring-1 ring-text-tertiary' : 'text-text-secondary hover:bg-bg-hover')}>
-              {p.drawing ? <Check size={20} /> : <Pencil size={20} />}
-            </button>
             <button type="button" onClick={tapComment}
               className="press inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-5 text-base font-semibold text-text-inverse hover:bg-accent-hover">
               {active ? <><Square size={18} aria-hidden="true" />Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</> : <><Mic size={20} aria-hidden="true" />Comment</>}

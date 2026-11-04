@@ -7,17 +7,13 @@ const recorder = () => vi.fn().mockResolvedValue({ stop: vi.fn().mockResolvedVal
 
 function setup(over: Partial<FlowViewProps> = {}) {
   const props: FlowViewProps = {
-    media: <div data-testid="media" />,
+    renderMedia: (overlay) => <div data-testid="media">{overlay}</div>,
     files: [{ id: 'a1', name: 'Hook 1' }, { id: 'a2', name: 'Hook 2' }],
     currentFileId: 'a1',
     onSelectFile: vi.fn(),
     getPlayhead: () => 3.2,
     onPause: vi.fn(),
     onSeek: vi.fn(),
-    drawing: false,
-    onToggleDrawing: vi.fn(),
-    annotation: null,
-    onAnnotationUsed: vi.fn(),
     canComment: true,
     onSendNotes: vi.fn().mockResolvedValue(undefined),
     onApprove: vi.fn().mockResolvedValue(undefined),
@@ -39,10 +35,10 @@ describe('FlowView', () => {
     expect(p.onSelectFile).toHaveBeenCalledWith('a2')
   })
 
-  it('Comment pauses, captures the playhead, records, then dictates into an editable note', async () => {
+  it('Comment captures the playhead without pausing, records, then dictates into an editable note', async () => {
     const p = setup()
     fireEvent.click(screen.getByRole('button', { name: /comment/i }))
-    expect(p.onPause).toHaveBeenCalled()
+    expect(p.onPause).not.toHaveBeenCalled()
     expect(await screen.findByRole('button', { name: /stop/i })).toBeInTheDocument()
     expect(screen.getByText(/recording/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /stop/i }))
@@ -72,16 +68,32 @@ describe('FlowView', () => {
     expect(screen.getByRole('button', { name: /^send 1$/i })).toBeEnabled()
   })
 
-  it('attaches the frame drawing to the note and sends notes with time and drawing', async () => {
-    const drawing = { objects: [1] }
-    const p = setup({ annotation: drawing })
+  it('keeps the video playing while recording, pauses on the first stroke, and sends the ink with the note', async () => {
+    const p = setup()
     fireEvent.click(screen.getByRole('button', { name: /comment/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /stop/i }))
+    expect(p.onPause).not.toHaveBeenCalled()
+    await screen.findByRole('button', { name: /stop/i })
+    const layer = screen.getByTestId('ink-layer')
+    expect(layer).toHaveAttribute('data-on')
+    layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0, toJSON: () => ({}) })
+    fireEvent.pointerDown(layer, { clientX: 100, clientY: 200, pointerId: 1 })
+    expect(p.onPause).toHaveBeenCalledTimes(1)
+    fireEvent.pointerMove(layer, { clientX: 150, clientY: 300, pointerId: 1 })
+    fireEvent.pointerUp(layer, { clientX: 150, clientY: 300, pointerId: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }))
     await screen.findByRole('textbox')
-    expect(p.onAnnotationUsed).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /^send 1$/i }))
-    await waitFor(() => expect(p.onSendNotes).toHaveBeenCalledWith([{ text: 'Hook too slow', t: 3.2, annotation: drawing }]))
-    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
+    await waitFor(() => expect(p.onSendNotes).toHaveBeenCalled())
+    const sent = (p.onSendNotes as ReturnType<typeof vi.fn>).mock.calls[0][0][0]
+    expect(sent.text).toBe('Hook too slow')
+    expect(sent.annotation).toMatchObject({ format: 'ink.v1', marks: [{ k: 'stroke', t: 3.2 }] })
+    expect(sent.annotation.marks[0].pts[0]).toEqual([0.5, 0.5])
+    expect(typeof sent.annotation.mark_offset_ms).toBe('number')
+  })
+
+  it('the ink layer is inert when not recording', () => {
+    setup()
+    expect(screen.getByTestId('ink-layer')).not.toHaveAttribute('data-on')
   })
 
   it('keeps notes on screen when sending fails', async () => {

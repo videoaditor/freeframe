@@ -37,6 +37,10 @@ describe('flow notes', () => {
     s = notesReducer(s, { type: 'transcribing', id: 'a', audio: blob })
     expect(sendBlocked(s)).toBe(true)
   })
+  it('attaches the drawing made while recording', () => {
+    const s = notesReducer(add([], 'a', 1), { type: 'annotate', id: 'a', annotation: { format: 'ink.v1' } })
+    expect(s[0].annotation).toEqual({ format: 'ink.v1' })
+  })
   it('removes and clears', () => {
     const s = add(add([], 'a', 1), 'b', 2)
     expect(notesReducer(s, { type: 'remove', id: 'a' }).map(n => n.id)).toEqual(['b'])
