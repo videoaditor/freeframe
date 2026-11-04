@@ -26,6 +26,8 @@ export interface FlowViewProps {
   onSendNotes: (notes: { text: string; t: number; annotation: Record<string, unknown> | null }[]) => Promise<void>
   onApprove: () => Promise<void> | void
   approved: boolean
+  /** Share links without approve permission: with no notes the right-hand button stays disabled. Default true. */
+  canApprove?: boolean
   onExit?: () => void
   exitLabel?: string
   dictate?: (audio: Blob) => Promise<DictationResult>
@@ -107,7 +109,8 @@ export function FlowView(p: FlowViewProps) {
     finally { setSending(false) }
   }
 
-  const sendLabel = notes.length ? `Send ${ready.length || ''}`.trim() : p.approved ? 'Approved' : 'Approve'
+  const canApprove = p.canApprove ?? true
+  const sendLabel = notes.length ? `Send ${ready.length || ''}`.trim() : !canApprove ? 'Send' : p.approved ? 'Approved' : 'Approve'
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg-primary" style={{ paddingTop: 'env(safe-area-inset-top)' }} data-testid="flow-view">
@@ -176,7 +179,7 @@ export function FlowView(p: FlowViewProps) {
               className="press inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-5 text-base font-semibold text-text-inverse hover:bg-accent-hover">
               {active ? <><Square size={18} aria-hidden="true" />Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</> : <><Mic size={20} aria-hidden="true" />Comment</>}
             </button>
-            <button type="button" onClick={send} disabled={sending || blocked || (!notes.length && p.approved)}
+            <button type="button" onClick={send} disabled={sending || blocked || (!notes.length && (p.approved || !canApprove))}
               className="press inline-flex h-14 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-4 text-sm font-semibold text-text-primary hover:bg-bg-hover disabled:opacity-50">
               {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : notes.length ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{sendLabel}
             </button>

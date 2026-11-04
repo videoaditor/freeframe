@@ -24,6 +24,7 @@ import { useSSE } from '@/hooks/use-sse'
 import { api } from '@/lib/api'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { canCompare } from '@/lib/compare-time'
+import { useIsNarrow } from '@/hooks/use-is-narrow'
 import { FlowView } from '@/components/review/flow-view'
 import { SendToAgent, useAgentRequest, useRequestHeartbeat } from '@/components/agents/send-to-agent'
 import {
@@ -42,19 +43,6 @@ import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
 import type { Project, AssetResponse, ProjectMember, ProjectRole, FolderTreeNode } from '@/types'
 
-
-/** True below the md breakpoint. Starts false so the server and first client render agree. */
-function useIsNarrow() {
-  const [narrow, setNarrow] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)')
-    const update = () => setNarrow(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [])
-  return narrow
-}
 
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()

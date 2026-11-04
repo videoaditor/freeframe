@@ -134,6 +134,11 @@ describe('FlowView', () => {
     expect(p.onSendNotes).not.toHaveBeenCalled()
   })
 
+  it('without approve permission the empty Send stays disabled', () => {
+    setup({ canApprove: false })
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+
   it('hides the controls for view-only users', () => {
     setup({ canComment: false })
     expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument()
