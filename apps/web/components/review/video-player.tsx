@@ -216,7 +216,7 @@ export function VideoPlayer({
     };
   }, [assetId, initialStreamUrl, versionId]);
 
-  const player = useVideoPlayer(streamUrl);
+  const player = useVideoPlayer(streamUrl, { preferBestQuality: compact });
 
   const {
     videoRef,
