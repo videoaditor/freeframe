@@ -58,6 +58,16 @@ export function FlowView(p: FlowViewProps) {
   const [replay, setReplay] = React.useState<InkReplay | null>(null)
   const replayKey = React.useRef(0)
   const rootRef = React.useRef<HTMLDivElement>(null)
+  const [playing, setPlaying] = React.useState(false)
+  // Media events do not bubble, but they can be caught on the way down: follow whichever <video> the player mounts.
+  React.useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    const on = (e: Event) => { if (e.target instanceof HTMLVideoElement) setPlaying(!e.target.paused && !e.target.ended) }
+    const events = ['play', 'playing', 'pause', 'ended', 'seeking'] as const
+    events.forEach(ev => root.addEventListener(ev, on, true))
+    return () => events.forEach(ev => root.removeEventListener(ev, on, true))
+  }, [])
   const tracker = React.useRef<ReturnType<typeof trackVideo> | null>(null)
   /** What the video did during each note's recording; kept so Try again maps times the same way. */
   const timelines = React.useRef(new Map<string, TimelinePoint[]>())
@@ -153,6 +163,7 @@ export function FlowView(p: FlowViewProps) {
         {p.renderMedia(
           <InkLayer
             active={!!active}
+            playing={playing}
             onStart={p.onPause}
             replay={replay}
             onMark={(k, points) => { if (active) marks.current.push({ k, points, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt }) }}
