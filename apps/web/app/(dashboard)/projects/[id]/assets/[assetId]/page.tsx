@@ -26,6 +26,7 @@ import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { canCompare } from '@/lib/compare-time'
 import { useIsNarrow } from '@/hooks/use-is-narrow'
 import { FlowView } from '@/components/review/flow-view'
+import { closeRound } from '@/lib/agents'
 import { SendToAgent, useAgentRequest, useRequestHeartbeat } from '@/components/agents/send-to-agent'
 import {
   ArrowLeft,
@@ -379,10 +380,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       onPause={() => seekTo(useReviewStore.getState().playheadTime, true)}
       onSeek={(t) => seekTo(t, true)}
       canComment={canComment}
-      onSendNotes={async (notes) => {
-        for (const n of notes) await createComment(n.text, n.t, undefined, n.annotation || undefined)
-        refetchComments()
-      }}
+      notePayload={(n) => ({ kind: 'project', assetId: asset.id, versionId: currentVersion?.id ?? '', ...n })}
+      onFinishRound={isOwner && agentRequest && requestAgents.length > 0 ? async () => { await closeRound(agentRequest.id) } : undefined}
       onApprove={approve}
       approved={approved}
       onExit={isNarrow ? () => router.push(`/projects/${projectId}`) : () => setPhoneView(false)}

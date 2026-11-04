@@ -7,6 +7,8 @@ import { timecode } from '@/lib/platform'
 import { dictate as dictateApi, type DictationResult } from '@/lib/agents'
 import { notesFromDictation, notesReducer, sendBlocked, sendable, type FlowNote } from '@/lib/flow-notes'
 import { buildDrawingData, type InkMark } from '@/lib/ink'
+import { getNoteOutbox, useNoteOutbox, type NoteBody, type NotePayload } from '@/lib/note-outbox'
+import type { Outbox } from '@/lib/outbox'
 import { InkLayer, type InkReplay } from './ink-layer'
 import { trackVideo, videoTimeAt, type TimelinePoint } from '@/lib/rec-timeline'
 import { startMicRecording, type ActiveRecording, type StartRecording } from '@/lib/recorder'
@@ -23,8 +25,15 @@ export interface FlowViewProps {
   onPause: () => void
   onSeek: (t: number) => void
   canComment: boolean
-  /** Posts every note as a comment. Rejects to keep the notes on screen. */
-  onSendNotes: (notes: { text: string; t: number; annotation: Record<string, unknown> | null }[]) => Promise<void>
+  /** What a note needs to be saved from anywhere: every note is saved in the background as soon as it exists. */
+  notePayload: (note: NoteBody) => NotePayload
+  outbox?: Outbox
+  /** False while the reviewer still has to say who they are; notes wait (nothing is lost) and onNeedSave is called. */
+  canSave?: boolean
+  onNeedSave?: () => void
+  /** Closes the feedback round (Send to agent). Without it the button reads Done: the notes are already saved. */
+  onFinishRound?: () => Promise<void>
+  finishLabel?: string
   onApprove: () => Promise<void> | void
   approved: boolean
   /** Share links without approve permission: with no notes the right-hand button stays disabled. Default true. */
@@ -58,6 +67,11 @@ export function FlowView(p: FlowViewProps) {
   const [replay, setReplay] = React.useState<InkReplay | null>(null)
   const replayKey = React.useRef(0)
   const rootRef = React.useRef<HTMLDivElement>(null)
+  const box = React.useMemo(() => p.outbox ?? getNoteOutbox(), [p.outbox])
+  const ob = useNoteOutbox(box)
+  const canSave = p.canSave ?? true
+  const onNeedSave = React.useRef(p.onNeedSave)
+  onNeedSave.current = p.onNeedSave
   const [playing, setPlaying] = React.useState(false)
   // Media events do not bubble, but they can be caught on the way down: follow whichever <video> the player mounts.
   React.useEffect(() => {
@@ -77,6 +91,17 @@ export function FlowView(p: FlowViewProps) {
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - active.startedAt) / 1000)), 500)
     return () => clearInterval(id)
   }, [active])
+
+  // Optimistic save: a note goes into the outbox the moment it has its words, and the outbox does the rest in the background.
+  const payloadRef = React.useRef(p.notePayload)
+  payloadRef.current = p.notePayload
+  React.useEffect(() => {
+    for (const n of notes) {
+      if (n.status !== 'ready' || !n.text.trim() || ob.byId(n.id)) continue
+      if (!canSave) { onNeedSave.current?.(); continue }
+      void ob.enqueue(n.id, payloadRef.current({ text: n.text.trim(), t: n.t, annotation: buildDrawingData(n.marks ?? []) }))
+    }
+  }, [notes, canSave, ob.entries]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const transcribe = async (n: { id: string; t: number; marks?: InkMark[] }, audio: Blob) => {
     const { id } = n
@@ -124,20 +149,20 @@ export function FlowView(p: FlowViewProps) {
     }
   }
 
-  const ready = sendable(notes)
-  const blocked = sendBlocked(notes)
-  const send = async () => {
+  const blocked = sendBlocked(notes) || ob.summary.pending > 0 || ob.summary.failed > 0
+  const hasNotes = notes.length > 0
+  const finish = async () => {
     setSending(true); setError('')
     try {
-      if (!notes.length) { await p.onApprove(); return }
-      await p.onSendNotes(ready.map(n => ({ text: n.text.trim(), t: n.t, annotation: buildDrawingData(n.marks ?? []) })))
+      if (!hasNotes) { await p.onApprove(); return }
+      await p.onFinishRound?.()
       dispatch({ type: 'clear' })
-    } catch { setError('Could not send. Your notes are still here. Try again.') }
+    } catch { setError(hasNotes ? 'Could not finish. Your notes are saved. Try again.' : 'Could not approve. Try again.') }
     finally { setSending(false) }
   }
 
   const canApprove = p.canApprove ?? true
-  const sendLabel = notes.length ? `Send ${ready.length || ''}`.trim() : !canApprove ? 'Send' : p.approved ? 'Approved' : 'Approve'
+  const sendLabel = hasNotes ? (p.finishLabel ?? (p.onFinishRound ? 'Send to agent' : 'Done')) : !canApprove ? 'Send' : p.approved ? 'Approved' : 'Approve'
 
   return (
     <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-bg-primary" style={{ paddingTop: 'env(safe-area-inset-top)' }} data-testid="flow-view">
@@ -181,7 +206,7 @@ export function FlowView(p: FlowViewProps) {
                 {n.status === 'transcribing' && <p role="status" className="flex min-h-11 items-center gap-2 text-sm text-text-secondary"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Transcribing…</p>}
                 {(n.status === 'ready' || n.status === 'failed') && (
                   <>
-                    <textarea aria-label={`Note at ${timecode(n.t)}`} value={n.text} rows={2} onChange={e => dispatch({ type: 'edit', id: n.id, text: e.target.value })}
+                    <textarea aria-label={`Note at ${timecode(n.t)}`} value={n.text} rows={2} onChange={e => dispatch({ type: 'edit', id: n.id, text: e.target.value })} onBlur={() => dispatch({ type: 'commit', id: n.id })}
                       className="w-full resize-none rounded-lg border border-border bg-bg-primary px-3 py-2 text-base text-text-primary outline-none focus:border-text-tertiary" />
                     {!!n.marks?.length && (
                       <ul aria-label={`Drawings on the note at ${timecode(n.t)}`} className="mt-1 flex flex-wrap gap-1.5">
@@ -211,6 +236,12 @@ export function FlowView(p: FlowViewProps) {
         </ul>
       )}
       {error && <p role="alert" className="shrink-0 bg-bg-secondary px-4 py-2 text-sm text-status-error">{error}</p>}
+      {ob.line && (
+        <div className="shrink-0 border-t border-border bg-bg-secondary px-4 py-1.5 text-center" aria-live="polite">
+          <p data-tone={ob.line.tone} className={cn('text-xs font-medium tabular-nums', ob.line.tone === 'ok' ? 'text-status-success' : ob.line.tone === 'error' ? 'text-status-error' : 'text-text-secondary')}>{ob.line.text}</p>
+          {ob.line.tone === 'pending' && <p className="text-[11px] text-text-tertiary">Unsent notes go out next time you open this.</p>}
+        </div>
+      )}
 
       {/* One-hand bottom controls */}
       <div className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-secondary px-3 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
@@ -220,9 +251,9 @@ export function FlowView(p: FlowViewProps) {
               className="flow-comment inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 text-base font-semibold text-text-inverse">
               {active ? <><Square size={18} aria-hidden="true" />Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</> : <><Mic size={24} aria-hidden="true" />Comment</>}
             </button>
-            <button type="button" onClick={send} disabled={sending || blocked || (!notes.length && (p.approved || !canApprove))}
+            <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (p.approved || !canApprove))}
               className="press inline-flex h-14 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-4 text-sm font-semibold text-text-primary hover:bg-bg-hover disabled:opacity-50">
-              {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : notes.length ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{sendLabel}
+              {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{sendLabel}
             </button>
           </>
         ) : <p className="flex-1 py-3 text-center text-sm text-text-secondary">View-only access. Comments are disabled.</p>}

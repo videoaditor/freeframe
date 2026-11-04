@@ -717,6 +717,8 @@ function ShareReviewInner({
   const { currentVersion, isDrawingMode, focusedCommentId, seekTo } = useReviewStore()
   const isNarrow = useIsNarrow()
   const [phoneView, setPhoneView] = React.useState(false)
+  const [authed, setAuthed] = React.useState(false)
+  React.useEffect(() => { void getUsableAccessToken().then((t) => setAuthed(t !== null)).catch(() => {}) }, [])
   const [sidebarOpen, setSidebarOpen] = React.useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
@@ -776,12 +778,6 @@ function ShareReviewInner({
 
   const flow = (isNarrow || phoneView) && asset.asset_type === 'video' && versionReady && !!VideoPlayer
   if (flow) {
-    const sendNotes = async (notes: { text: string; t: number; annotation: Record<string, unknown> | null }[]) => {
-      const hasAuth = (await getUsableAccessToken()) !== null
-      const hasGuest = !!localStorage.getItem('ff_guest_identity')
-      if (!hasAuth && !hasGuest) { setShowGuestPrompt(true); throw new Error('identity') }
-      for (const n of notes) await submitComment(n.text, n.t, undefined, n.annotation ?? undefined)
-    }
     const approveAsset = async () => {
       const hasAuth = (await getUsableAccessToken()) !== null
       let identity: { name: string; email: string } | null = null
@@ -816,7 +812,9 @@ function ShareReviewInner({
               onSeek={(t: number) => seekTo(t, true)}
               canComment={canComment}
               canApprove={permission === 'approve'}
-              onSendNotes={sendNotes}
+              notePayload={(n) => ({ kind: 'share', token, assetId: asset.id, versionId: currentVersion?.id, identity: guestIdentity, shareSession, ...n })}
+              canSave={authed || !!guestIdentity}
+              onNeedSave={() => setShowGuestPrompt(true)}
               onApprove={approveAsset}
               approved={!!approvedIds?.has(asset.id)}
               dictate={(audio) => guestDictate(token, audio, shareSession)}
