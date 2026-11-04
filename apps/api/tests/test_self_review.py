@@ -131,3 +131,18 @@ def test_queue_has_processing_status_and_review_url_and_initiate_takes_an_asset_
         assert ok.status_code == 200 and ok.json()["asset_id"] == str(one.id) and ok.json()["version_number"] == 3
         other = env.request(env.project_a, env.owner, "Elsewhere")
         assert env.client.post(f"/r/{other.token}/upload/initiate", json=body, headers=agent.headers).status_code == 404
+
+
+@needs_pg
+def test_agent_request_works_when_folders_must_carry_a_trello_link(env, monkeypatch):
+    """The folder-link rule guards the /folders routes; a request creates its folder itself and never trips it."""
+    from apps.api.config import settings
+    monkeypatch.setattr(settings, "require_folder_description_pattern", r"trello\.com/c/")
+    monkeypatch.setattr(settings, "require_project_description_pattern", r"trello\.com/c/")
+    agent = env.pair_agent(env.project_a)
+    with patch("apps.api.routers.requests.dispatch_binding"):
+        r = env.client.post("/agent/requests", json={"title": "Glow hook", "external_ref": "gen:abc"}, headers=agent.headers)
+    assert r.status_code == 200 and r.json()["created"] is True
+    # the pattern really is on: a plain folder without a link is refused
+    assert env.client.post(f"/projects/{env.project_a.id}/folders", json={"name": "x", "description": "no link"},
+                           headers=env.headers(env.owner)).status_code == 400
