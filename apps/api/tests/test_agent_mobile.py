@@ -142,3 +142,54 @@ def test_dictate_is_a_plain_def_so_the_blocking_groq_call_runs_in_the_threadpool
 def test_webhook_with_a_broken_body_is_400(client, tg):
     r = client.post("/telegram/webhook", content=b"{nope", headers={"X-Telegram-Bot-Api-Secret-Token": "s3cret", "content-type": "application/json"})
     assert r.status_code == 400
+
+
+# ── Guests: POST /share/{token}/dictate ───────────────────────────────────────
+
+def _groq(monkeypatch):
+    from apps.api.config import settings
+    monkeypatch.setattr(settings, "groq_api_key", "gsk_test")
+    reply = MagicMock(status_code=200)
+    reply.json.return_value = {"text": "Mehr Musik", "segments": [{"start": 0.0, "end": 1.0, "text": "Mehr Musik"}]}
+    return patch("apps.api.services.dictation.httpx.post", return_value=reply)
+
+
+def _share(permission):
+    from apps.api.models.share import SharePermission
+    link = MagicMock()
+    link.permission = SharePermission(permission)
+    return patch("apps.api.routers.mobile.validate_share_link_with_session", return_value=link)
+
+
+AUDIO = {"audio": ("a.webm", b"123", "audio/webm")}
+
+
+def test_guest_dictates_on_a_link_that_allows_comments(client, monkeypatch):
+    with _groq(monkeypatch), _share("comment"):
+        r = client.post("/share/tok/dictate?share_session=abc", files=AUDIO)
+    assert r.status_code == 200 and r.json() == {"text": "Mehr Musik", "segments": [{"start": 0.0, "end": 1.0, "text": "Mehr Musik"}]}
+
+
+def test_guest_dictation_is_refused_on_a_view_only_link(client, monkeypatch):
+    with _groq(monkeypatch) as groq, _share("view"):
+        r = client.post("/share/tok/dictate", files=AUDIO)
+    assert r.status_code == 403
+    groq.assert_not_called()
+
+
+def test_guest_dictation_on_an_unknown_link_is_404(client, monkeypatch):
+    from fastapi import HTTPException
+    with _groq(monkeypatch) as groq, patch("apps.api.routers.mobile.validate_share_link_with_session", side_effect=HTTPException(404, "Share link not found")):
+        assert client.post("/share/nope/dictate", files=AUDIO).status_code == 404
+    groq.assert_not_called()
+
+
+def test_guest_dictation_without_a_key_is_503_and_rate_limited_per_token(client, monkeypatch):
+    from apps.api.config import settings
+    monkeypatch.setattr(settings, "groq_api_key", None)
+    with _share("comment"):
+        r = client.post("/share/tok/dictate", files=AUDIO)
+        assert (r.status_code, r.json()["detail"]) == (503, "dictation_unavailable")
+        with patch("apps.api.routers.mobile.check_rate_limit", return_value=(False, 30)) as rl:
+            assert client.post("/share/tok/dictate", files=AUDIO).status_code == 429
+        assert rl.call_args.args[1] == "share_dictate:tok" and rl.call_args.args[2:] == (30, 600)
