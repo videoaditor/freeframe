@@ -16,6 +16,7 @@ class ProjectUpdate(BaseModel):
     description: str | None = None
     is_public: bool | None = None
     is_workspace: bool | None = None
+    agents_may_approve: bool | None = None
 
 class ProjectResponse(BaseModel):
     id: uuid.UUID
@@ -27,6 +28,7 @@ class ProjectResponse(BaseModel):
     poster_url: str | None = None
     is_public: bool = False
     is_workspace: bool = False
+    agents_may_approve: bool = False
     asset_count: int = 0
     storage_bytes: int = 0
     member_count: int = 0
