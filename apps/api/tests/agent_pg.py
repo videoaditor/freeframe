@@ -72,7 +72,33 @@ def env():
             db.commit()
             return r
 
-    e.user, e.project, e.request = user, project, request
+    def pair_agent(proj, name="Cutter", program="codex"):
+        code = e.client.post(f"/projects/{proj.id}/agent-pairing-codes", headers=e.headers(e.owner)).json()["code"]
+        body = e.client.post("/agents/pair", json={"code": code, "agent_name": name, "program": program}).json()
+        return SimpleNamespace(user_id=body["user_id"], key=body["agent_key"], headers={"Authorization": f"Bearer {body['agent_key']}"})
+
+    def asset(req, name="Hook 1", versions=1, submitted=True, status="ready"):
+        """An asset in the request's folder with `versions` versions, each handed in by the owner."""
+        from datetime import datetime, timezone
+        from apps.api.models.asset import Asset, AssetType, AssetVersion, ProcessingStatus
+        from apps.api.models.upload_request import RequestUpload
+        with Session() as db:
+            a = Asset(project_id=req.project_id, name=name, asset_type=AssetType.video, created_by=req.created_by, folder_id=req.folder_id)
+            db.add(a)
+            db.flush()
+            out = []
+            for n in range(1, versions + 1):
+                v = AssetVersion(asset_id=a.id, version_number=n, processing_status=ProcessingStatus(status), created_by=req.created_by)
+                db.add(v)
+                db.flush()
+                if submitted:
+                    db.add(RequestUpload(request_id=req.id, asset_id=a.id, version_number=n, uploader_name="Cutter (codex)",
+                                         uploader_email="a@example.test", submitted_at=datetime.now(timezone.utc)))
+                out.append(v)
+            db.commit()
+            return SimpleNamespace(id=a.id, versions=out, name=name)
+
+    e.user, e.project, e.request, e.pair_agent, e.asset = user, project, request, pair_agent, asset
     e.headers = lambda u: {"Authorization": f"Bearer {create_access_token(str(u.id))}"}
     e.owner = user("Owner")
     e.project_a = project(e.owner, "Brand A")

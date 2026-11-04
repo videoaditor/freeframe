@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, get_optional_agent
 from ..middleware.rate_limit import rate_limit
 from ..models.asset import Asset, AssetType, AssetVersion, FileType, MediaFile, ProcessingStatus
 from ..models.comment import Comment
@@ -45,6 +45,7 @@ from ..schemas.upload import ALLOWED_MIME_TYPES, mime_to_asset_type
 from ..models.checklist_binding import ChecklistBinding
 from ..services.checklists import reserve_binding, binding_out, dispatch_binding
 from ..services import review_bridge
+from ..services.agents import AgentContext
 from ..services.briefing import docx_text, MAX_DOCUMENT_BASE64, validate_briefing_text
 from ..services.review_timing import adopt_signed_in_upload, freeze_submission_timing, reopen_request
 from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
@@ -512,6 +513,17 @@ def _writable_request(db, token):
     return req
 
 
+def _as_agent(req: UploadRequest, agent: Optional[AgentContext], identity: 'GuestIdentity') -> Optional[AgentContext]:
+    """A paired agent's hand-in counts as that agent's, like a signed-in editor's; another project's agent gets 404.
+    Anything that is not a resolved AgentContext (no key, or a direct call without the dependency) is a plain guest."""
+    if not isinstance(agent, AgentContext):
+        return None
+    if agent.key.project_id != req.project_id:
+        raise HTTPException(404, "not_found")
+    identity.name, identity.email = agent.user.name, agent.user.email
+    return agent
+
+
 def _record_uploader(db, req, version, identity) -> RequestUpload:
     record = db.query(RequestUpload).filter(RequestUpload.request_id == req.id,
         RequestUpload.asset_id == version.asset_id, RequestUpload.version_number == version.version_number).first()
@@ -548,8 +560,10 @@ class GuestInitiate(GuestIdentity):
 
 
 @router.post("/r/{token}/upload/initiate", dependencies=[Depends(rate_limit("request_upload", 60, 600))])
-def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db)):
+def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db),
+                   agent: Optional[AgentContext] = Depends(get_optional_agent)):
     req = _writable_request(db, token)
+    agent = _as_agent(req, agent, body)
     if body.mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {body.mime_type}")
     if not body.mime_type.startswith('video/'):
@@ -593,7 +607,7 @@ def guest_initiate(token: str, body: GuestInitiate, db: Session = Depends(get_db
         .order_by(AssetVersion.version_number.desc()).first()
     # The guest has no account; the version is filed under the request's owner, who asked for it.
     version = AssetVersion(asset_id=asset.id, version_number=(last.version_number + 1) if last else 1,
-                           processing_status=ProcessingStatus.uploading, created_by=req.created_by)
+                           processing_status=ProcessingStatus.uploading, created_by=agent.user.id if agent else req.created_by)
     db.add(version)
     db.flush()
     ext = os.path.splitext(body.original_filename)[1].lower()
@@ -647,8 +661,10 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
 
 
 @router.post("/r/{token}/upload/complete", dependencies=[Depends(rate_limit("request_upload", 60, 600))])
-def guest_complete(token: str, body: GuestComplete, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def guest_complete(token: str, body: GuestComplete, background_tasks: BackgroundTasks, db: Session = Depends(get_db),
+                   agent: Optional[AgentContext] = Depends(get_optional_agent)):
     req = locked_request(db, _live_request(db, token, recovery=True).id)
+    _as_agent(req, agent, body)
     _, version = _owned_media(db, req, body.s3_key)
     version = db.query(AssetVersion).filter(AssetVersion.id == version.id).populate_existing().with_for_update().one()
     # Completing twice (a retried request) must not re-trigger processing on a finished version.
