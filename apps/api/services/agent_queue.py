@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..models.approval import Approval, ApprovalStatus
 from ..models.asset import Asset
 from ..models.project import Project
 from ..models.upload_request import UploadRequest
@@ -43,6 +44,9 @@ def queue(db: Session, project_id: uuid.UUID, state: Optional[str] = None) -> li
     out = []
     for q in reqs:
         reviews = r._review_assets(db, q, assets[q.id], reviewer, stats, include_media=False)
+        approved = {str(v) for (v,) in db.query(Approval.version_id).filter(
+            Approval.version_id.in_([uuid.UUID(a["version_id"]) for a in reviews if a.get("version_id")]),
+            Approval.status == ApprovalStatus.approved, Approval.deleted_at.is_(None))}
         gate = r._request_gate(reviews, statuses.get(q.review_share_token))
         agent_notify.evaluate(db, q, reviews)
         stage = stage_of("live", len(assets[q.id]), gate["status"])
@@ -52,7 +56,8 @@ def queue(db: Session, project_id: uuid.UUID, state: Optional[str] = None) -> li
                     "upload_token": q.token, "review_url": review_url(q), "review_phase": phase_of_reviews(db, reviews),
                     "assets": [{"asset_id": a["asset_id"], "name": a["name"], "version_id": a["version_id"],
                                 "version_number": a["version"], "review_state": a["review_state"],
-                                "processing_status": a["processing"]} for a in reviews]})
+                                "processing_status": a["processing"],
+                                "approval": "approved" if a["version_id"] in approved else None} for a in reviews]})
     db.commit()  # _review_assets records observed campaign usage
     return out
 
