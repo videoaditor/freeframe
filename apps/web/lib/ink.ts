@@ -21,3 +21,12 @@ export function buildDrawingData(marks: InkMark[]): Record<string, unknown> | nu
 }
 export const isInk = (d: unknown): d is { format: 'ink.v1'; marks: InkMark[] } =>
   !!d && typeof d === 'object' && (d as { format?: string }).format === 'ink.v1' && Array.isArray((d as { marks?: unknown }).marks)
+
+/** Where a `videoW:videoH` picture sits when letterboxed (object-contain) inside a container. */
+export function containedRect(cw: number, ch: number, videoW: number, videoH: number) {
+  if (!videoW || !videoH || !cw || !ch) return { left: 0, top: 0, width: cw, height: ch }
+  const scale = Math.min(cw / videoW, ch / videoH)
+  const width = videoW * scale
+  const height = videoH * scale
+  return { left: (cw - width) / 2, top: (ch - height) / 2, width, height }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DOT_PX, INK_MS, buildDrawingData, classifyMark, clamp01, normalizePoint, isInk } from '../ink'
+import { containedRect, DOT_PX, INK_MS, buildDrawingData, classifyMark, clamp01, normalizePoint, isInk } from '../ink'
 
 describe('ink', () => {
   it('normalises to the visible frame, origin top-left, clamped to 0..1', () => {
@@ -26,5 +26,26 @@ describe('ink', () => {
     expect(buildDrawingData([])).toBeNull()
     expect(isInk({ objects: [] })).toBe(false)
     expect(INK_MS).toBe(1200)
+  })
+})
+
+describe('containedRect + normalizePoint (9:16 letterboxed in a 16:9 box)', () => {
+  const box = containedRect(1600, 900, 1080, 1920)
+  it('centres the picture and excludes the bars', () => {
+    expect(box.height).toBe(900)
+    expect(box.width).toBeCloseTo(506.25)
+    expect(box.left).toBeCloseTo(546.875)
+    expect(box.top).toBe(0)
+  })
+  it('maps picture corners and centre to 0..1, bars clamp', () => {
+    expect(normalizePoint(box, 546.875, 0)).toEqual([0, 0])
+    const c = normalizePoint(box, 800, 450)
+    expect(c[0]).toBeCloseTo(0.5)
+    expect(c[1]).toBeCloseTo(0.5)
+    expect(normalizePoint(box, 10, 450)[0]).toBe(0)
+    expect(normalizePoint(box, 1590, 450)[0]).toBe(1)
+  })
+  it('fills the box when the video size is unknown', () => {
+    expect(containedRect(300, 200, 0, 0)).toEqual({ left: 0, top: 0, width: 300, height: 200 })
   })
 })
