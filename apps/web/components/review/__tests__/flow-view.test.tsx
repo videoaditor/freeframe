@@ -176,6 +176,31 @@ describe('FlowView', () => {
     await waitFor(() => expect(document.querySelector('.ink-line')).not.toBeNull())
   })
 
+  it('recording looks alive: edge glow, level meter, mono timer and a cancel that throws everything away', async () => {
+    const cancel = vi.fn()
+    const { send, props } = setup({ startRecording: vi.fn().mockResolvedValue({ stop: vi.fn().mockResolvedValue(audio), cancel }) })
+    expect(screen.queryByTestId('rec-glow')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    await screen.findByRole('button', { name: /stop/i })
+    expect(screen.getByTestId('rec-glow')).toBeInTheDocument()
+    expect(screen.getByTestId('level-meter')).toBeInTheDocument()
+    expect(screen.getByTestId('rec-timer')).toHaveTextContent('0:00')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel recording' }))
+    expect(cancel).toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByTestId('rec-glow')).toBeNull())
+    expect(screen.queryByTestId('note-chip')).toBeNull()
+    expect(props.dictate).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('passes a level callback to the recorder', async () => {
+    const startRecording = vi.fn().mockResolvedValue({ stop: vi.fn().mockResolvedValue(audio), cancel: vi.fn() })
+    setup({ startRecording })
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    await screen.findByRole('button', { name: /stop/i })
+    expect(typeof startRecording.mock.calls[0][0]).toBe('function')
+  })
+
   it('hands the player one marker per note', async () => {
     const seen: number[] = []
     setup({ renderMedia: (o, extra) => { seen.push(extra.markers.length); return <div>{o}</div> } })

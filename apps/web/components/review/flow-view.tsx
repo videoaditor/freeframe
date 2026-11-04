@@ -10,6 +10,7 @@ import { buildDrawingData, splitDeictic, type InkMark } from '@/lib/ink'
 import { getNoteOutbox, useNoteOutbox, type NoteBody, type NotePayload } from '@/lib/note-outbox'
 import type { Outbox } from '@/lib/outbox'
 import { InkLayer, type InkReplay } from './ink-layer'
+import { LevelMeter } from './level-meter'
 import { trackVideo, videoTimeAt, type TimelinePoint } from '@/lib/rec-timeline'
 import { startMicRecording, type ActiveRecording, type StartRecording } from '@/lib/recorder'
 
@@ -87,6 +88,7 @@ export function FlowView(p: FlowViewProps) {
   const [replay, setReplay] = React.useState<InkReplay | null>(null)
   const replayKey = React.useRef(0)
   const rootRef = React.useRef<HTMLDivElement>(null)
+  const levelRef = React.useRef(0)
   const box = React.useMemo(() => p.outbox ?? getNoteOutbox(), [p.outbox])
   const ob = useNoteOutbox(box)
   const canSave = p.canSave ?? true
@@ -138,6 +140,18 @@ export function FlowView(p: FlowViewProps) {
     catch (e) { dispatch({ type: 'failed', id }); setMessages(m => ({ ...m, [id]: dictationMessage(e) })) }
   }
 
+  /** Throws the recording away: no transcription, no note, nothing saved. */
+  const cancelRecording = () => {
+    if (!active) return
+    const { id, rec } = active
+    rec.cancel()
+    tracker.current?.stop(); tracker.current = null
+    marks.current = []
+    timelines.current.delete(id)
+    dispatch({ type: 'remove', id })
+    setActive(null)
+  }
+
   const tapComment = async () => {
     setError('')
     if (active) {
@@ -158,7 +172,8 @@ export function FlowView(p: FlowViewProps) {
     marks.current = []
     dispatch({ type: 'add', id, t: p.getPlayhead() })
     try {
-      const rec = await start()
+      levelRef.current = 0
+      const rec = await start(v => { levelRef.current = v })
       const startedAt = Date.now()
       tracker.current = trackVideo(rootRef.current?.querySelector('video') ?? null, startedAt)
       setActive({ id, rec, startedAt })
@@ -206,13 +221,16 @@ export function FlowView(p: FlowViewProps) {
       {/* 9:16 at full height, letterboxed never cropped */}
       <div className="flex min-h-0 flex-1 flex-col" data-recording={active ? '' : undefined}>
         {p.renderMedia(
+          <>
+          {active && <div className="flow-rec-glow" data-testid="rec-glow" aria-hidden="true" />}
           <InkLayer
             active={!!active}
             playing={playing}
             onStart={p.onPause}
             replay={replay}
             onMark={(k, points, times) => { if (active) marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt }) }}
-          />,
+          />
+          </>,
           { markers: notes.map(n => ({ t: n.t, label: stamp(n.t) })) },
         )}
       </div>
@@ -279,13 +297,21 @@ export function FlowView(p: FlowViewProps) {
         </div>
       )}
 
+      {active && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-secondary pl-4 pr-1" role="status" aria-label="Recording">
+          <LevelMeter levelRef={levelRef} />
+          <span data-testid="rec-timer" className="min-w-[3.25rem] text-right font-mono text-[17px] font-semibold leading-[22px] tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
+          <button type="button" onClick={cancelRecording} aria-label="Cancel recording" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-secondary hover:bg-bg-hover"><X size={18} /></button>
+        </div>
+      )}
+
       {/* One-hand bottom controls */}
       <div className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-secondary px-3 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
         {p.canComment ? (
           <>
             <button type="button" onClick={tapComment}
               className="flow-comment inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 text-base font-semibold text-text-inverse">
-              {active ? <><Square size={18} aria-hidden="true" />Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</> : <><Mic size={24} aria-hidden="true" />Comment</>}
+              {active ? <><Square size={18} aria-hidden="true" />Stop</> : <><Mic size={24} aria-hidden="true" />Comment</>}
             </button>
             <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (p.approved || !canApprove))}
               className="press inline-flex h-14 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-4 text-sm font-semibold text-text-primary hover:bg-bg-hover disabled:opacity-50">
