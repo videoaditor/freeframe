@@ -27,7 +27,7 @@ import { GuestCommentInput, IdentityForm, loadIdentity, type GuestIdentity } fro
 import { FlowView } from '@/components/review/flow-view'
 import { VideoFrameConstraint } from '@/components/review/video-player'
 import { useIsNarrow } from '@/hooks/use-is-narrow'
-import { guestDictate } from '@/lib/share-flow'
+import { guestDictate, undoApproveSharedAsset } from '@/lib/share-flow'
 import { FolderShareViewer } from '@/components/share/folder-share-viewer'
 import type { Asset, SharePermission, ProjectBranding, ShareLinkAppearance } from '@/types'
 
@@ -972,6 +972,8 @@ function ShareViewer({
               canSave={!!identity}
               onNeedSave={() => setAskIdentity(true)}
               onApprove={flowApprove}
+              onUndoApprove={async () => { await undoApproveSharedAsset(token, asset.id); setFlowApproved(false) }}
+              sessionKey={token}
               approved={flowApproved}
               dictate={(audio) => guestDictate(token, audio)}
               onExit={isNarrow ? undefined : () => setPhoneView(false)}

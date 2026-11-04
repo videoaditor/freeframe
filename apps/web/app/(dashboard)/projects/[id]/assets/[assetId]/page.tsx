@@ -204,6 +204,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     }
   }
 
+  // Flow view: approve stays on this file for 5 s (Undo), then the view itself moves on
+  const approveOnly = async () => {
+    if (!asset || !currentVersion || approved) return
+    await api.post(`/assets/${asset.id}/approve`, { version_id: currentVersion.id })
+    await mutateApprovals()
+  }
+  const undoApprove = async () => {
+    if (!asset || !currentVersion) return
+    await api.delete(`/assets/${asset.id}/approve?version_id=${encodeURIComponent(currentVersion.id)}`)
+    await mutateApprovals()
+  }
+
   const navigateAsset = (assetId: string) => {
     router.push(`/projects/${projectId}/assets/${assetId}`)
   }
@@ -383,7 +395,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       canComment={canComment}
       notePayload={(n) => ({ kind: 'project', assetId: asset.id, versionId: currentVersion?.id ?? '', ...n })}
       onFinishRound={isOwner && agentRequest && requestAgents.length > 0 ? async () => { await closeRound(agentRequest.id) } : undefined}
-      onApprove={approve}
+      onApprove={approveOnly}
+      onUndoApprove={undoApprove}
+      hasNext={!!nextAsset}
+      onNext={() => nextAsset && navigateAsset(nextAsset.id)}
+      sessionKey={projectId}
       approved={approved}
       onExit={isNarrow ? () => router.push(`/projects/${projectId}`) : () => setPhoneView(false)}
       exitLabel={isNarrow ? 'Back' : 'Desktop view'}

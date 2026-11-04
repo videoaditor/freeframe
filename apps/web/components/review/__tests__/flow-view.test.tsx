@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { FlowView, type FlowViewProps } from '../flow-view'
 import { createOutbox, memoryStore } from '@/lib/outbox'
+import { resetSession } from '@/lib/flow-session'
+import { beforeEach } from 'vitest'
 
 const audio = new Blob(['a'])
 const recorder = () => vi.fn().mockResolvedValue({ stop: vi.fn().mockResolvedValue(audio), cancel: vi.fn() })
@@ -30,7 +32,8 @@ function setup(over: Partial<FlowViewProps> & { send?: (p: unknown, id: string) 
   const view = render(<FlowView {...props} />)
   return { props, send: send as ReturnType<typeof vi.fn>, outbox, rerender: (o: Partial<FlowViewProps>) => view.rerender(<FlowView {...props} {...o} />) }
 }
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.useRealTimers() })
+beforeEach(() => resetSession())
 const record = async () => {
   fireEvent.click(screen.getByRole('button', { name: /comment/i }))
   fireEvent.click(await screen.findByRole('button', { name: /stop/i }))
@@ -311,5 +314,73 @@ describe('FlowView', () => {
     setup({ canComment: false })
     expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument()
     expect(screen.getByText(/view-only/i)).toBeInTheDocument()
+  })
+
+  describe('approve, undo and the closing moments', () => {
+    const approve = async () => { fireEvent.click(screen.getByRole('button', { name: 'Approve' })); await screen.findByText('Approved') }
+
+    it('Approve shows Approved with a 5 s Undo, then moves to the next file on its own', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      const onNext = vi.fn()
+      setup({ onUndoApprove: vi.fn().mockResolvedValue(undefined), hasNext: true, onNext })
+      await approve()
+      expect(screen.getByRole('button', { name: 'Undo (5 s)' })).toBeInTheDocument()
+      expect(onNext).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(5200)
+      expect(onNext).toHaveBeenCalledTimes(1)
+    })
+
+    it('Undo within the 5 s takes the approval back and stays on this file', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      const onUndoApprove = vi.fn().mockResolvedValue(undefined)
+      const onNext = vi.fn()
+      setup({ onUndoApprove, hasNext: true, onNext })
+      await approve()
+      await vi.advanceTimersByTimeAsync(2000)
+      fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+      await vi.advanceTimersByTimeAsync(10)
+      expect(onUndoApprove).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(8000)
+      expect(onNext).not.toHaveBeenCalled()
+      expect(screen.queryByText('Approved')).toBeNull()
+    })
+
+    it('after the last file it ends with "All done · X approved, Y with feedback"', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      setup({ onUndoApprove: vi.fn().mockResolvedValue(undefined), hasNext: false, sessionKey: 'folder' })
+      await approve()
+      await vi.advanceTimersByTimeAsync(5200)
+      expect(await screen.findByText('All done · 1 approved, 0 with feedback')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(screen.queryByRole('dialog', { name: 'Done' })).toBeNull()
+    })
+
+    it('Send to agent ends in a moment that says how many notes the agent has, and offers the next file', async () => {
+      const onNext = vi.fn()
+      setup({ onFinishRound: vi.fn().mockResolvedValue(undefined), hasNext: true, onNext })
+      await record()
+      const btn = await screen.findByRole('button', { name: 'Send to agent' })
+      await waitFor(() => expect(btn).toBeEnabled())
+      fireEvent.click(btn)
+      expect(await screen.findByText('1 note with the agent · it replies with the next version')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Next file' }))
+      expect(onNext).toHaveBeenCalled()
+    })
+
+    it('counts files with feedback in the final numbers', async () => {
+      setup({ onFinishRound: vi.fn().mockResolvedValue(undefined), hasNext: false, sessionKey: 'k2' })
+      await record()
+      const btn = await screen.findByRole('button', { name: 'Send to agent' })
+      await waitFor(() => expect(btn).toBeEnabled())
+      fireEvent.click(btn)
+      expect(await screen.findByText('All done · 0 approved, 1 with feedback')).toBeInTheDocument()
+    })
+
+    it('a failed approve says so and keeps the button', async () => {
+      setup({ onApprove: vi.fn().mockRejectedValue(new Error('x')) })
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/could not approve/i)
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled()
+    })
   })
 })
