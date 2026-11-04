@@ -4,6 +4,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models.asset import Asset
 from ..models.project import Project
 from ..models.upload_request import UploadRequest
@@ -25,6 +26,11 @@ def stage_of(state: str, asset_count: int, gate_status: str) -> str:
     return "corrections" if gate_status == "held" else "ready"
 
 
+def review_url(req: UploadRequest) -> Optional[str]:
+    """The request's standing review share link on the web app (what the owner opens), None without one."""
+    return f"{(settings.frontend_url or '').rstrip('/')}/share/{req.review_share_token}" if req.review_share_token else None
+
+
 def queue(db: Session, project_id: uuid.UUID, state: Optional[str] = None) -> list[dict]:
     from ..routers import requests as r
     from datetime import datetime, timezone
@@ -43,9 +49,10 @@ def queue(db: Session, project_id: uuid.UUID, state: Optional[str] = None) -> li
         if state and stage != state:
             continue
         out.append({"request_id": str(q.id), "title": q.title, "folder_id": str(q.folder_id), "stage": stage,
-                    "upload_token": q.token, "review_phase": phase_of_reviews(db, reviews),
+                    "upload_token": q.token, "review_url": review_url(q), "review_phase": phase_of_reviews(db, reviews),
                     "assets": [{"asset_id": a["asset_id"], "name": a["name"], "version_id": a["version_id"],
-                                "version_number": a["version"], "review_state": a["review_state"]} for a in reviews]})
+                                "version_number": a["version"], "review_state": a["review_state"],
+                                "processing_status": a["processing"]} for a in reviews]})
     db.commit()  # _review_assets records observed campaign usage
     return out
 

@@ -116,7 +116,7 @@ class NewRequest(BaseModel):
 
 
 def _request_reply(req: UploadRequest, created: bool) -> dict:
-    return {"request_id": str(req.id), "folder_id": str(req.folder_id), "upload_token": req.token, "created": created}
+    return {"request_id": str(req.id), "folder_id": str(req.folder_id), "upload_token": req.token, "review_url": agent_queue.review_url(req), "created": created}
 
 
 @router.post("/requests")
