@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dotsLit, pushLevel, rmsLevel, METER_COLUMNS } from '../level-meter'
+import { columnRows, dotsLit, pushLevel, rmsLevel, METER_COLUMNS } from '../level-meter'
 
 describe('level meter maths', () => {
   it('turns audio samples into a 0..1 level, silence being 0', () => {
@@ -19,5 +19,20 @@ describe('level meter maths', () => {
     expect(h).toHaveLength(METER_COLUMNS)
     expect(h[h.length - 1]).toBeCloseTo((METER_COLUMNS + 3) / 100)
     expect(h[0]).toBeCloseTo(4 / 100)
+  })
+
+  it('grows symmetrically from the centre line: silence is one centre dot', () => {
+    expect(columnRows(0, 7)).toEqual([false, false, false, true, false, false, false])
+    expect(columnRows(0.34, 7)).toEqual([false, false, true, true, true, false, false])
+    expect(columnRows(1, 7)).toEqual([true, true, true, true, true, true, true])
+  })
+  it('is always symmetric, odd in height, and clamps out-of-range levels', () => {
+    for (const lv of [0, 0.1, 0.5, 0.9, 1, 3, -1]) {
+      const r = columnRows(lv, 7)
+      expect(r).toHaveLength(7)
+      expect(r).toEqual([...r].reverse())
+      expect(r[3]).toBe(true)
+    }
+    expect(columnRows(0.5, 6)).toHaveLength(7)
   })
 })
