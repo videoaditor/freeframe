@@ -778,6 +778,7 @@ function ShareReviewInner({
                   assetId={asset.id}
                   comments={comments}
                   className="flex-1 min-h-0"
+                  compact
                   initialStreamUrl={(asset as any).stream_url}
                   overlay={<>{AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}{ink}</>}
                 />

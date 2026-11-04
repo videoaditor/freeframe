@@ -206,8 +206,8 @@ export function FlowView(p: FlowViewProps) {
         {p.canComment ? (
           <>
             <button type="button" onClick={tapComment}
-              className="press inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-5 text-base font-semibold text-text-inverse hover:bg-accent-hover">
-              {active ? <><Square size={18} aria-hidden="true" />Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</> : <><Mic size={20} aria-hidden="true" />Comment</>}
+              className="flow-comment inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 text-base font-semibold text-text-inverse">
+              {active ? <><Square size={18} aria-hidden="true" />Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</> : <><Mic size={24} aria-hidden="true" />Comment</>}
             </button>
             <button type="button" onClick={send} disabled={sending || blocked || (!notes.length && (p.approved || !canApprove))}
               className="press inline-flex h-14 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-4 text-sm font-semibold text-text-primary hover:bg-bg-hover disabled:opacity-50">
