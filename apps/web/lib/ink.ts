@@ -4,7 +4,7 @@
 export const INK_MS = 1200
 export const DOT_PX = 8
 export type MarkKind = 'stroke' | 'dot'
-export interface InkMark { k: MarkKind; pts: [number, number][]; /** video seconds, ms precision */ t: number; /** ms since the recording started */ offset_ms: number }
+export interface InkMark { k: MarkKind; points: [number, number][]; /** video seconds, ms precision */ t: number; /** ms since the recording started */ offset_ms: number }
 
 export const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 export const normalizePoint = (r: { left: number; top: number; width: number; height: number }, x: number, y: number): [number, number] =>

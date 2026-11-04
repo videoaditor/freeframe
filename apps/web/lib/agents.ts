@@ -67,10 +67,13 @@ export const acceptRuleSuggestion = (roundId: string, suggestionId: string) =>
   api.post(`/feedback-rounds/${roundId}/rule-suggestions/${suggestionId}/accept`)
 
 export const linkTelegram = () => api.post<{ url: string }>('/me/telegram/link')
-export async function dictate(audio: Blob): Promise<string> {
+export interface DictationSegment { start: number; end: number; text: string }
+export interface DictationResult { text: string; segments: DictationSegment[] }
+export async function dictate(audio: Blob): Promise<DictationResult> {
   const fd = new FormData()
   fd.append('audio', audio, 'dictation.webm')
-  return (await api.upload<{ text: string }>('/dictate', fd)).text
+  const r = await api.upload<{ text: string; segments?: DictationSegment[] }>('/dictate', fd)
+  return { text: r.text, segments: r.segments ?? [] }
 }
 
 export function countdown(expiresAt: string, now: number): { label: string; expired: boolean } {

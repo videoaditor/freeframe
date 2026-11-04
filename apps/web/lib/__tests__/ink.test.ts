@@ -15,8 +15,8 @@ describe('ink', () => {
   })
   it('keeps the first mark offset and ms precision on t', () => {
     const d = buildDrawingData([
-      { k: 'stroke', pts: [[0, 0], [1, 1]], t: 3.14159, offset_ms: 1200 },
-      { k: 'dot', pts: [[0.5, 0.5]], t: 4, offset_ms: 2500 },
+      { k: 'stroke', points: [[0, 0], [1, 1]], t: 3.14159, offset_ms: 1200 },
+      { k: 'dot', points: [[0.5, 0.5]], t: 4, offset_ms: 2500 },
     ])
     expect(d).toMatchObject({ format: 'ink.v1', mark_offset_ms: 1200 })
     expect((d!.marks as { t: number }[])[0].t).toBe(3.142)

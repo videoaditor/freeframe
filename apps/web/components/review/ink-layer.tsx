@@ -3,22 +3,22 @@
 import * as React from 'react'
 import { DOT_PX, INK_MS, classifyMark, normalizePoint, type InkMark } from '@/lib/ink'
 
-type Ink = { id: number; k: 'stroke' | 'dot'; pts: [number, number][] }
+type Ink = { id: number; k: 'stroke' | 'dot'; points: [number, number][] }
 
 export const Strokes = ({ list, live }: { list: Ink[]; live?: boolean }) => (
   <>
     <svg className="ink-svg" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
       {list.filter(m => m.k === 'stroke').map(m => (
-        <polyline key={m.id} className="ink-line" data-live={live ? '' : undefined} points={m.pts.map(p => p.join(',')).join(' ')} />
+        <polyline key={m.id} className="ink-line" data-live={live ? '' : undefined} points={m.points.map(p => p.join(',')).join(' ')} />
       ))}
     </svg>
     {list.filter(m => m.k === 'dot').map(m => (
-      <i key={m.id} className="ink-dot" data-live={live ? '' : undefined} style={{ left: `${m.pts[0][0] * 100}%`, top: `${m.pts[0][1] * 100}%` }} />
+      <i key={m.id} className="ink-dot" data-live={live ? '' : undefined} style={{ left: `${m.points[0][0] * 100}%`, top: `${m.points[0][1] * 100}%` }} />
     ))}
   </>
 )
 
-export interface InkReplay { key: number; marks: Pick<InkMark, 'k' | 'pts'>[] }
+export interface InkReplay { key: number; marks: Pick<InkMark, 'k' | 'points'>[] }
 
 /**
  * The drawing surface over the picture, mounted inside the video frame (so 0..1 is the picture, never the letterbox).
@@ -28,7 +28,7 @@ export interface InkReplay { key: number; marks: Pick<InkMark, 'k' | 'pts'>[] }
 export function InkLayer({ active, onStart, onMark, replay }: {
   active: boolean
   onStart: () => void
-  onMark: (k: 'stroke' | 'dot', pts: [number, number][]) => void
+  onMark: (k: 'stroke' | 'dot', points: [number, number][]) => void
   replay?: InkReplay | null
 }) {
   const root = React.useRef<HTMLDivElement>(null)
@@ -73,20 +73,20 @@ export function InkLayer({ active, onStart, onMark, replay }: {
     g.current = null
     setCur(null)
     const k = classifyMark(s.far)
-    const pts = k === 'dot' ? [s.pts[0]] : s.pts
-    onMark(k, pts)
+    const points = k === 'dot' ? [s.pts[0]] : s.pts
+    onMark(k, points)
     const id = ++seq.current
-    setTrail(l => [...l, { id, k, pts }])
+    setTrail(l => [...l, { id, k, points }])
     setTimeout(() => { if (!gone.current) setTrail(l => l.filter(m => m.id !== id)) }, INK_MS + 100)
   }
-  const shown: Ink[] = replayShown ? replayShown.marks.map((m, i) => ({ id: replayShown.key * 100 + i, k: m.k, pts: m.pts })) : []
+  const shown: Ink[] = replayShown ? replayShown.marks.map((m, i) => ({ id: replayShown.key * 100 + i, k: m.k, points: m.points })) : []
   return (
     <div ref={root} className="ink-layer" data-testid="ink-layer" data-on={active ? '' : undefined}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onClick={e => { if (active) e.stopPropagation() }}>
       <Strokes list={trail} />
       {replayShown ? <Strokes key={replayShown.key} list={shown} /> : null}
-      {cur ? <Strokes list={[{ id: -1, k: 'stroke', pts: cur.length > 1 ? cur : [cur[0], cur[0]] }]} live /> : null}
+      {cur ? <Strokes list={[{ id: -1, k: 'stroke', points: cur.length > 1 ? cur : [cur[0], cur[0]] }]} live /> : null}
     </div>
   )
 }
