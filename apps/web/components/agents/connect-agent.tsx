@@ -98,8 +98,8 @@ function AgentRow({ agent, onRevoke }: { agent: ProjectAgent; onRevoke: (a: Proj
             className="press min-h-11 rounded-full bg-status-error px-4 text-sm font-semibold text-white disabled:opacity-60">Revoke access</button>
         </div>
       ) : (
-        <button type="button" onClick={() => setConfirming(true)} className="press min-h-11 rounded-full px-4 text-sm font-medium text-status-error hover:bg-bg-hover">
-          Revoke<span className="sr-only"> {agent.agent_name}</span>
+        <button type="button" onClick={() => setConfirming(true)} aria-label={`Revoke ${agent.agent_name}`} className="press min-h-11 rounded-full px-4 text-sm font-medium text-status-error hover:bg-bg-hover">
+          Revoke
         </button>
       )}
     </li>
@@ -109,7 +109,7 @@ function AgentRow({ agent, onRevoke }: { agent: ProjectAgent; onRevoke: (a: Proj
 export function ConnectAgent({ projectId }: { projectId: string }) {
   const agentsKey = `/projects/${projectId}/agents`
   const { data: agents, error, mutate } = useSWR<ProjectAgent[]>(agentsKey, () => listAgents(projectId))
-  const { data: project, mutate: mutateProject } = useSWR<{ agents_may_approve?: boolean }>(`/projects/${projectId}`, () => api.get(`/projects/${projectId}`))
+  const { data: project, mutate: mutateProject } = useSWR<{ agents_may_approve?: boolean }>(`/projects/${projectId}`, () => api.get<{ agents_may_approve?: boolean }>(`/projects/${projectId}`))
   const [toggleError, setToggleError] = React.useState('')
   const [revokeError, setRevokeError] = React.useState('')
   const mayApprove = !!project?.agents_may_approve
@@ -118,7 +118,7 @@ export function ConnectAgent({ projectId }: { projectId: string }) {
   const toggle = async (value: boolean) => {
     setToggleError('')
     try {
-      await mutateProject(async current => { await setAgentsMayApprove(projectId, value); return { ...current, agents_may_approve: value } }, { optimisticData: { ...project, agents_may_approve: value }, rollbackOnError: true, revalidate: false })
+      await mutateProject(async current => { await setAgentsMayApprove(projectId, value); return { ...current, agents_may_approve: value } }, false)
     } catch { setToggleError('Could not save. The setting is unchanged.') }
   }
   const revoke = async (agent: ProjectAgent) => {
