@@ -75,9 +75,12 @@ def env():
     def pair_agent(proj, name="Cutter", program="codex"):
         code = e.client.post(f"/projects/{proj.id}/agent-pairing-codes", headers=e.headers(e.owner)).json()["code"]
         body = e.client.post("/agents/pair", json={"code": code, "agent_name": name, "program": program}).json()
-        return SimpleNamespace(user_id=body["user_id"], key=body["agent_key"], headers={"Authorization": f"Bearer {body['agent_key']}"})
+        with Session() as db:
+            agent_user = db.get(User, uuid.UUID(body["user_id"]))
+            who = SimpleNamespace(name=agent_user.name, email=agent_user.email)
+        return SimpleNamespace(user_id=body["user_id"], key=body["agent_key"], who=who, headers={"Authorization": f"Bearer {body['agent_key']}"})
 
-    def asset(req, name="Hook 1", versions=1, submitted=True, status="ready"):
+    def asset(req, name="Hook 1", versions=1, submitted=True, status="ready", by=None):
         """An asset in the request's folder with `versions` versions, each handed in by the owner."""
         from datetime import datetime, timezone
         from apps.api.models.asset import Asset, AssetType, AssetVersion, ProcessingStatus
@@ -92,8 +95,8 @@ def env():
                 db.add(v)
                 db.flush()
                 if submitted:
-                    db.add(RequestUpload(request_id=req.id, asset_id=a.id, version_number=n, uploader_name="Cutter (codex)",
-                                         uploader_email="a@example.test", submitted_at=datetime.now(timezone.utc)))
+                    db.add(RequestUpload(request_id=req.id, asset_id=a.id, version_number=n, uploader_name=by.name if by else "Cutter (codex)",
+                                         uploader_email=by.email if by else "a@example.test", submitted_at=datetime.now(timezone.utc)))
                 out.append(v)
             db.commit()
             return SimpleNamespace(id=a.id, versions=out, name=name)

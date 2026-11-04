@@ -1,8 +1,9 @@
 """The agent's own API (`Authorization: Bearer ara_...`). An agent sees only its one project; anything else is 404."""
 import uuid
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -12,7 +13,7 @@ from ..models.activity import ActivityAction, ActivityLog
 from ..models.approval import ApprovalStatus
 from ..models.asset import Asset, AssetVersion
 from ..models.project import Project
-from ..services import agent_queue, review_bridge
+from ..services import agent_queue, feedback_rounds, review_bridge
 from ..services.agents import AgentContext
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -79,3 +80,28 @@ def suggest_rule(body: RuleSuggestion, agent: AgentContext = Depends(get_agent),
     if review_bridge.import_rules(brand, text) is None:
         raise HTTPException(503, "review_unavailable")
     return {"suggestion_id": str(uuid.uuid4())}
+
+
+@router.get("/feedback")
+def feedback(cursor: str = "", agent: AgentContext = Depends(get_agent), db: Session = Depends(get_db)):
+    """Closed, unacknowledged rounds after `cursor` (an ISO timestamp, or empty), oldest first."""
+    try:
+        after = datetime.fromisoformat(cursor) if cursor else None
+    except ValueError:
+        raise HTTPException(422, "invalid_cursor")
+    if after is not None and after.tzinfo is None:
+        after = after.replace(tzinfo=timezone.utc)
+    rows = feedback_rounds.agent_rounds(db, agent.user, _project(db, agent).id, after)
+    return {"rounds": [feedback_rounds.feedback_v1(db, r) for r in rows],
+            "next_cursor": rows[-1].closed_at.isoformat() if rows else (cursor or None)}
+
+
+@router.post("/feedback/{round_id}/ack", status_code=status.HTTP_204_NO_CONTENT)
+def ack(round_id: uuid.UUID, agent: AgentContext = Depends(get_agent), db: Session = Depends(get_db)):
+    rnd = feedback_rounds.agent_round(db, agent.user, _project(db, agent).id, round_id)
+    if rnd is None:
+        raise HTTPException(404, "not_found")
+    if rnd.acked_at is None:
+        rnd.acked_at = datetime.now(timezone.utc)
+        db.commit()
+    return Response(status_code=204)

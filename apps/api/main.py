@@ -95,6 +95,8 @@ app.include_router(iterations.router)
 from .routers import agents as agents_owner, agent as agent_api
 app.include_router(agents_owner.router)
 app.include_router(agent_api.router)
+from .routers import feedback as feedback_api
+app.include_router(feedback_api.router)
 
 @app.get("/health")
 def health():
