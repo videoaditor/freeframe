@@ -3,7 +3,7 @@ import { api } from '../api'
 import {
   PROGRAM_LABEL, countdown, mcpAddCommand, pairInstruction, programLabel,
   createPairingCode, listAgents, revokeAgent, setAgentsMayApprove,
-  closeRound, roundSummary, formatSent, type FeedbackV1,
+  closeRound, roundSummary, formatSent, requestForFolder, startHeartbeat, HEARTBEAT_MS, type FeedbackV1,
 } from '../agents'
 
 afterEach(() => vi.restoreAllMocks())
@@ -70,5 +70,45 @@ describe('round summary', () => {
   it('words the success line', () => {
     expect(formatSent('Claude Code', 3)).toBe('Sent to Claude Code · 3 comments')
     expect(formatSent('Codex', 1)).toBe('Sent to Codex · 1 comment')
+  })
+})
+
+describe('requestForFolder', () => {
+  const reqs = [
+    { id: 'a', folder_id: 'f1', state: 'revoked' },
+    { id: 'b', folder_id: 'f1', state: 'live' },
+    { id: 'c', folder_id: 'f2', state: 'live' },
+  ]
+  it('finds the live request for the asset folder', () => {
+    expect(requestForFolder(reqs, 'f1')?.id).toBe('b')
+    expect(requestForFolder(reqs, 'f2')?.id).toBe('c')
+  })
+  it('is null without folder or match', () => {
+    expect(requestForFolder(reqs, null)).toBeNull()
+    expect(requestForFolder(reqs, 'zzz')).toBeNull()
+    expect(requestForFolder(undefined, 'f1')).toBeNull()
+  })
+})
+
+describe('startHeartbeat', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+  it('pings every 60s while visible and stays quiet while hidden', () => {
+    vi.useFakeTimers()
+    const send = vi.fn().mockResolvedValue(undefined)
+    let state: DocumentVisibilityState = 'visible'
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => state)
+    const stop = startHeartbeat('r1', send)
+    vi.advanceTimersByTime(HEARTBEAT_MS)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith('r1')
+    state = 'hidden'
+    vi.advanceTimersByTime(HEARTBEAT_MS * 2)
+    expect(send).toHaveBeenCalledTimes(1)
+    state = 'visible'
+    vi.advanceTimersByTime(HEARTBEAT_MS)
+    expect(send).toHaveBeenCalledTimes(2)
+    stop()
+    vi.advanceTimersByTime(HEARTBEAT_MS * 3)
+    expect(send).toHaveBeenCalledTimes(2)
   })
 })

@@ -84,3 +84,21 @@ export const pairInstruction = (code: string) => `Pair with code ${code}`
 
 export const roundSummary = (round: FeedbackV1) => round.files.reduce((n, f) => n + f.comments.length, 0)
 export const formatSent = (agent: string, n: number) => `Sent to ${agent} · ${n} ${n === 1 ? 'comment' : 'comments'}`
+
+export const HEARTBEAT_MS = 60_000
+
+/** The request whose folder holds this asset; live requests win over closed ones. */
+export function requestForFolder<T extends { id: string; folder_id?: string | null; state: string }>(requests: T[] | undefined, folderId: string | null | undefined): T | null {
+  if (!requests || !folderId) return null
+  const hits = requests.filter(r => r.folder_id === folderId)
+  return hits.find(r => r.state === 'live') ?? hits[0] ?? null
+}
+
+/** Starts a heartbeat that only fires while the tab is visible. Returns the stop function. */
+export function startHeartbeat(requestId: string, send: (id: string) => unknown = heartbeat): () => void {
+  const tick = () => { if (document.visibilityState === 'visible') void Promise.resolve(send(requestId)).catch(() => {}) }
+  const timer = setInterval(tick, HEARTBEAT_MS)
+  return () => clearInterval(timer)
+}
+
+export const agentNames = (agents: RequestAgent[]) => agents.map(a => a.name).join(', ')

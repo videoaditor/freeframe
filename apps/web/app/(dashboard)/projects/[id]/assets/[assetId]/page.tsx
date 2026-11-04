@@ -23,6 +23,7 @@ import { useSSE } from '@/hooks/use-sse'
 import { api } from '@/lib/api'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { canCompare } from '@/lib/compare-time'
+import { SendToAgent, useAgentRequest, useRequestHeartbeat } from '@/components/agents/send-to-agent'
 import {
   ArrowLeft,
   ChevronLeft,
@@ -116,6 +117,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     folderKey ? `/projects/${projectId}/assets?folder_id=${folderKey}` : null,
     (url: string) => api.get<AssetResponse[]>(url),
   )
+
+  // Agents: the owner can hand this folder's comments to the agents paired with its request
+  const isOwner = currentRole === 'owner'
+  const { request: agentRequest, agents: requestAgents } = useAgentRequest(asset?.folder_id, isOwner)
+  useRequestHeartbeat(isOwner ? agentRequest?.id : null)
 
   // Approve = this version is accepted; the server is the authority, the button just mirrors it
   const { data: approvals, mutate: mutateApprovals } = useSWR<{ version_id: string; status: string }[]>(
@@ -425,6 +431,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             </button>
           )}
           <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
+          {isOwner && agentRequest && requestAgents.length > 0 && (
+            <SendToAgent requestId={agentRequest.id} agents={requestAgents} />
+          )}
           {canComment && (
             <button
               onClick={approve}
