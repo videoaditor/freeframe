@@ -17,6 +17,9 @@ describe('flow session', () => {
   })
   it('words the closing lines', () => {
     expect(doneLine({ approved: 7, feedback: 3 })).toBe('All done · 7 approved, 3 with feedback')
+    expect(doneLine({ approved: 1, feedback: 0 })).toBe('All done · 1 approved')
+    expect(doneLine({ approved: 0, feedback: 2 })).toBe('All done · 2 with feedback')
+    expect(doneLine({ approved: 0, feedback: 0 })).toBe('All done')
     expect(sentLine(3, true)).toBe('3 notes with the agent · it replies with the next version')
     expect(sentLine(1, false)).toBe('1 note sent')
   })

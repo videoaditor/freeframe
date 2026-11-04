@@ -67,11 +67,15 @@ export const summarize = (entries: OutboxEntry[]): OutboxSummary => ({
   total: entries.length,
 })
 
-export function statusLine(s: OutboxSummary): { text: string; tone: 'pending' | 'ok' | 'error' } | null {
+export interface StatusPart { text: string; tone: 'neutral' | 'ok' | 'error' }
+/** Only the failure and the final tick carry colour; the counts stay neutral. */
+export function statusLine(s: OutboxSummary): { text: string; tone: 'pending' | 'ok' | 'error'; parts: StatusPart[] } | null {
   if (!s.total) return null
-  if (s.pending > 0) return { text: `${s.saved} saved · ${s.pending} sending…${s.failed > 0 ? ` · ${s.failed} failed` : ''}`, tone: s.failed > 0 ? 'error' : 'pending' }
-  if (s.failed > 0) return { text: `${s.saved} saved · ${s.failed} failed`, tone: 'error' }
-  return { text: 'All saved ✓', tone: 'ok' }
+  if (s.pending === 0 && s.failed === 0) return { text: 'All saved ✓', tone: 'ok', parts: [{ text: 'All saved ', tone: 'neutral' }, { text: '✓', tone: 'ok' }] }
+  const parts: StatusPart[] = [{ text: `${s.saved} saved`, tone: 'neutral' }]
+  if (s.pending > 0) parts.push({ text: ` · ${s.pending} sending…`, tone: 'neutral' })
+  if (s.failed > 0) parts.push({ text: ` · ${s.failed} failed`, tone: 'error' })
+  return { text: parts.map(x => x.text).join(''), tone: s.failed > 0 ? 'error' : 'pending', parts }
 }
 
 export interface OutboxOptions {

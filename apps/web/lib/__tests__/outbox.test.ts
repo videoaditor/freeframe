@@ -118,6 +118,14 @@ describe('status line', () => {
   it('still mentions a failed note while others are on their way', () => {
     expect(statusLine(summarize([e('saved'), e('sending'), e('failed')]))).toMatchObject({ text: '1 saved · 1 sending… · 1 failed', tone: 'error' })
   })
+  it('colours only the failed segment and the final tick', () => {
+    const mixed = statusLine(summarize([e('saved'), e('sending'), e('failed')]))!
+    expect(mixed.parts.filter(p => p.tone === 'error').map(p => p.text.trim())).toEqual(['· 1 failed'])
+    expect(mixed.parts.filter(p => p.tone === 'neutral').length).toBe(2)
+    const ok = statusLine(summarize([e('saved')]))!
+    expect(ok.parts.filter(p => p.tone === 'ok').map(p => p.text)).toEqual(['✓'])
+    expect(ok.parts[0].tone).toBe('neutral')
+  })
   it('says All saved when nothing is open', () => {
     expect(statusLine(summarize([e('saved'), e('saved')]))).toMatchObject({ text: 'All saved ✓', tone: 'ok' })
   })

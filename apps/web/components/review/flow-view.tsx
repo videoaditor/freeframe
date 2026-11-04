@@ -340,8 +340,10 @@ export function FlowView(p: FlowViewProps) {
       {error && <p role="alert" className="shrink-0 bg-bg-secondary px-4 py-2 text-sm text-status-error">{error}</p>}
       {ob.line && (
         <div className="shrink-0 border-t border-border bg-bg-secondary px-4 py-1.5 text-center" aria-live="polite">
-          <p data-tone={ob.line.tone} className={cn('text-xs font-medium tabular-nums', ob.line.tone === 'ok' ? 'text-status-success' : ob.line.tone === 'error' ? 'text-status-error' : 'text-text-secondary')}>{ob.line.text}</p>
-          {ob.line.tone === 'pending' && <p className="text-[11px] text-text-tertiary">Unsent notes go out next time you open this.</p>}
+          <p data-tone={ob.line.tone} className="text-xs font-medium tabular-nums text-text-secondary">
+            {ob.line.parts.map((part, i) => <span key={i} className={part.tone === 'error' ? 'text-status-error' : part.tone === 'ok' ? 'text-status-success' : undefined}>{part.text}</span>)}
+          </p>
+          {ob.summary.pending > 0 && <p className="text-[11px] text-text-tertiary">Unsent notes go out next time you open this.</p>}
         </div>
       )}
 

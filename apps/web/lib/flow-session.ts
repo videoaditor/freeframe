@@ -11,7 +11,8 @@ export const sessionSummary = (key: string) => { const s = get(key); return { ap
 export const resetSession = (key?: string) => { if (key) sessions.delete(key); else sessions.clear() }
 
 export function doneLine(s: { approved: number; feedback: number }): string {
-  return `All done · ${s.approved} approved, ${s.feedback} with feedback`
+  const parts = [s.approved > 0 && `${s.approved} approved`, s.feedback > 0 && `${s.feedback} with feedback`].filter(Boolean)
+  return parts.length ? `All done · ${parts.join(', ')}` : 'All done'
 }
 export function sentLine(notes: number, agent: boolean): string {
   const n = `${notes} ${notes === 1 ? 'note' : 'notes'}`

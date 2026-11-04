@@ -34,6 +34,7 @@ function setup(over: Partial<FlowViewProps> & { send?: (p: unknown, id: string) 
 }
 afterEach(() => { cleanup(); vi.useRealTimers() })
 beforeEach(() => resetSession())
+const line = (text: string) => screen.findByText((_, el) => el?.tagName === 'P' && el.getAttribute('data-tone') !== null && el.textContent === text)
 const record = async () => {
   fireEvent.click(screen.getByRole('button', { name: /comment/i }))
   fireEvent.click(await screen.findByRole('button', { name: /stop/i }))
@@ -63,23 +64,23 @@ describe('FlowView', () => {
   it('tells the reviewer when everything is saved, with no Send step in between', async () => {
     setup()
     await record()
-    expect(await screen.findByText('All saved ✓')).toBeInTheDocument()
+    expect(await line('All saved ✓')).toBeInTheDocument()
   })
 
   it('shows "N saved · M sending…" while a note is on its way', async () => {
     let release!: () => void
     setup({ send: () => new Promise<void>(r => { release = r }) })
     await record()
-    expect(await screen.findByText('0 saved · 1 sending…')).toBeInTheDocument()
+    expect(await line('0 saved · 1 sending…')).toBeInTheDocument()
     expect(screen.getByText(/next time you open this/i)).toBeInTheDocument()
     release()
-    expect(await screen.findByText('All saved ✓')).toBeInTheDocument()
+    expect(await line('All saved ✓')).toBeInTheDocument()
   })
 
   it('a rejected note stays on screen and the status line says so', async () => {
     setup({ send: vi.fn().mockRejectedValue(Object.assign(new Error('nope'), { status: 403, detail: 'This share link does not allow commenting' })) })
     await record()
-    expect(await screen.findByText('0 saved · 1 failed')).toBeInTheDocument()
+    expect(await line('0 saved · 1 failed')).toBeInTheDocument()
     expect(screen.getByText('Hook too slow')).toBeInTheDocument()
   })
 
@@ -350,7 +351,7 @@ describe('FlowView', () => {
       setup({ onUndoApprove: vi.fn().mockResolvedValue(undefined), hasNext: false, sessionKey: 'folder' })
       await approve()
       await vi.advanceTimersByTimeAsync(5200)
-      expect(await screen.findByText('All done · 1 approved, 0 with feedback')).toBeInTheDocument()
+      expect(await screen.findByText('All done · 1 approved')).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
       expect(screen.queryByRole('dialog', { name: 'Done' })).toBeNull()
     })
@@ -373,7 +374,7 @@ describe('FlowView', () => {
       const btn = await screen.findByRole('button', { name: 'Send to agent' })
       await waitFor(() => expect(btn).toBeEnabled())
       fireEvent.click(btn)
-      expect(await screen.findByText('All done · 0 approved, 1 with feedback')).toBeInTheDocument()
+      expect(await screen.findByText('All done · 1 with feedback')).toBeInTheDocument()
     })
 
     it('a failed approve says so and keeps the button', async () => {
