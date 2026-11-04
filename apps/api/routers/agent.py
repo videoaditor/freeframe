@@ -30,7 +30,8 @@ def _project(db: Session, agent: AgentContext) -> Project:
 def me(agent: AgentContext = Depends(get_agent), db: Session = Depends(get_db)):
     project = db.get(Project, agent.key.project_id)
     return {"user_id": str(agent.user.id), "name": agent.user.name, "program": agent.key.program,
-            "project_id": str(agent.key.project_id), "project_name": project.name if project else ""}
+            "project_id": str(agent.key.project_id), "project_name": project.name if project else "",
+            "brand_slug": (project.autoreview_brand_slug if project else None) or None}
 
 
 @router.get("/queue")

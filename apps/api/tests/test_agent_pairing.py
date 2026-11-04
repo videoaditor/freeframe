@@ -46,7 +46,7 @@ def test_pairing_creates_an_agent_editor_and_a_working_key(env):
     me = env.client.get("/agent/me", headers={"Authorization": f"Bearer {body['agent_key']}"})
     assert me.status_code == 200
     assert me.json() == {"user_id": body["user_id"], "name": "Cutter (codex)", "program": "codex",
-                         "project_id": str(env.project_a.id), "project_name": "Brand A"}
+                         "project_id": str(env.project_a.id), "project_name": "Brand A", "brand_slug": None}
 
 
 def test_key_is_stored_only_as_sha256(env):
@@ -122,3 +122,12 @@ def test_other_projects_agents_are_not_listed_or_revocable(env):
 def test_owner_toggles_agents_may_approve(env):
     r = env.client.patch(f"/projects/{env.project_a.id}", json={"agents_may_approve": True}, headers=env.headers(env.owner))
     assert r.status_code == 200 and r.json()["agents_may_approve"] is True
+
+
+def test_me_returns_the_workspace_brand_slug(env):
+    from apps.api.models.project import Project
+    with env.Session() as db:
+        db.get(Project, env.project_a.id).autoreview_brand_slug = "mynd-organics"
+        db.commit()
+    key = _pair(env, _code(env)).json()["agent_key"]
+    assert env.client.get("/agent/me", headers={"Authorization": f"Bearer {key}"}).json()["brand_slug"] == "mynd-organics"

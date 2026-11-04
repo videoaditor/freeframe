@@ -12,6 +12,8 @@ T0 = datetime(2026, 11, 4, 10, 0, tzinfo=timezone.utc)
 
 # ── Pure ──────────────────────────────────────────────────────────────────────
 
+INK = {"format": "ink.v1", "mark_offset_ms": 420, "marks": [{"t": 3.2, "offset_ms": 420, "points": [[0.1, 0.2], [0.3, 0.4]]}]}
+
 def test_idle_is_five_minutes_since_the_latest_activity():
     from apps.api.services.feedback_rounds import is_idle
     assert not is_idle(T0, None, T0 + timedelta(minutes=4, seconds=59))
@@ -32,7 +34,7 @@ def test_feedback_v1_snapshot():
             {"asset_id": "a", "version_id": "va", "name": "Hook 1", "version_number": 2, "comments": [
                 {"comment_id": "c2", "t_start": None, "t_end": None, "text": "Louder music", "drawing": None, "author": "Anna", "author_kind": "guest"},
                 {"comment_id": "c1", "t_start": 3.2, "t_end": None, "text": "Hook too slow",
-                 "drawing": {"drawing_data": {"objects": []}, "frame_url": "https://x/t.jpg"}, "author": "Alan Simon", "author_kind": "human"}]}])
+                 "drawing": {"drawing_data": INK, "frame_url": "https://x/t.jpg", "mark_offset_ms": 420}, "author": "Alan Simon", "author_kind": "human"}]}])
     assert out == {
         "schema": "feedback.v1", "round_id": str(rid), "request_id": str(qid), "project_id": str(pid), "briefing": "Hook tests",
         "opened_at": "2026-11-04T10:00:00+00:00", "closed_at": "2026-11-04T10:06:00+00:00", "closed_by": "idle",
@@ -40,7 +42,7 @@ def test_feedback_v1_snapshot():
             {"asset_id": "a", "version_id": "va", "name": "Hook 1", "version_number": 2, "comments": [
                 {"comment_id": "c2", "t_start": None, "t_end": None, "text": "Louder music", "drawing": None, "author": "Anna", "author_kind": "guest"},
                 {"comment_id": "c1", "t_start": 3.2, "t_end": None, "text": "Hook too slow",
-                 "drawing": {"drawing_data": {"objects": []}, "frame_url": "https://x/t.jpg"}, "author": "Alan Simon", "author_kind": "human"}]},
+                 "drawing": {"drawing_data": INK, "frame_url": "https://x/t.jpg", "mark_offset_ms": 420}, "author": "Alan Simon", "author_kind": "human"}]},
             {"asset_id": "b", "version_id": "vb", "name": "Hook 2", "version_number": 1, "comments": []}],
         "context_url": f"https://review.aditor.ai/api/v1/agents/context?project={pid}"}
 
@@ -129,7 +131,7 @@ def test_a_guest_comment_opens_a_round(scene):
 @needs_pg
 def test_close_button_returns_feedback_v1_then_a_new_comment_opens_a_new_round(scene):
     e = scene
-    c = comment(e, e.scene.asset, annotation={"drawing_data": {"objects": [1]}})
+    c = comment(e, e.scene.asset, t=3.2004, annotation={"drawing_data": INK})
     r = e.client.post(f"/requests/{e.scene.req.id}/feedback-rounds/close", json={"reason": "button"}, headers=e.headers(e.owner))
     assert r.status_code == 200, r.text
     v1 = r.json()
@@ -141,7 +143,7 @@ def test_close_button_returns_feedback_v1_then_a_new_comment_opens_a_new_round(s
     [note] = f["comments"]
     assert note["comment_id"] == c["id"] and note["text"] == "Make the hook faster" and note["t_start"] == 3.2
     assert note["author"] == "Owner" and note["author_kind"] == "human"
-    assert note["drawing"]["drawing_data"] == {"objects": [1]} and note["drawing"]["frame_url"] is None
+    assert note["drawing"] == {"drawing_data": INK, "frame_url": None, "mark_offset_ms": 420}   # passed through unchanged
     # nothing open any more -> 409; a later comment opens round #2 that excludes the first comment
     again = e.client.post(f"/requests/{e.scene.req.id}/feedback-rounds/close", json={"reason": "button"}, headers=e.headers(e.owner))
     assert (again.status_code, again.json()["detail"]) == (409, "no_open_round")

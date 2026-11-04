@@ -18,7 +18,7 @@ router = APIRouter(tags=["mobile"])
 @router.post("/dictate", dependencies=[Depends(rate_limit("dictate", 60, 600))])
 async def dictate(audio: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     data = await audio.read(dictation.MAX_BYTES + 1)
-    return {"text": dictation.transcribe(data, audio.filename or "", audio.content_type or "")}
+    return dictation.transcribe(data, audio.filename or "", audio.content_type or "")
 
 
 @router.post("/me/telegram/link")

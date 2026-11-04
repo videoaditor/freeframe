@@ -46,13 +46,16 @@ def test_dictation_sends_the_audio_to_groq_whisper_turbo(client, auth_headers, m
     from apps.api.config import settings
     monkeypatch.setattr(settings, "groq_api_key", "gsk_test")
     reply = MagicMock(status_code=200)
-    reply.json.return_value = {"text": " Hook ist zu langsam. "}
+    reply.json.return_value = {"text": " Hook ist zu langsam. Musik lauter.", "segments": [
+        {"start": 0.0, "end": 1.8, "text": " Hook ist zu langsam."}, {"start": 1.8, "end": 3.0, "text": " Musik lauter."}, {"start": 3.0, "end": 3.1, "text": " "}]}
     with patch("apps.api.services.dictation.httpx.post", return_value=reply) as post:
         r = client.post("/dictate", files={"audio": ("a.webm", b"123", "audio/webm")}, headers=auth_headers)
-    assert r.status_code == 200 and r.json() == {"text": "Hook ist zu langsam."}
+    assert r.status_code == 200 and r.json() == {"text": "Hook ist zu langsam. Musik lauter.", "segments": [
+        {"start": 0.0, "end": 1.8, "text": "Hook ist zu langsam."}, {"start": 1.8, "end": 3.0, "text": "Musik lauter."}]}
     assert post.call_args.args[0] == "https://api.groq.com/openai/v1/audio/transcriptions"
     assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer gsk_test"
     assert post.call_args.kwargs["data"]["model"] == "whisper-large-v3-turbo"
+    assert post.call_args.kwargs["data"]["response_format"] == "verbose_json"
 
 
 def test_dictation_needs_login(client):
