@@ -14,7 +14,7 @@ export const Strokes = ({ list, live, fading }: { list: Ink[]; live?: boolean; f
       {list.filter(m => m.k === 'stroke').map(m => (
         <g key={m.id} className="ink-stroke" data-live={live ? '' : undefined} data-fading={fading ? '' : undefined}>
           {taperChunks(thinPoints(m.points)).map((c, i) => (
-            <path key={i} className="ink-line" d={smoothPath(c.points)} style={{ strokeWidth: c.width }} />
+            <path key={i} className="ink-line" d={smoothPath(c.points, c)} style={{ strokeWidth: c.width }} />
           ))}
         </g>
       ))}

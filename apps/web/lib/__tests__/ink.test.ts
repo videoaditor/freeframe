@@ -70,17 +70,21 @@ describe('smoothing', () => {
     expect(smoothPath([[0.1, 0.1]])).toBe('M0.1,0.1L0.1,0.1')
     expect(smoothPath([[0, 0], [1, 1]])).toBe('M0,0L1,1')
   })
-  it('splits a stroke into overlapping chunks that taper from thick to thinner', () => {
+  it('splits a stroke into chunks that taper from thick to thinner and join on midpoints', () => {
     const pts: [number, number][] = Array.from({ length: 21 }, (_, i) => [i / 20, 0.5])
     const chunks = taperChunks(pts)
-    expect(chunks.length).toBe(STROKE_WIDTHS.length)
     expect(chunks.map(c => c.width)).toEqual(STROKE_WIDTHS)
     expect(STROKE_WIDTHS[0]).toBeGreaterThan(STROKE_WIDTHS[STROKE_WIDTHS.length - 1])
+    expect(chunks[0]).toMatchObject({ trimStart: false, trimEnd: true })
     expect(chunks[0].points[0]).toEqual(pts[0])
-    expect(chunks[chunks.length - 1].points.at(-1)).toEqual(pts.at(-1))
-    for (let i = 1; i < chunks.length; i++) expect(chunks[i].points[0]).toEqual(chunks[i - 1].points.at(-1))
+    expect(chunks.at(-1)).toMatchObject({ trimStart: true, trimEnd: false })
+    expect(chunks.at(-1)!.points.at(-1)).toEqual(pts.at(-1))
+    // a chunk ends where the next one starts: both on the midpoint of the same two raw points
+    const end0 = smoothPath(chunks[0].points, chunks[0]).match(/ ([\d.]+),([\d.]+)$/)!
+    const start1 = smoothPath(chunks[1].points, chunks[1]).match(/^M([\d.]+),([\d.]+)/)!
+    expect([end0[1], end0[2]]).toEqual([start1[1], start1[2]])
   })
   it('a very short stroke is a single chunk at the starting width', () => {
-    expect(taperChunks([[0, 0], [0.01, 0]])).toEqual([{ points: [[0, 0], [0.01, 0]], width: STROKE_WIDTHS[0] }])
+    expect(taperChunks([[0, 0], [0.01, 0]])).toEqual([{ points: [[0, 0], [0.01, 0]], width: STROKE_WIDTHS[0], trimStart: false, trimEnd: false }])
   })
 })

@@ -34,7 +34,7 @@ export function containedRect(cw: number, ch: number, videoW: number, videoH: nu
 // ── Drawing feel: smooth curves, a gentle taper ───────────────────────────────
 
 /** Slightly thicker at the start, thinning towards the end (screen px, the stroke has a fixed screen width). */
-export const STROKE_WIDTHS = [7, 6.2, 5.4, 4.6]
+export const STROKE_WIDTHS = [7, 6.6, 6.2, 5.8, 5.4, 5, 4.6]
 
 const r4 = (v: number) => Math.round(v * 10000) / 10000
 const pt = (p: [number, number]) => `${r4(p[0])},${r4(p[1])}`
@@ -51,27 +51,35 @@ export function thinPoints(points: [number, number][], minDist = 0.004): [number
   return out
 }
 
-/** A quadratic curve through the midpoints of the captured points, so a hand-drawn line has no corners. */
-export function smoothPath(points: [number, number][]): string {
+const mid = (a: [number, number], b: [number, number]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+
+/**
+ * A quadratic curve through the midpoints of the captured points, so a hand-drawn line has no corners.
+ * `trimStart` / `trimEnd` begin / end on the midpoint instead of the raw end point, so neighbouring chunks of one stroke
+ * join with the same tangent (no kinks where the width steps).
+ */
+export function smoothPath(points: [number, number][], opts: { trimStart?: boolean; trimEnd?: boolean } = {}): string {
   const n = points.length
   if (n === 0) return ''
   if (n === 1) return `M${pt(points[0])}L${pt(points[0])}`
   if (n === 2) return `M${pt(points[0])}L${pt(points[1])}`
-  let d = `M${pt(points[0])}`
-  for (let i = 1; i < n - 1; i++) {
-    const mid: [number, number] = [(points[i][0] + points[i + 1][0]) / 2, (points[i][1] + points[i + 1][1]) / 2]
-    d += `Q${pt(points[i])} ${pt(mid)}`
-  }
-  return `${d}L${pt(points[n - 1])}`
+  let d = `M${pt(opts.trimStart ? mid(points[0], points[1]) : points[0])}`
+  for (let i = 1; i < n - 1; i++) d += `Q${pt(points[i])} ${pt(mid(points[i], points[i + 1]))}`
+  return opts.trimEnd ? d : `${d}L${pt(points[n - 1])}`
 }
 
-/** Splits a stroke into consecutive chunks (sharing their end points) that get the tapering widths. */
-export function taperChunks(points: [number, number][]): { points: [number, number][]; width: number }[] {
+export interface InkChunk { points: [number, number][]; width: number; trimStart: boolean; trimEnd: boolean }
+
+/** Splits a stroke into consecutive chunks that get the tapering widths; each carries its neighbours' points so the curve stays continuous. */
+export function taperChunks(points: [number, number][]): InkChunk[] {
   const n = points.length
   const k = STROKE_WIDTHS.length
-  if (n < k * 2) return [{ points, width: STROKE_WIDTHS[0] }]
-  return STROKE_WIDTHS.map((width, i) => ({
-    width,
-    points: points.slice(Math.floor((i * (n - 1)) / k), Math.floor(((i + 1) * (n - 1)) / k) + 1),
-  }))
+  if (n < k * 2) return [{ points, width: STROKE_WIDTHS[0], trimStart: false, trimEnd: false }]
+  return STROKE_WIDTHS.map((width, i) => {
+    const a = Math.floor((i * (n - 1)) / k)
+    const b = Math.floor(((i + 1) * (n - 1)) / k)
+    const first = i === 0
+    const last = i === k - 1
+    return { width, points: points.slice(a, last ? b + 1 : b + 2), trimStart: !first, trimEnd: !last }
+  })
 }
