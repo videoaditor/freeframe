@@ -269,7 +269,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     currentVersion?.processing_status === 'processing' ||
     currentVersion?.processing_status === 'uploading'
 
-  const renderMediaViewer = (inkOverlay?: React.ReactNode) => {
+  const renderMediaViewer = (inkOverlay?: React.ReactNode, markers?: { t: number; label: string }[]) => {
     if (!currentVersion || !versionReady) {
       return (
         <div className="flex-1 flex items-center justify-center">
@@ -324,6 +324,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             comments={comments}
             className="flex-1 min-h-0"
             compact={!!inkOverlay}
+            markers={markers}
             overlay={
               <>
                 <AnnotationOverlay key={focusedCommentId ?? 'none'} />
@@ -372,7 +373,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   const flowView = (
     <FlowView
-      renderMedia={(ink) => renderMediaViewer(ink)}
+      renderMedia={(ink, extra) => renderMediaViewer(ink, extra.markers)}
       files={(allAssets ?? [asset]).map((a) => ({ id: a.id, name: a.name }))}
       currentFileId={asset.id}
       onSelectFile={navigateAsset}

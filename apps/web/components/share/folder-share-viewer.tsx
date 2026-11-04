@@ -794,12 +794,13 @@ function ShareReviewInner({
         <div className="flex min-h-0 flex-1 justify-center">
           <div className="h-full w-full max-w-[430px] md:border-x md:border-border">
             <FlowView
-              renderMedia={(ink) => (
+              renderMedia={(ink, extra) => (
                 <VideoPlayer
                   assetId={asset.id}
                   comments={comments}
                   className="flex-1 min-h-0"
                   compact
+                  markers={extra.markers}
                   initialStreamUrl={(asset as any).stream_url}
                   overlay={<>{AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}{ink}</>}
                 />

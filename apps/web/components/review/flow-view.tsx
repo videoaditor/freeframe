@@ -1,12 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { Check, Loader2, Mic, Pencil, RotateCcw, Send, Square, X } from 'lucide-react'
+import { Check, Clock, Loader2, Mic, RotateCcw, Send, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timecode } from '@/lib/platform'
 import { dictate as dictateApi, type DictationResult } from '@/lib/agents'
 import { notesFromDictation, notesReducer, sendBlocked, sendable, type FlowNote } from '@/lib/flow-notes'
-import { buildDrawingData, type InkMark } from '@/lib/ink'
+import { buildDrawingData, splitDeictic, type InkMark } from '@/lib/ink'
 import { getNoteOutbox, useNoteOutbox, type NoteBody, type NotePayload } from '@/lib/note-outbox'
 import type { Outbox } from '@/lib/outbox'
 import { InkLayer, type InkReplay } from './ink-layer'
@@ -17,7 +17,7 @@ export interface FlowFile { id: string; name: string; thumbnail_url?: string | n
 
 export interface FlowViewProps {
   /** The existing media viewer; `overlay` (the ink layer) must be mounted inside the video frame. Never cropped: it letterboxes. */
-  renderMedia: (overlay: React.ReactNode) => React.ReactNode
+  renderMedia: (overlay: React.ReactNode, extra: { markers: { t: number; label: string }[] }) => React.ReactNode
   files: FlowFile[]
   currentFileId: string
   onSelectFile: (id: string) => void
@@ -48,6 +48,26 @@ let seq = 0
 const newId = () => `note-${Date.now()}-${seq++}`
 
 const stamp = (t: number) => `${timecode(t)}.${Math.floor((t % 1) * 10)}`
+
+/** Clock (waiting) -> spinner (sending) -> check (saved); red Retry when it failed. Never colour alone: each has its own glyph and name. */
+function NoteStatus({ status, onRetry, onDelete, label }: { status?: string; onRetry: () => void; onDelete?: () => void; label: string }) {
+  if (status === 'queued') return <span role="img" aria-label="Waiting to send" className="grid h-11 w-11 shrink-0 place-items-center text-text-tertiary"><Clock size={16} /></span>
+  if (status === 'sending') return <span role="img" aria-label="Sending" className="grid h-11 w-11 shrink-0 place-items-center text-text-secondary"><Loader2 size={16} className="animate-spin motion-reduce:animate-none" /></span>
+  if (status === 'saved') return <span role="img" aria-label="Saved" className="grid h-11 w-11 shrink-0 place-items-center text-status-success"><Check size={18} /></span>
+  if (status === 'failed') return <button type="button" onClick={onRetry} aria-label={`Retry sending note at ${label}`} className="press inline-flex h-11 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-semibold text-status-error hover:bg-bg-hover"><RotateCcw size={13} />Retry</button>
+  return onDelete ? <button type="button" onClick={onDelete} aria-label={`Delete note at ${label}`} className="press grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-secondary hover:bg-bg-hover"><X size={16} /></button> : <span className="h-11 w-11 shrink-0" />
+}
+
+/** The drawing as a small picture: the strokes in the same 0..1 frame, on a 9:16 card. */
+function InkThumb({ mark }: { mark: InkMark }) {
+  return (
+    <svg viewBox="0 0 1 1" preserveAspectRatio="none" width="18" height="32" aria-hidden="true" className="shrink-0 rounded-[4px] bg-bg-tertiary ring-1 ring-border">
+      {mark.k === 'dot'
+        ? <circle cx={mark.points[0][0]} cy={mark.points[0][1]} r="0.12" fill="none" stroke="currentColor" strokeWidth="0.06" className="text-text-primary" />
+        : <polyline points={mark.points.map(q => q.join(',')).join(' ')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" className="text-text-primary" />}
+    </svg>
+  )
+}
 
 function dictationMessage(e: unknown): string {
   const detail = (e as { detail?: string })?.detail
@@ -191,48 +211,64 @@ export function FlowView(p: FlowViewProps) {
             playing={playing}
             onStart={p.onPause}
             replay={replay}
-            onMark={(k, points) => { if (active) marks.current.push({ k, points, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt }) }}
+            onMark={(k, points, times) => { if (active) marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt }) }}
           />,
+          { markers: notes.map(n => ({ t: n.t, label: stamp(n.t) })) },
         )}
       </div>
 
       {notes.length > 0 && (
         <ul aria-label="Your notes" className="max-h-[30dvh] shrink-0 space-y-2 overflow-y-auto border-t border-border bg-bg-secondary px-3 py-2">
-          {notes.map(n => (
-            <li key={n.id} className="flex items-start gap-2">
-              <button type="button" onClick={() => p.onSeek(n.t)} aria-label={`Go to ${timecode(n.t)}`} className="press min-h-11 shrink-0 rounded-lg bg-bg-tertiary px-2.5 font-mono text-xs tabular-nums text-text-primary">{timecode(n.t)}</button>
-              <div className="min-w-0 flex-1">
-                {n.status === 'recording' && <p role="status" className="flex min-h-11 items-center text-sm text-text-secondary">Recording. Talk and draw on the picture, then tap Stop.</p>}
-                {n.status === 'transcribing' && <p role="status" className="flex min-h-11 items-center gap-2 text-sm text-text-secondary"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Transcribing…</p>}
-                {(n.status === 'ready' || n.status === 'failed') && (
-                  <>
-                    <textarea aria-label={`Note at ${timecode(n.t)}`} value={n.text} rows={2} onChange={e => dispatch({ type: 'edit', id: n.id, text: e.target.value })} onBlur={() => dispatch({ type: 'commit', id: n.id })}
-                      className="w-full resize-none rounded-lg border border-border bg-bg-primary px-3 py-2 text-base text-text-primary outline-none focus:border-text-tertiary" />
-                    {!!n.marks?.length && (
-                      <ul aria-label={`Drawings on the note at ${timecode(n.t)}`} className="mt-1 flex flex-wrap gap-1.5">
-                        {n.marks.map((m, i) => (
-                          <li key={i}>
-                            <button type="button" onClick={() => { p.onSeek(m.t); setReplay({ key: ++replayKey.current, marks: [m] }) }}
-                              aria-label={`Drawing at ${stamp(m.t)}`}
-                              className="press inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 font-mono text-xs tabular-nums text-text-secondary hover:bg-bg-hover">
-                              <Pencil size={12} aria-hidden="true" />{stamp(m.t)}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {n.status === 'failed' && (
-                      <p role="alert" className="flex flex-wrap items-center gap-x-3 text-xs text-text-secondary">
-                        <span>{messages[n.id] ?? 'Could not transcribe.'}</span>
-                        {n.audio && <button type="button" onClick={() => transcribe(n, n.audio!)} className="press inline-flex min-h-11 items-center gap-1 font-semibold text-text-primary"><RotateCcw size={12} />Try again</button>}
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-              <button type="button" onClick={() => dispatch({ type: 'remove', id: n.id })} aria-label={`Delete note at ${timecode(n.t)}`} className="press grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-secondary hover:bg-bg-hover"><X size={16} /></button>
-            </li>
-          ))}
+          {notes.map(n => {
+            const entry = ob.byId(n.id)
+            const replayAll = () => { p.onSeek(n.t); if (n.marks?.length) setReplay({ key: ++replayKey.current, marks: n.marks }) }
+            return (
+              <li key={n.id} data-testid="note-chip" data-state={entry?.status ?? n.status} className="flex items-start gap-2">
+                <button type="button" onClick={() => p.onSeek(n.t)} aria-label={`Go to ${timecode(n.t)}`} className="press min-h-11 shrink-0 rounded-lg bg-bg-tertiary px-2.5 font-mono text-xs tabular-nums text-text-primary">{timecode(n.t)}</button>
+                <div className="min-w-0 flex-1">
+                  {n.status === 'recording' && <p role="status" className="flex min-h-11 items-center text-sm text-text-secondary">Recording. Talk and draw on the picture, then tap Stop.</p>}
+                  {n.status === 'transcribing' && <p role="status" className="flex min-h-11 items-center gap-2 text-sm text-text-secondary"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Transcribing…</p>}
+                  {(n.status === 'ready' || n.status === 'failed') && (
+                    <>
+                      {entry ? (
+                        <p className="flex min-h-11 items-center py-1 text-base text-text-primary">
+                          <span>{(n.marks?.length ? splitDeictic(n.text) : [{ text: n.text, deictic: false }]).map((part, i) => part.deictic
+                            ? <button key={i} type="button" onClick={replayAll} className="press inline underline decoration-text-secondary decoration-2 underline-offset-4">{part.text}</button>
+                            : <span key={i}>{part.text}</span>)}</span>
+                        </p>
+                      ) : (
+                        <textarea aria-label={`Note at ${timecode(n.t)}`} value={n.text} rows={2} onChange={e => dispatch({ type: 'edit', id: n.id, text: e.target.value })} onBlur={() => dispatch({ type: 'commit', id: n.id })}
+                          className="w-full resize-none rounded-lg border border-border bg-bg-primary px-3 py-2 text-base text-text-primary outline-none focus:border-text-tertiary" />
+                      )}
+                      {!!n.marks?.length && (
+                        <ul aria-label={`Drawings on the note at ${timecode(n.t)}`} className="mt-1 flex flex-wrap gap-1.5">
+                          {n.marks.map((m, i) => (
+                            <li key={i}>
+                              <button type="button" onClick={() => { p.onSeek(m.t); setReplay({ key: ++replayKey.current, marks: [m] }) }}
+                                aria-label={`Drawing at ${stamp(m.t)}`}
+                                className="press inline-flex min-h-11 items-center gap-2 rounded-full border border-border py-1 pl-1.5 pr-3 font-mono text-xs tabular-nums text-text-secondary hover:bg-bg-hover">
+                                <InkThumb mark={m} />{stamp(m.t)}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {n.status === 'failed' && !entry && (
+                        <p role="alert" className="flex flex-wrap items-center gap-x-3 text-xs text-text-secondary">
+                          <span>{messages[n.id] ?? 'Could not transcribe.'}</span>
+                          {n.audio && <button type="button" onClick={() => transcribe(n, n.audio!)} className="press inline-flex min-h-11 items-center gap-1 font-semibold text-text-primary"><RotateCcw size={12} />Try again</button>}
+                        </p>
+                      )}
+                      {entry?.status === 'failed' && (
+                        <p role="alert" className="text-xs text-status-error">{entry.error || 'Could not save.'}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <NoteStatus status={entry?.status} onRetry={() => ob.retry(n.id)} onDelete={entry ? undefined : () => dispatch({ type: 'remove', id: n.id })} label={timecode(n.t)} />
+              </li>
+            )
+          })}
         </ul>
       )}
       {error && <p role="alert" className="shrink-0 bg-bg-secondary px-4 py-2 text-sm text-status-error">{error}</p>}

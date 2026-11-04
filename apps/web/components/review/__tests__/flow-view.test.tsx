@@ -77,7 +77,7 @@ describe('FlowView', () => {
     setup({ send: vi.fn().mockRejectedValue(Object.assign(new Error('nope'), { status: 403, detail: 'This share link does not allow commenting' })) })
     await record()
     expect(await screen.findByText('0 saved · 1 failed')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('Hook too slow')).toBeInTheDocument()
+    expect(screen.getByText('Hook too slow')).toBeInTheDocument()
   })
 
   it('keeps the audio when dictation fails and Try again re-sends the same recording', async () => {
@@ -174,6 +174,77 @@ describe('FlowView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Drawing at 0:04.0' }))
     expect(props.onSeek).toHaveBeenCalledWith(4)
     await waitFor(() => expect(document.querySelector('.ink-line')).not.toBeNull())
+  })
+
+  it('hands the player one marker per note', async () => {
+    const seen: number[] = []
+    setup({ renderMedia: (o, extra) => { seen.push(extra.markers.length); return <div>{o}</div> } })
+    expect(seen.at(-1)).toBe(0)
+    await record()
+    await waitFor(() => expect(seen.at(-1)).toBe(1))
+  })
+
+  it('shows each note as a chip that goes clock -> spinner -> check as it is saved', async () => {
+    let release!: () => void
+    setup({ send: () => new Promise<void>(r => { release = r }) })
+    await record()
+    await screen.findByRole('img', { name: 'Sending' })
+    expect(screen.getByTestId('note-chip')).toHaveAttribute('data-state', 'sending')
+    release()
+    expect(await screen.findByRole('img', { name: 'Saved' })).toBeInTheDocument()
+  })
+
+  it('a rejected note shows a red Retry that sends it again with the same text', async () => {
+    const send = vi.fn().mockRejectedValueOnce(Object.assign(new Error('x'), { status: 403, detail: 'No access' })).mockResolvedValue(undefined)
+    setup({ send })
+    await record()
+    const retry = await screen.findByRole('button', { name: /retry sending note/i })
+    expect(screen.getByRole('alert')).toHaveTextContent('No access')
+    fireEvent.click(retry)
+    expect(await screen.findByRole('img', { name: 'Saved' })).toBeInTheDocument()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1][1]).toBe(send.mock.calls[0][1])
+  })
+
+  it('shows a Transcribing placeholder at once after Stop, then fills in the words', async () => {
+    let finish!: (v: { text: string; segments: [] }) => void
+    setup({ dictate: () => new Promise(r => { finish = r as never }) })
+    await record()
+    expect(await screen.findByText('Transcribing…')).toBeInTheDocument()
+    finish({ text: 'Hook too slow', segments: [] })
+    await waitFor(() => expect(screen.getByText('Hook too slow')).toBeInTheDocument())
+  })
+
+  it('underlines pointing words; tapping one seeks to the note and replays its drawing', async () => {
+    const dictate = vi.fn().mockResolvedValue({ text: 'Cut this part', segments: [] })
+    const { props } = setup({ dictate })
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    await screen.findByRole('button', { name: /stop/i })
+    const layer = screen.getByTestId('ink-layer')
+    layer.getBoundingClientRect = rect
+    fireEvent.pointerDown(layer, { clientX: 100, clientY: 200, pointerId: 1 })
+    fireEvent.pointerMove(layer, { clientX: 150, clientY: 300, pointerId: 1 })
+    fireEvent.pointerUp(layer, { clientX: 150, clientY: 300, pointerId: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }))
+    const word = await screen.findByRole('button', { name: 'this' })
+    expect(screen.queryByRole('button', { name: 'Cut' })).not.toBeInTheDocument()
+    fireEvent.click(word)
+    expect(props.onSeek).toHaveBeenCalledWith(3.2)
+    await waitFor(() => expect(document.querySelector('.ink-stroke')).not.toBeNull())
+  })
+
+  it('shows a small picture of each drawing in its chip', async () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    await screen.findByRole('button', { name: /stop/i })
+    const layer = screen.getByTestId('ink-layer')
+    layer.getBoundingClientRect = rect
+    fireEvent.pointerDown(layer, { clientX: 100, clientY: 200, pointerId: 1 })
+    fireEvent.pointerMove(layer, { clientX: 150, clientY: 300, pointerId: 1 })
+    fireEvent.pointerUp(layer, { clientX: 150, clientY: 300, pointerId: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }))
+    const chip = await screen.findByRole('button', { name: /^Drawing at/ })
+    expect(chip.querySelector('svg polyline')).not.toBeNull()
   })
 
   it('the ink layer is inert when not recording', () => {
