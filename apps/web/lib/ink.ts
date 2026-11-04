@@ -36,6 +36,9 @@ export function containedRect(cw: number, ch: number, videoW: number, videoH: nu
 /** Slightly thicker at the start, thinning towards the end (screen px, the stroke has a fixed screen width). */
 export const STROKE_WIDTHS = [7, 6.6, 6.2, 5.8, 5.4, 5, 4.6]
 
+/** One width for the whole dark contour: a little wider than the average core, so the outline stays even along the taper. */
+export const CONTOUR_WIDTH = Math.round((STROKE_WIDTHS.reduce((a, b) => a + b, 0) / STROKE_WIDTHS.length + 3) * 10) / 10
+
 const r4 = (v: number) => Math.round(v * 10000) / 10000
 const pt = (p: [number, number]) => `${r4(p[0])},${r4(p[1])}`
 

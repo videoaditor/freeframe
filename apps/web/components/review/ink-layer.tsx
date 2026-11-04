@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { DOT_PX, classifyMark, normalizePoint, smoothPath, taperChunks, thinPoints, type InkMark } from '@/lib/ink'
+import { CONTOUR_WIDTH, DOT_PX, classifyMark, normalizePoint, smoothPath, taperChunks, thinPoints, type InkMark } from '@/lib/ink'
 
 type Ink = { id: number; k: 'stroke' | 'dot'; points: [number, number][] }
 
@@ -13,10 +13,8 @@ export const Strokes = ({ list, live, fading }: { list: Ink[]; live?: boolean; f
     <svg className="ink-svg" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
       {list.filter(m => m.k === 'stroke').map(m => (
         <g key={m.id} className="ink-stroke" data-live={live ? '' : undefined} data-fading={fading ? '' : undefined}>
-          {/* dark contour first (1.5px wider on each side), the white core on top: reads on bright frames too */}
-          {taperChunks(thinPoints(m.points)).map((c, i) => (
-            <path key={`o${i}`} className="ink-contour" d={smoothPath(c.points, c)} style={{ strokeWidth: c.width + 3 }} />
-          ))}
+          {/* one continuous dark contour under every white chunk, so it never shows seams where the width steps */}
+          <path className="ink-contour" d={smoothPath(thinPoints(m.points))} style={{ strokeWidth: CONTOUR_WIDTH }} />
           {taperChunks(thinPoints(m.points)).map((c, i) => (
             <path key={i} className="ink-line" d={smoothPath(c.points, c)} style={{ strokeWidth: c.width }} />
           ))}

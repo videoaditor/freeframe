@@ -56,15 +56,20 @@ describe('InkLayer persistence', () => {
     expect(strokes(container)).toHaveLength(0)
   })
 
-  it('draws a darker contour under the white core so it reads on bright frames', () => {
+  it('draws ONE continuous dark contour under all white chunks, so no seams', () => {
     const { getByTestId, container } = render(<InkLayer active playing={false} onStart={() => {}} onMark={() => {}} />)
-    draw(getByTestId('ink-layer'))
+    const layer = getByTestId('ink-layer')
+    layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0, toJSON: () => ({}) })
+    fireEvent.pointerDown(layer, { clientX: 5, clientY: 5, pointerId: 1 })
+    for (let i = 1; i <= 30; i++) fireEvent.pointerMove(layer, { clientX: 5 + i * 5, clientY: 5 + i * 10 + (i % 3) * 4, pointerId: 1 })
+    fireEvent.pointerUp(layer, { clientX: 155, clientY: 305, pointerId: 1 })
     const g = container.querySelector('.ink-stroke')!
+    expect(g.querySelectorAll('.ink-contour')).toHaveLength(1)
+    expect(g.querySelectorAll('.ink-line').length).toBeGreaterThan(1)
     const kids = Array.from(g.children).map(c => c.getAttribute('class'))
-    expect(kids.indexOf('ink-contour')).toBeLessThan(kids.indexOf('ink-line'))
-    const contour = g.querySelector('.ink-contour') as SVGElement
-    const core = g.querySelector('.ink-line') as SVGElement
-    expect(parseFloat(contour.style.strokeWidth) - parseFloat(core.style.strokeWidth)).toBe(3)
+    expect(kids[0]).toBe('ink-contour')
+    const cw = parseFloat((g.querySelector('.ink-contour') as SVGElement).style.strokeWidth)
+    g.querySelectorAll('.ink-line').forEach(l => expect(cw).toBeGreaterThan(parseFloat((l as SVGElement).style.strokeWidth)))
   })
 
   it('drawn strokes are smooth curves, not polylines', () => {
