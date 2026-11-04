@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import uuid
 from datetime import datetime
 from ..models.project import ProjectType, ProjectRole
@@ -30,6 +30,11 @@ class ProjectResponse(BaseModel):
     is_workspace: bool = False
     agents_may_approve: bool = False
     asset_count: int = 0
+
+    @field_validator("agents_may_approve", mode="before")
+    @classmethod
+    def _flag_only_when_a_real_bool(cls, v):
+        return v if isinstance(v, bool) else False
     storage_bytes: int = 0
     member_count: int = 0
     role: ProjectRole | None = None
