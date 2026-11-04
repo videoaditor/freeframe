@@ -109,3 +109,25 @@ def test_requests_list_exposes_review_phase_and_humans_get_null(env):
          patch("apps.api.services.review_bridge.request_status", return_value=statuses):
         rows = env.client.get(f"/requests?project_id={env.project_a.id}", headers=env.headers(env.owner)).json()
     assert {r["title"]: r["review_phase"] for r in rows} == {"By agent": "self_review", "By human": None}
+
+
+@needs_pg
+def test_queue_has_processing_status_and_review_url_and_initiate_takes_an_asset_id(env):
+    from apps.api.config import settings
+    agent = env.pair_agent(env.project_a)
+    req = env.request(env.project_a, env.owner)
+    one = env.asset(req, "Hook 1", versions=2, by=agent.who, status="processing")
+    with patch("apps.api.services.review_bridge.asset_stats", return_value={}), patch("apps.api.services.review_bridge.request_status", return_value={}):
+        [row] = env.client.get("/agent/queue", headers=agent.headers).json()
+    assert row["review_url"] == f"{settings.frontend_url.rstrip('/')}/share/{req.review_share_token}"
+    assert row["assets"][0]["processing_status"] == "processing" and row["assets"][0]["version_number"] == 2
+    with patch("apps.api.routers.requests.dispatch_binding"):
+        made = env.client.post("/agent/requests", json={"title": "T", "external_ref": "gen:z"}, headers=agent.headers).json()
+    assert made["review_url"].startswith(settings.frontend_url.rstrip("/") + "/share/")
+    # a new version of an existing asset: asset_id in the request's own folder works, another folder is 404
+    body = {"original_filename": "Hook 1.mp4", "mime_type": "video/mp4", "file_size_bytes": 1000, "asset_id": str(one.id)}
+    with patch("apps.api.routers.requests.create_multipart_upload", return_value="uid"):
+        ok = env.client.post(f"/r/{req.token}/upload/initiate", json=body, headers=agent.headers)
+        assert ok.status_code == 200 and ok.json()["asset_id"] == str(one.id) and ok.json()["version_number"] == 3
+        other = env.request(env.project_a, env.owner, "Elsewhere")
+        assert env.client.post(f"/r/{other.token}/upload/initiate", json=body, headers=agent.headers).status_code == 404
