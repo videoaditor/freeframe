@@ -85,7 +85,16 @@ def review_link(project_id, folder_id) -> str:
 
 
 def deliver(db: Session, req: UploadRequest, payload: dict) -> None:
-    """Channels beyond the activity row (Telegram) hang off here."""
+    """Channels beyond the activity row: a Telegram push to every owner who linked a chat (no-op without a bot)."""
+    from . import telegram
+    stuck = payload["agent_stuck"]
+    newer = any(n > 1 for n in payload["versions"].values())
+    head = f"{req.title}: the agent is stuck and needs you" if stuck else f"{req.title}: " + ("new version ready" if newer else "ready for your review")
+    text = f"{head}\n{review_link(req.project_id, req.folder_id)}"
+    for owner in project_owners(db, req.project_id):
+        chat = telegram.chat_id_of(owner)
+        if chat:
+            telegram.send(chat, text)
 
 
 def sweep(db: Session, now: datetime) -> int:
