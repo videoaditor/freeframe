@@ -17,8 +17,8 @@ class FakeRedis:
     def get(self, key):
         return self.data.get(key)
 
-    def delete(self, key):
-        self.data.pop(key, None)
+    def getdel(self, key):
+        return self.data.pop(key, None)
 
 
 @pytest.fixture
@@ -131,3 +131,14 @@ def test_owner_with_a_chat_gets_one_push_when_the_agent_hand_in_is_clear(env, tg
     chat, text = tg.post.call_args.args[0], tg.post.call_args.args[1]
     assert chat == "777" and "Hook tests" in text
     assert f"/projects/{env.project_a.id}/review?folder={req.folder_id}" in text
+
+
+def test_dictate_is_a_plain_def_so_the_blocking_groq_call_runs_in_the_threadpool():
+    import inspect
+    from apps.api.routers.mobile import dictate
+    assert not inspect.iscoroutinefunction(dictate)
+
+
+def test_webhook_with_a_broken_body_is_400(client, tg):
+    r = client.post("/telegram/webhook", content=b"{nope", headers={"X-Telegram-Bot-Api-Secret-Token": "s3cret", "content-type": "application/json"})
+    assert r.status_code == 400

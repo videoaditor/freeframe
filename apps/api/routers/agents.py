@@ -5,17 +5,17 @@ routers/agent.py and authenticates with `Authorization: Bearer ara_...`.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..middleware.rate_limit import rate_limit
 from ..models.agent import AgentKey
-from ..models.project import Project, ProjectRole
+from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.user import User
 from ..services import agents as agent_service
 from ..services.permissions import require_project_role
@@ -60,16 +60,20 @@ def revoke_agent(project_id: uuid.UUID, user_id: uuid.UUID, db: Session = Depend
     now = datetime.now(timezone.utc)
     for key in keys:
         key.revoked_at = key.revoked_at or now
+    # The agent leaves the project too; pairing again brings it back (services.agents.pair).
+    for member in db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id,
+                                                 ProjectMember.deleted_at.is_(None)).all():
+        member.deleted_at = now
     db.commit()
 
 
 class PairBody(BaseModel):
     code: str = Field(min_length=1, max_length=32)
-    agent_name: str = Field(min_length=1, max_length=80)
+    agent_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
     program: Literal["claude-code", "codex", "hermes", "grok", "other"]
 
 
 @router.post("/agents/pair", dependencies=[Depends(rate_limit("agent_pair", 20, 600))])
 def pair_agent(body: PairBody, db: Session = Depends(get_db)):
-    key, row, project = agent_service.pair(db, body.code, body.agent_name.strip(), body.program)
+    key, row, project = agent_service.pair(db, body.code, body.agent_name, body.program)
     return {"agent_key": key, "user_id": str(row.user_id), "project_id": str(project.id), "project_name": project.name}

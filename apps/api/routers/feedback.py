@@ -39,7 +39,7 @@ class CloseBody(BaseModel):
 def close_round(request_id: uuid.UUID, body: CloseBody, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     req = _request(db, request_id)
     _owner_of(db, req, current_user)
-    rnd = rounds.open_round(db, req.id)
+    rnd = rounds.open_round(db, req.id, lock=True)
     if rnd is None:
         raise HTTPException(409, "no_open_round")
     rounds.close_round(db, rnd, "button", datetime.now(timezone.utc))

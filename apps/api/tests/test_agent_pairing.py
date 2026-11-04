@@ -131,3 +131,51 @@ def test_me_returns_the_workspace_brand_slug(env):
         db.commit()
     key = _pair(env, _code(env)).json()["agent_key"]
     assert env.client.get("/agent/me", headers={"Authorization": f"Bearer {key}"}).json()["brand_slug"] == "mynd-organics"
+
+
+def test_blank_agent_name_is_422(env):
+    assert _pair(env, _code(env), name="   ").status_code == 422
+
+
+def test_last_used_at_is_written_at_most_once_a_minute(env):
+    from apps.api.models.agent import AgentKey
+    key = _pair(env, _code(env)).json()["agent_key"]
+    headers = {"Authorization": f"Bearer {key}"}
+    env.client.get("/agent/me", headers=headers)
+    with env.Session() as db:
+        first = db.query(AgentKey).one().last_used_at
+    env.client.get("/agent/me", headers=headers)
+    with env.Session() as db:
+        assert db.query(AgentKey).one().last_used_at == first
+        db.query(AgentKey).one().last_used_at = first - timedelta(minutes=2)
+        db.commit()
+    env.client.get("/agent/me", headers=headers)
+    with env.Session() as db:
+        assert db.query(AgentKey).one().last_used_at > first
+
+
+def test_a_pairing_race_retries_once_instead_of_500(env):
+    from sqlalchemy.exc import IntegrityError
+    from apps.api.services import agents
+    code = _code(env)
+    with env.Session() as db:
+        real, calls = db.commit, []
+        def flaky():
+            calls.append(1)
+            if len(calls) == 1:
+                raise IntegrityError("insert", {}, Exception("uq_agent_keys_project_program_name"))
+            return real()
+        db.commit = flaky
+        plain, key, _ = agents.pair(db, code, "Cutter", "codex")
+    assert plain.startswith("ara_") and len(calls) == 2
+
+
+def test_revoking_removes_the_agent_from_the_project_and_pairing_restores_it(env):
+    from apps.api.models.project import ProjectMember
+    paired = _pair(env, _code(env)).json()
+    env.client.delete(f"/projects/{env.project_a.id}/agents/{paired['user_id']}", headers=env.headers(env.owner))
+    with env.Session() as db:
+        assert db.query(ProjectMember).filter_by(user_id=paired["user_id"]).one().deleted_at is not None
+    _pair(env, _code(env))
+    with env.Session() as db:
+        assert db.query(ProjectMember).filter_by(user_id=paired["user_id"]).one().deleted_at is None

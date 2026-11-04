@@ -38,11 +38,9 @@ def link_url(user_id: uuid.UUID) -> str:
 
 def bind_chat(db: Session, code: str, chat_id: int) -> bool:
     """Single use: the code is gone after the first /start that carries it."""
-    r = get_redis()
-    user_id = r.get(f"{LINK_PREFIX}{code}")
+    user_id = get_redis().getdel(f"{LINK_PREFIX}{code}")  # atomic: two /start with one code cannot both bind
     if not user_id:
         return False
-    r.delete(f"{LINK_PREFIX}{code}")
     user = db.get(User, uuid.UUID(user_id))
     if user is None:
         return False

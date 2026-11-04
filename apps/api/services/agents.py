@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.agent import AgentKey, AgentPairingCode
@@ -16,6 +17,7 @@ from ..models.user import User, UserStatus
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789"
 CODE_TTL = timedelta(minutes=15)
 KEY_PREFIX = "ara_"
+LAST_USED_EVERY = timedelta(seconds=60)
 
 
 def sha256(value: str) -> str:
@@ -45,7 +47,16 @@ def create_pairing_code(db: Session, project_id: uuid.UUID, owner: User) -> tupl
 
 
 def pair(db: Session, code: str, agent_name: str, program: str) -> tuple[str, AgentKey, Project]:
-    """Spend a code and return (plain key, key row, project). Same project+program+name rotates that row's key."""
+    """Spend a code and return (plain key, key row, project). Same project+program+name rotates that row's key.
+    Two codes racing for the same new agent hit the unique key once; the retry then rotates the winner's row."""
+    try:
+        return _pair(db, code, agent_name, program)
+    except IntegrityError:
+        db.rollback()
+        return _pair(db, code, agent_name, program)
+
+
+def _pair(db: Session, code: str, agent_name: str, program: str) -> tuple[str, AgentKey, Project]:
     row = db.query(AgentPairingCode).filter(AgentPairingCode.code_hash == sha256((code or "").strip().upper())) \
         .populate_existing().with_for_update().first()
     if row is None:
@@ -99,6 +110,8 @@ def resolve_key(db: Session, token: str) -> AgentContext:
     user = db.query(User).filter(User.id == key.user_id, User.deleted_at.is_(None)).first()
     if user is None or user.status == UserStatus.deactivated:
         raise HTTPException(403, "revoked_agent_key")
-    key.last_used_at = datetime.now(timezone.utc)
-    db.commit()
+    now = datetime.now(timezone.utc)
+    if key.last_used_at is None or now - key.last_used_at >= LAST_USED_EVERY:  # not a write per poll
+        key.last_used_at = now
+        db.commit()
     return AgentContext(user=user, key=key)

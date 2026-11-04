@@ -244,3 +244,44 @@ def test_request_agents_lists_only_live_agents_that_handed_in(scene):
     assert e.client.get(f"/requests/{e.request(e.project_a, e.owner).id}/agents", headers=e.headers(e.owner)).json() == []
     e.client.delete(f"/projects/{e.project_a.id}/agents/{e.scene.agent.user_id}", headers=e.headers(e.owner))
     assert e.client.get(url, headers=e.headers(e.owner)).json() == []
+
+
+@needs_pg
+def test_a_closed_round_is_never_closed_again(scene):
+    e = scene
+    from apps.api.services import feedback_rounds
+    comment(e, e.scene.asset, "Always end on the product shot", None)
+    e.client.post(f"/requests/{e.scene.req.id}/feedback-rounds/close", json={}, headers=e.headers(e.owner))
+    rid = rounds(e)[0].id
+    [sug] = e.client.get(f"/feedback-rounds/{rid}/rule-suggestions", headers=e.headers(e.owner)).json()
+    with patch("apps.api.services.review_bridge.import_rules", return_value={"ok": True}):
+        e.client.post(f"/feedback-rounds/{rid}/rule-suggestions/{sug['suggestion_id']}/accept", headers=e.headers(e.owner))
+    before = rounds(e)[0]
+    with e.Session() as db:
+        assert feedback_rounds.close_idle(db, before.closed_at + timedelta(hours=1)) == 0
+        feedback_rounds.close_round(db, db.get(type(before), rid), "idle", before.closed_at + timedelta(hours=2))
+    after = rounds(e)[0]
+    assert (after.closed_at, after.closed_by, after.rule_suggestions) == (before.closed_at, "button", before.rule_suggestions)
+    assert after.rule_suggestions[0]["accepted"] is True
+
+
+@needs_pg
+def test_the_database_allows_one_open_round_and_a_racing_comment_joins_it(scene):
+    e = scene
+    from sqlalchemy.exc import IntegrityError
+    from apps.api.models.agent import FeedbackRound
+    from apps.api.services import feedback_rounds
+    first = comment(e, e.scene.asset)
+    with e.Session() as db:
+        db.add(FeedbackRound(request_id=e.scene.req.id))
+        with pytest.raises(IntegrityError):
+            db.commit()
+    # the race: the second comment looked, saw no open round (stale), then tried to insert one
+    real = feedback_rounds.open_round
+    seen = []
+    def stale_then_real(db, request_id, **kw):
+        seen.append(1)
+        return None if len(seen) == 1 else real(db, request_id, **kw)
+    with patch.object(feedback_rounds, "open_round", stale_then_real), e.Session() as db:
+        feedback_rounds.on_comment(db, uuid.UUID(first["id"]))
+    assert len(rounds(e)) == 1

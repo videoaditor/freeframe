@@ -49,6 +49,7 @@ def upgrade():
         sa.Column('rule_suggestions', sa.JSON(), nullable=False, server_default='[]'),
     )
     op.create_index('ix_feedback_rounds_request_id', 'feedback_rounds', ['request_id'])
+    op.create_index('uq_feedback_rounds_one_open', 'feedback_rounds', ['request_id'], unique=True, postgresql_where=sa.text('closed_at IS NULL'))
 
 
 def downgrade():

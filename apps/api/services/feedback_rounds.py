@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -84,9 +85,11 @@ def request_for_asset(db: Session, asset_id: uuid.UUID) -> Optional[UploadReques
     return db.query(UploadRequest).filter(UploadRequest.folder_id == asset.folder_id).first() if asset and asset.folder_id else None
 
 
-def open_round(db: Session, request_id: uuid.UUID) -> Optional[FeedbackRound]:
-    return db.query(FeedbackRound).filter(FeedbackRound.request_id == request_id, FeedbackRound.closed_at.is_(None)) \
-        .order_by(FeedbackRound.opened_at.desc()).first()
+def open_round(db: Session, request_id: uuid.UUID, *, lock: bool = False) -> Optional[FeedbackRound]:
+    q = db.query(FeedbackRound).filter(FeedbackRound.request_id == request_id, FeedbackRound.closed_at.is_(None))
+    if lock:
+        q = q.populate_existing().with_for_update()
+    return q.order_by(FeedbackRound.opened_at.desc()).first()
 
 
 def on_comment(db: Session, comment_id: uuid.UUID) -> None:
@@ -102,8 +105,14 @@ def on_comment(db: Session, comment_id: uuid.UUID) -> None:
         rnd = open_round(db, req.id)
         stamp = comment.created_at or datetime.now(timezone.utc)
         if rnd is None:
-            db.add(FeedbackRound(request_id=req.id, opened_at=stamp, last_activity_at=stamp))
-        else:
+            try:
+                db.add(FeedbackRound(request_id=req.id, opened_at=stamp, last_activity_at=stamp))
+                db.commit()
+                return
+            except IntegrityError:  # a concurrent comment opened it first: join that round
+                db.rollback()
+                rnd = open_round(db, req.id)
+        if rnd is not None:
             rnd.last_activity_at = max(rnd.last_activity_at, stamp)
         db.commit()
     except Exception:  # noqa: BLE001 - feedback rounds are an extra; the comment is already saved
@@ -166,6 +175,8 @@ def feedback_v1(db: Session, rnd: FeedbackRound) -> dict:
 
 
 def close_round(db: Session, rnd: FeedbackRound, by: str, now: datetime) -> FeedbackRound:
+    if rnd.closed_at is not None:  # never re-close: keeps closed_at, closed_by and accepted flags
+        return rnd
     rnd.closed_at, rnd.closed_by = now, by
     db.flush()
     req = db.get(UploadRequest, rnd.request_id)
@@ -177,7 +188,7 @@ def close_round(db: Session, rnd: FeedbackRound, by: str, now: datetime) -> Feed
 
 def close_idle(db: Session, now: datetime) -> int:
     closed = 0
-    for rnd in db.query(FeedbackRound).filter(FeedbackRound.closed_at.is_(None)).all():
+    for rnd in db.query(FeedbackRound).filter(FeedbackRound.closed_at.is_(None)).with_for_update(skip_locked=True).all():
         req = db.get(UploadRequest, rnd.request_id)
         last = max((c.created_at for c in round_comments(db, rnd, req)), default=None)
         if is_idle(rnd.last_activity_at, last, now):

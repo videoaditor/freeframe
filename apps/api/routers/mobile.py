@@ -16,8 +16,9 @@ router = APIRouter(tags=["mobile"])
 
 
 @router.post("/dictate", dependencies=[Depends(rate_limit("dictate", 60, 600))])
-async def dictate(audio: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    data = await audio.read(dictation.MAX_BYTES + 1)
+def dictate(audio: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    # A plain def runs in the threadpool: the Groq call below is a blocking httpx request.
+    data = audio.file.read(dictation.MAX_BYTES + 1)
     return dictation.transcribe(data, audio.filename or "", audio.content_type or "")
 
 
@@ -32,9 +33,12 @@ def telegram_link(current_user: User = Depends(get_current_user)):
 async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
     secret = settings.telegram_webhook_secret
     presented = request.headers.get("x-telegram-bot-api-secret-token", "")
-    if not secret or not secrets.compare_digest(presented, secret):
+    if not secret or not secrets.compare_digest(presented.encode(), secret.encode()):
         raise HTTPException(401, "invalid_secret")
-    update: Any = await request.json()
+    try:
+        update: Any = await request.json()
+    except ValueError:
+        raise HTTPException(400, "invalid_json")
     message = update.get("message") if isinstance(update, dict) else None
     text = (message or {}).get("text") or ""
     chat = ((message or {}).get("chat") or {}).get("id")
