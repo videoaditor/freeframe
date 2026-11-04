@@ -23,6 +23,7 @@ import { useSSE } from '@/hooks/use-sse'
 import { api } from '@/lib/api'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { canCompare } from '@/lib/compare-time'
+import { FlowView } from '@/components/review/flow-view'
 import { SendToAgent, useAgentRequest, useRequestHeartbeat } from '@/components/agents/send-to-agent'
 import {
   ArrowLeft,
@@ -33,6 +34,7 @@ import {
   Columns2,
   GitCompareArrows,
   Check,
+  Smartphone,
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -40,12 +42,25 @@ import { usePageTitle } from '@/hooks/use-page-title'
 import type { Project, AssetResponse, ProjectMember, ProjectRole, FolderTreeNode } from '@/types'
 
 
+/** True below the md breakpoint. Starts false so the server and first client render agree. */
+function useIsNarrow() {
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const update = () => setNarrow(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return narrow
+}
+
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { asset, versions, isLoading, refetchComments, refetchVersions } = useReview()
-  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
+  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation, toggleDrawingMode, setIsDrawingMode, setPendingAnnotation } = useReviewStore()
   const { user } = useAuthStore()
   const setExtraCrumbs = useBreadcrumbStore((s) => s.setExtraCrumbs)
   const setLabel = useBreadcrumbStore((s) => s.setLabel)
@@ -53,6 +68,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const deepLinkApplied = useRef(false)
+  const isNarrow = useIsNarrow()
+  const [phoneView, setPhoneView] = useState(false)
+  const flow = isNarrow || phoneView
 
   // Fetch folder tree to build the folder path for the breadcrumb
   const { data: folderTree } = useSWR<FolderTreeNode[]>(
@@ -361,6 +379,35 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     }
   }
 
+  const flowView = (
+    <FlowView
+      media={renderMediaViewer()}
+      files={(allAssets ?? [asset]).map((a) => ({ id: a.id, name: a.name }))}
+      currentFileId={asset.id}
+      onSelectFile={navigateAsset}
+      getPlayhead={() => useReviewStore.getState().playheadTime}
+      onPause={() => seekTo(useReviewStore.getState().playheadTime, true)}
+      onSeek={(t) => seekTo(t, true)}
+      drawing={isDrawingMode}
+      onToggleDrawing={toggleDrawingMode}
+      annotation={annotationData}
+      onAnnotationUsed={() => { setAnnotationData(null); setPendingAnnotation(null); setIsDrawingMode(false) }}
+      canComment={canComment}
+      onSendNotes={async (notes) => {
+        for (const n of notes) await createComment(n.text, n.t, undefined, n.annotation || undefined)
+        refetchComments()
+      }}
+      onApprove={approve}
+      approved={approved}
+      onExit={isNarrow ? () => router.push(`/projects/${projectId}`) : () => setPhoneView(false)}
+      exitLabel={isNarrow ? 'Back' : 'Desktop view'}
+    />
+  )
+
+  if (isNarrow) {
+    return <div className="absolute inset-0 overflow-hidden">{flowView}</div>
+  }
+
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
       {/* ─── Top bar (Frame.io style) ──────────────────────────────────── */}
@@ -452,6 +499,17 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             </button>
           )}
           <button
+            onClick={() => setPhoneView((p) => !p)}
+            aria-pressed={phoneView}
+            className={cn(
+              'inline-flex h-11 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+              phoneView ? 'bg-bg-hover text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
+            )}
+          >
+            <Smartphone className="h-3.5 w-3.5" aria-hidden="true" />
+            Phone view
+          </button>
+          <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
               'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
@@ -472,6 +530,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       {compareOpen && asset && currentVersion && canCompare(asset.asset_type, versions) ? (
         <CompareOverlay asset={asset} versions={versions} rightVersion={currentVersion} onClose={closeCompare} canComment={canComment} />
+      ) : phoneView ? (
+        <div className="flex min-h-0 flex-1 justify-center bg-bg-secondary">
+          <div className="h-full w-full max-w-[430px] border-x border-border">{flowView}</div>
+        </div>
       ) : (
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left: viewer column */}
