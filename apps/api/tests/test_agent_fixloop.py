@@ -143,3 +143,21 @@ def test_one_event_per_clear_transition_not_per_poll(env):
         v3_id = v3.id
     poll(env, agent, req, {str(one.id): {"version_id": str(v3_id), "reviewed": True, "openMustFix": 0}}, clear_status)
     assert len(logs(env)) == 2
+
+
+@needs_pg
+def test_queue_twice_plus_sweep_is_one_event_also_when_stuck(env):
+    from datetime import datetime, timezone
+    from apps.api.services import agent_notify
+    agent = env.pair_agent(env.project_a)
+    req = env.request(env.project_a, env.owner)
+    one = env.asset(req, "Hook 1", versions=3, by=agent.who)
+    stats, status = {str(one.id): clear(one.versions[2], 1)}, {req.review_share_token: {"status": "held", "openMustFixes": 1}}
+    with patch("apps.api.services.review_bridge.asset_stats", return_value=stats), \
+         patch("apps.api.services.review_bridge.request_status", return_value=status):
+        for _ in range(2):
+            assert env.client.get("/agent/queue", headers=agent.headers).status_code == 200
+        with env.Session() as db:
+            assert agent_notify.sweep(db, datetime.now(timezone.utc)) == 0
+    [row] = logs(env)
+    assert row.payload["agent_stuck"] is True
