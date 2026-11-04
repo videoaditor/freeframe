@@ -8,7 +8,7 @@ from ..models.asset import Asset
 from ..models.project import Project
 from ..models.upload_request import UploadRequest
 from ..models.user import GuestUser
-from . import review_bridge
+from . import agent_notify, review_bridge
 
 STAGES = ("editor", "review", "corrections", "ready")
 
@@ -37,6 +37,7 @@ def queue(db: Session, project_id: uuid.UUID, state: Optional[str] = None) -> li
     for q in reqs:
         reviews = r._review_assets(db, q, assets[q.id], reviewer, stats, include_media=False)
         gate = r._request_gate(reviews, statuses.get(q.review_share_token))
+        agent_notify.evaluate(db, q, reviews)
         stage = stage_of("live", len(assets[q.id]), gate["status"])
         if state and stage != state:
             continue

@@ -32,6 +32,7 @@ from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user, get_optional_agent
 from ..middleware.rate_limit import rate_limit
+from ..models.agent import AgentKey
 from ..models.asset import Asset, AssetType, AssetVersion, FileType, MediaFile, ProcessingStatus
 from ..models.comment import Comment
 from ..models.folder import Folder
@@ -996,7 +997,7 @@ def _brand_logo(db: Session, project_id: uuid.UUID) -> Optional[str]:
         return None
 
 
-def rank_editors(uploads: list[dict], stats: dict[str, dict]) -> list[dict]:
+def rank_editors(uploads: list[dict], stats: dict[str, dict], identities: Optional[dict[str, dict]] = None) -> list[dict]:
     """People ranked by accuracy: the share of their videos with no must-fix on the first version.
 
     One row per email. A video counts once (its first version is the one that shows how right the
@@ -1015,6 +1016,8 @@ def rank_editors(uploads: list[dict], stats: dict[str, dict]) -> list[dict]:
         versions = [stats[a]["versions"] for a in p["assets"] if a in stats]
         out.append({
             "email": p["email"], "name": p["name"], "videos": len(p["assets"]),
+            "kind": (identities or {}).get(p["email"], {}).get("kind", "human"),
+            "program": (identities or {}).get(p["email"], {}).get("program"),
             "rated": len(known),
             "first_try_rate": round(clean / len(known), 3) if known else None,
             "avg_versions": round(sum(versions) / len(versions), 2) if versions else None,
@@ -1036,4 +1039,6 @@ def editors(db: Session = Depends(get_db), current_user: User = Depends(get_curr
     rows = q.limit(5000).all()
     uploads = [{"email": u.uploader_email, "name": u.uploader_name, "asset_id": str(u.asset_id)} for u, _ in rows]
     stats = review_bridge.asset_stats(sorted({u["asset_id"] for u in uploads}))
-    return {"editors": rank_editors(uploads, stats), "reviewed": bool(stats) or not uploads}
+    agents = {u.email: {"kind": "agent", "program": k.program} for u, k in db.query(User, AgentKey).join(AgentKey, AgentKey.user_id == User.id)
+              .filter(User.email.in_({u["email"] for u in uploads} or {""}), User.kind == "agent").all()}
+    return {"editors": rank_editors(uploads, stats, agents), "reviewed": bool(stats) or not uploads}
