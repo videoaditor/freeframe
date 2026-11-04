@@ -56,6 +56,17 @@ describe('InkLayer persistence', () => {
     expect(strokes(container)).toHaveLength(0)
   })
 
+  it('draws a darker contour under the white core so it reads on bright frames', () => {
+    const { getByTestId, container } = render(<InkLayer active playing={false} onStart={() => {}} onMark={() => {}} />)
+    draw(getByTestId('ink-layer'))
+    const g = container.querySelector('.ink-stroke')!
+    const kids = Array.from(g.children).map(c => c.getAttribute('class'))
+    expect(kids.indexOf('ink-contour')).toBeLessThan(kids.indexOf('ink-line'))
+    const contour = g.querySelector('.ink-contour') as SVGElement
+    const core = g.querySelector('.ink-line') as SVGElement
+    expect(parseFloat(contour.style.strokeWidth) - parseFloat(core.style.strokeWidth)).toBe(3)
+  })
+
   it('drawn strokes are smooth curves, not polylines', () => {
     const { getByTestId, container } = render(<InkLayer active playing={false} onStart={() => {}} onMark={() => {}} />)
     draw(getByTestId('ink-layer'))

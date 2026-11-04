@@ -13,6 +13,10 @@ export const Strokes = ({ list, live, fading }: { list: Ink[]; live?: boolean; f
     <svg className="ink-svg" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
       {list.filter(m => m.k === 'stroke').map(m => (
         <g key={m.id} className="ink-stroke" data-live={live ? '' : undefined} data-fading={fading ? '' : undefined}>
+          {/* dark contour first (1.5px wider on each side), the white core on top: reads on bright frames too */}
+          {taperChunks(thinPoints(m.points)).map((c, i) => (
+            <path key={`o${i}`} className="ink-contour" d={smoothPath(c.points, c)} style={{ strokeWidth: c.width + 3 }} />
+          ))}
           {taperChunks(thinPoints(m.points)).map((c, i) => (
             <path key={i} className="ink-line" d={smoothPath(c.points, c)} style={{ strokeWidth: c.width }} />
           ))}
