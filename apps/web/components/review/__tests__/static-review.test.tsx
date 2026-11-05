@@ -109,3 +109,31 @@ describe('static review', () => {
     expect(screen.getByText(/View-only access/)).toBeInTheDocument()
   })
 })
+
+describe('static review fit', () => {
+  const fitFor = async (w: number, h: number, nw = 1000, nh = 1000) => {
+    const cw = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    const ch = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => w })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => h })
+    try {
+      setup()
+      const img = await screen.findByAltText('Ad 1')
+      Object.defineProperty(img, 'naturalWidth', { value: nw })
+      Object.defineProperty(img, 'naturalHeight', { value: nh })
+      fireEvent.load(img)
+      const frame = screen.getByTestId('static-frame')
+      await waitFor(() => expect(frame.style.height).not.toBe(''))
+      return [parseFloat(frame.style.width), parseFloat(frame.style.height)]
+    } finally {
+      if (cw) Object.defineProperty(HTMLElement.prototype, 'clientWidth', cw)
+      if (ch) Object.defineProperty(HTMLElement.prototype, 'clientHeight', ch)
+    }
+  }
+  it.each([[1464, 653], [1232, 602], [390, 300], [600, 900]])('a 1:1 image fits entirely in %ix%i', async (w, h) => {
+    const [fw, fh] = await fitFor(w, h)
+    expect(fw).toBeLessThanOrEqual(w)
+    expect(fh).toBeLessThanOrEqual(h)
+    expect(fw / fh).toBeCloseTo(1, 2)
+  })
+})

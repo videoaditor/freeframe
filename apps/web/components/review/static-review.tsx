@@ -188,7 +188,9 @@ export function StaticReview(p: StaticReviewProps) {
             if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1)
           }}
         >
-          <div ref={stage} className="absolute inset-0 flex items-center justify-center p-3 md:p-6">
+          {/* Padding lives on the outside: the measured box is exactly the room the picture may use. */}
+          <div className="absolute inset-0 p-3 md:p-6">
+          <div ref={stage} className="flex h-full w-full items-center justify-center">
             {failed === file.id ? (
               <p role="alert" className="text-sm text-white/70">This image could not be loaded.</p>
             ) : !url ? (
@@ -224,6 +226,7 @@ export function StaticReview(p: StaticReviewProps) {
                 )}
               </div>
             )}
+          </div>
           </div>
           <button type="button" onClick={() => go(-1)} disabled={index === 0} aria-label="Previous image" className={cn(navBtn, 'absolute left-3 top-1/2 -translate-y-1/2')}><ChevronLeft size={22} /></button>
           <button type="button" onClick={() => go(1)} disabled={index === total - 1} aria-label="Next image" className={cn(navBtn, 'absolute right-3 top-1/2 -translate-y-1/2')}><ChevronRight size={22} /></button>
