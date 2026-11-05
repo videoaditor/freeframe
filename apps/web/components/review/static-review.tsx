@@ -185,8 +185,19 @@ export function StaticReview(p: StaticReviewProps) {
   React.useEffect(() => () => { recRef.current?.rec.cancel() }, [])
   const recRef = React.useRef(rec)
   recRef.current = rec
+  const [memo, setMemo] = React.useState<{ state: 'saving' | 'saved' | 'failed'; fileId: string; words: string; pin: [number, number] | null } | null>(null)
+  /** The memo goes out on its own, to the image it was recorded on, with the pin if one was set (as on video). */
+  const saveMemo = async (m: { fileId: string; words: string; pin: [number, number] | null }) => {
+    setMemo({ ...m, state: 'saving' })
+    try {
+      await p.postComment(m.fileId, m.words, m.pin ? pinDrawing(m.pin[0], m.pin[1]) : null)
+      setMemo({ ...m, state: 'saved' })
+      setReload(n => n + 1)
+      setTimeout(() => setMemo(cur => (cur?.state === 'saved' && cur.words === m.words ? null : cur)), 3000)
+    } catch { setMemo({ ...m, state: 'failed' }) }
+  }
   const talk = async () => {
-    setMemoMsg(''); setError('')
+    setMemoMsg(''); setError(''); setMemo(null)
     if (rec) {
       const { rec: r, fileId } = rec
       const pin = pendingRef.current
@@ -195,8 +206,8 @@ export function StaticReview(p: StaticReviewProps) {
         const out = await dictate(await r.stop())
         const words = out.text.trim()
         if (!words) { setMemoMsg('Nothing was heard. Try again or type it.'); return }
-        if (fileId === currentIdRef.current) { setText(t => (t.trim() ? `${t.trim()} ${words}` : words)); setPending(pin) }
-        else { await p.postComment(fileId, words, pin ? pinDrawing(pin[0], pin[1]) : null); setReload(n => n + 1) }
+        if (fileId === currentIdRef.current) setPending(null)
+        await saveMemo({ fileId, words, pin })
       } catch (e) { setMemoMsg(dictationMessage(e)) }
       finally { setTranscribing(false) }
       return
@@ -363,6 +374,13 @@ export function StaticReview(p: StaticReviewProps) {
               </button>
               </div>
             </div>
+            {memo && (
+              <p role={memo.state === 'failed' ? 'alert' : 'status'} data-testid="memo-status" data-state={memo.state} className={cn('mt-2 flex items-center gap-2 text-xs', memo.state === 'failed' ? 'text-status-error' : memo.state === 'saved' ? 'text-status-success' : 'text-text-secondary')}>
+                {memo.state === 'saving' && <><Loader2 size={13} className="animate-spin motion-reduce:animate-none" />Saving your memo…</>}
+                {memo.state === 'saved' && <><Check size={14} aria-hidden="true" />Memo saved</>}
+                {memo.state === 'failed' && <>Could not save your memo.<button type="button" onClick={() => void saveMemo(memo)} className="press inline-flex min-h-11 items-center font-semibold underline">Retry</button></>}
+              </p>
+            )}
             {memoMsg && <p role="alert" className="mt-2 text-xs text-text-secondary">{memoMsg}</p>}
           </form>
         ) : <p className="shrink-0 border-t border-border py-3 text-center text-sm text-text-secondary">View-only access. Comments are disabled.</p>}

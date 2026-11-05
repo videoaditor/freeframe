@@ -145,7 +145,7 @@ describe('static review voice memo', () => {
     return { stop, cancel, start: vi.fn(async () => ({ stop, cancel })) }
   }
 
-  it('Talk records, a tap pins it, Stop turns the words into the note with that pin', async () => {
+  it('Talk records, a tap pins it, Stop saves the words as a note on that image with that pin, by itself', async () => {
     const r = recorder()
     const dictate = vi.fn(async () => ({ text: 'Make the logo bigger', segments: [] }))
     const { postComment } = setup({ startRecording: r.start, dictate })
@@ -155,14 +155,38 @@ describe('static review voice memo', () => {
     expect(await screen.findByTestId('rec-glow')).toBeInTheDocument()
     fireEvent.click(frame, { clientX: 100, clientY: 40 })
     fireEvent.click(screen.getByLabelText('Stop recording'))
-    const field = await screen.findByLabelText('Write a note on this image')
-    expect(field).toHaveValue('Make the logo bigger')
-    expect(screen.getByTestId('pending-pin')).toBeInTheDocument()
-    fireEvent.click(screen.getByLabelText('Send note'))
     await waitFor(() => expect(postComment).toHaveBeenCalledTimes(1))
     const [id, body, drawing] = postComment.mock.calls[0] as unknown as [string, string, { marks: { points: number[][] }[] }]
     expect([id, body]).toEqual(['a1', 'Make the logo bigger'])
     expect(drawing.marks[0].points[0]).toEqual([0.5, 0.2])
+    await waitFor(() => expect(screen.getByTestId('memo-status')).toHaveAttribute('data-state', 'saved'))
+    expect(screen.queryByTestId('pending-pin')).toBeNull()
+  })
+
+  it('a memo recorded on one image is saved to that image even after moving on', async () => {
+    const r = recorder()
+    let release: (v: { text: string; segments: [] }) => void = () => {}
+    const dictate = vi.fn(() => new Promise<{ text: string; segments: [] }>(res => { release = res }))
+    const { postComment } = setup({ startRecording: r.start, dictate })
+    fireEvent.click(screen.getByLabelText('Talk'))
+    fireEvent.click(await screen.findByLabelText('Stop recording'))
+    await waitFor(() => expect(dictate).toHaveBeenCalled())
+    fireEvent.click(screen.getByLabelText('Next image'))
+    release({ text: 'Fix the price', segments: [] })
+    await waitFor(() => expect(postComment).toHaveBeenCalledWith('a1', 'Fix the price', null))
+  })
+
+  it('a memo that fails to save offers Retry, and typed text is untouched', async () => {
+    const r = recorder()
+    const post = vi.fn().mockRejectedValueOnce(new Error('no')).mockResolvedValue(undefined)
+    setup({ startRecording: r.start, dictate: vi.fn(async () => ({ text: 'Too dark', segments: [] })), postComment: post })
+    fireEvent.change(screen.getByLabelText('Write a note on this image'), { target: { value: 'typed' } })
+    fireEvent.click(screen.getByLabelText('Talk'))
+    fireEvent.click(await screen.findByLabelText('Stop recording'))
+    fireEvent.click(await screen.findByText('Retry'))
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByTestId('memo-status')).toHaveAttribute('data-state', 'saved'))
+    expect(screen.getByLabelText('Write a note on this image')).toHaveValue('typed')
   })
 
   it('a failed transcription says so and keeps typing available', async () => {
