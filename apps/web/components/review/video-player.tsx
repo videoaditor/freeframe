@@ -420,14 +420,6 @@ export function VideoPlayer({
           </button>
 
           <button
-            onClick={handleSpeedCycle}
-            className="flex h-7 items-center justify-center rounded px-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors tabular-nums"
-            aria-label="Playback speed"
-          >
-            {playbackRate}x
-          </button>
-
-          <button
             onClick={toggleMute}
             className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-secondary hover:bg-bg-hover transition-colors"
             aria-label={isMuted ? "Unmute" : "Mute"}
@@ -536,6 +528,18 @@ export function VideoPlayer({
               ))}
             </select>
           )}
+
+          {/* Speed lives behind "more": rarely needed, so it stays out of the transport bar (Alan 06.11.) */}
+          <div className="relative">
+            <button onClick={() => setMoreOpen((p) => !p)} aria-expanded={moreOpen} aria-label="More playback options" className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"><MoreHorizontal className="h-4 w-4" /></button>
+            {moreOpen && (
+              <div className="absolute bottom-full right-0 mb-2 z-50 w-44 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                <button onClick={handleSpeedCycle} aria-label="Playback speed" className="flex w-full items-center justify-between px-3 py-2 text-[13px] text-text-secondary hover:bg-white/5">
+                  Speed <span className="font-medium tabular-nums text-text-primary">{playbackRate}x</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Fullscreen */}
           <button
