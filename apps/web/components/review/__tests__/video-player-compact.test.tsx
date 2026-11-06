@@ -32,10 +32,12 @@ describe('VideoPlayer compact (phone Flow view)', () => {
     expect(row.querySelectorAll('button')).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Note at 0:07.5' })).toBeInTheDocument()
   })
-  it('the full player still shows everything', () => {
+  it('the full player shows loop and fullscreen; speed sits behind the more button', () => {
     render(<VideoPlayer assetId="a" initialStreamUrl="x.mp4" />)
     expect(screen.getByRole('button', { name: 'Loop' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enter fullscreen' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'More playback options' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Playback speed' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'More playback options' }))
+    expect(screen.getByRole('button', { name: 'Playback speed' })).toHaveTextContent('1x')
   })
 })

@@ -162,3 +162,25 @@ def test_on_reports_the_implicit_role_on_the_project_itself(instance_wide, clien
 
     assert resp.status_code == 200
     assert resp.json()["role"] == "editor"
+
+
+def test_on_lists_requests_from_projects_you_were_never_added_to(instance_wide):
+    """An agent's delivery in a shared project reaches the overview of an instance-wide editor."""
+    from apps.api.routers.requests import list_requests
+    from apps.api.models.project import ProjectMember
+    queried = []
+    db = MagicMock()
+
+    def query(model, *rest):
+        queried.append(model)
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.limit.return_value = q
+        q.all.return_value = []
+        q.first.return_value = None
+        return q
+    db.query.side_effect = query
+    with patch("apps.api.routers.requests.review_bridge.request_status", return_value={}):
+        assert list_requests(None, db, _user()) == []
+    assert ProjectMember not in queried  # no membership filter: the floor covers every project

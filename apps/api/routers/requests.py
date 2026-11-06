@@ -51,7 +51,7 @@ from ..services.review_phase import phase_of_reviews
 from ..services.briefing import docx_text, MAX_DOCUMENT_BASE64, validate_briefing_text
 from ..services.review_timing import adopt_signed_in_upload, freeze_submission_timing, reopen_request
 from ..services.iteration_requests import request_fields, components, upload_slot, bind_upload, revision_target, stored_upload
-from ..services.permissions import effective_project_role, require_project_role
+from ..services.permissions import effective_project_role, implicit_project_role, require_project_role
 from ..services.s3_service import (
     abort_multipart_upload, complete_multipart_upload, create_multipart_upload, presign_upload_part,
 )
@@ -342,7 +342,7 @@ def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = D
     if project_id:
         require_project_role(db, project_id, current_user, ProjectRole.viewer)
         q = q.filter(UploadRequest.project_id == project_id)
-    else:
+    elif implicit_project_role(current_user) is None:  # an instance-wide role covers every project, like /projects
         member_projects = [m.project_id for m in db.query(ProjectMember).filter(
             ProjectMember.user_id == current_user.id, ProjectMember.deleted_at.is_(None)).all()]
         q = q.filter((UploadRequest.created_by == current_user.id) | (UploadRequest.project_id.in_(member_projects or [uuid.uuid4()])))
