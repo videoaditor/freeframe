@@ -45,8 +45,16 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
 6. **Ein unvollständiger Kommentar geht nicht raus.** Unvollständig heißt: Es sind weniger Bilder bestätigt als `attachments_expected`.
    - Weder `feedback_v1` noch der Export noch eine Agent-Abholung verbrauchen ihn.
    - `close_round` wartet auf ihn und antwortet mit `409 images_uploading`.
-   - Nach 15 Minuten wird `attachments_expected` auf die bestätigten Bilder gekürzt. Der Kommentar geht dann ohne die fehlenden Bilder raus, mit `attachments_missing: n`, und die Runde kann schließen. So hängt eine Runde nie fest.
-   - Die Prüfung, ob ein Kommentar vollständig ist, ist eine reine Funktion `comment_ready(expected, uploaded, created_at, now)` mit eigenem Test.
+   - Nach 15 Minuten ohne Bestätigung wird **nichts verworfen**. Der Kommentar wechselt sichtbar in den Zustand `images_failed`. Die Zeit allein ist keine Zustimmung, ein Bild wegzulassen.
+   - Aus `images_failed` kommt der Kommentar nur auf drei Wegen, und alle drei gehen vom Autor aus:
+     1. **Erneut versuchen.** `POST …/attachments/{aid}/retry` gibt für **denselben** Anhang eine neue PUT-URL aus, es entsteht keine neue Zeile. Danach folgt `complete`.
+     2. **Bild entfernen.** Der Anhang wird gelöscht, `attachments_expected` sinkt um 1.
+     3. **Ohne Bild senden.** `PATCH /comments/{id}` setzt `attachments_expected` auf die Zahl der bestätigten Bilder. Die nicht hochgeladenen Anhänge werden gelöscht.
+   - Eine späte Bestätigung zählt: Kommt `complete` nach den 15 Minuten, ist der Kommentar wieder vollständig.
+   - Eine Runde schließt nicht, solange in ihrem Zeitfenster ein Kommentar ausstehend oder `images_failed` ist. `close_round` antwortet mit `409 images_pending` und nennt die betroffenen `comment_id`s.
+     - Die Oberfläche zeigt beim Abschließen genau diese Kommentare mit den drei Aktionen.
+     - Andere Kommentare werden nicht einzeln vorab freigegeben. Eine Runde geht nur als Ganzes raus, deshalb bekommt der Agent nie eine halbe Runde zu sehen und bestätigt auch keine.
+   - Den Zustand berechnet eine reine Funktion `comment_state(expected, uploaded, created_at, now) -> ready | pending | images_failed`, mit eigenem Test.
 
 ### P2 – Oberfläche (eine Logik, zwei Eingabefelder)
 
@@ -94,7 +102,7 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
   - `/agent/references/{id}` liefert für eine fremde Marke 404;
   - ein einzelnes Bild wird nie zur Regel, ohne dass jemand „merken“ wählt oder einen Vorschlag annimmt;
   - Backfill: Alt-Anhänge bleiben sichtbar;
-  - Race: Ein Kommentar mit ausstehendem Bild fehlt in `feedback_v1`, und `close_round` antwortet 409. Nach `complete` ist er drin. Nach 15 Minuten ohne Upload geht er mit `attachments_missing` raus. Ein Retry mit demselben `Idempotency-Key` erzeugt keinen zweiten Kommentar;
+  - Race: Ein Kommentar mit ausstehendem Bild fehlt in `feedback_v1`, und `close_round` antwortet 409. Nach `complete` ist er drin. Nach 15 Minuten ohne Upload ist er `images_failed`, `close_round` antwortet weiter 409, und `feedback_v1` enthält ihn nicht. Eine späte Bestätigung macht ihn wieder `ready`. `retry` vergibt eine neue URL für denselben Anhang, es entsteht keine neue Zeile. „Ohne Bild senden“ und „Bild entfernen“ geben ihn frei. Ein Retry mit demselben `Idempotency-Key` erzeugt keinen zweiten Kommentar;
   - Brand-Recht: `editor` ohne Workspace-Manager-Rolle ergibt 403 beim Merken.
 - [ ] vitest:
   - der Hook nimmt Drop, Einfügen und Auswahl an;
@@ -135,7 +143,7 @@ Gebaut wird P1–P3 auf jeden Fall. P4 erst nach dieser Entscheidung.
 - [x] 2 SoC: Prüfungen von Typ und Größe und der Vertrag von `feedback_v1` als reine Funktionen.
 - [x] 3 Idempotenz: `Idempotency-Key` am Kommentar, `complete` mehrfach ohne Schaden, `remember` wird über `(attachment_id)` dedupliziert.
 - [x] 4 Coupling: `feedback.v1` erweitert sich nur additiv; die Referenz-ID ist stabil, URLs nie.
-- [x] 3b Race: `attachments_expected` hält unvollständige Kommentare aus Runde, Export und ACK heraus; nach 15 Minuten wird der Kommentar mit `attachments_missing` freigegeben.
+- [x] 3b Race: `attachments_expected` hält unvollständige Kommentare aus Runde, Export und ACK heraus. Ein Timeout bedeutet `images_failed`, das sich wieder auflösen lässt. Verworfen wird ein Bild nur durch eine Aktion des Autors.
 - [x] 6 Fehlerklassen: Upload gescheitert (Retry pro Bild), Typ oder Größe (422, kein Retry), Rechte (403, Stopp), Regel-Store nicht erreichbar (503, Anhang bleibt, merken später erneut).
 - [x] 7 Defensive: Ein gescheitertes Bild verliert nie den Kommentar.
 - [x] Tests: reine Funktionen plus pytest gegen ein Wegwerf-Postgres; kein voller Stack nötig.
