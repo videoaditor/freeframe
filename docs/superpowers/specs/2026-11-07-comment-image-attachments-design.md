@@ -31,6 +31,8 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
 ### P1 – Speichern sicher machen (API)
 
 1. Neue Spalte `comment_attachments.uploaded_at` (Migration `ap05`). Ein Anhang zählt erst, wenn er hochgeladen und bestätigt ist.
+   - Bestehende Einträge erhalten beim Backfill `uploaded_at = created_at`, damit kein alter Anhang verschwindet. Der Backfill zählt die betroffenen Zeilen und gibt die Zahl im Migrations-Log aus.
+   - Neue Spalte `comments.attachments_expected` (int, Standard 0). Der Client meldet sie beim Anlegen des Kommentars: so viele Bilder folgen noch.
 2. `POST /comments/{id}/attachments`:
    - lässt nur erlaubte Typen und Größen zu;
    - nur der Autor des Kommentars darf anhängen, oder jemand mit Projektrolle `editor` oder höher;
@@ -40,6 +42,11 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
    - Share-Link mit Kommentarrecht, geprüft wie in `guest_comment` (`validate_share_link_with_session` und `validate_asset_in_share`);
    - nur am eigenen Gastkommentar (`guest_author_id` aus der Session).
 5. Gelesen werden nur Anhänge mit `uploaded_at`. Wird der Kommentar soft-gelöscht, verschwinden auch seine Anhänge.
+6. **Ein unvollständiger Kommentar geht nicht raus.** Unvollständig heißt: Es sind weniger Bilder bestätigt als `attachments_expected`.
+   - Weder `feedback_v1` noch der Export noch eine Agent-Abholung verbrauchen ihn.
+   - `close_round` wartet auf ihn und antwortet mit `409 images_uploading`.
+   - Nach 15 Minuten wird `attachments_expected` auf die bestätigten Bilder gekürzt. Der Kommentar geht dann ohne die fehlenden Bilder raus, mit `attachments_missing: n`, und die Runde kann schließen. So hängt eine Runde nie fest.
+   - Die Prüfung, ob ein Kommentar vollständig ist, ist eine reine Funktion `comment_ready(expected, uploaded, created_at, now)` mit eigenem Test.
 
 ### P2 – Oberfläche (eine Logik, zwei Eingabefelder)
 
@@ -59,11 +66,12 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
   - `url` ist 7 Tage gültig, wie `frame_url`. Ein erneuter `get_feedback`-Aufruf liefert eine neue URL. Agents speichern die URL nicht dauerhaft, sondern nur die `attachment_id`.
   - Die Schema-Version bleibt `v1`, weil nur ein Feld dazukommt.
 - Der Worker reicht das Feld in `get_feedback` (MCP) unverändert durch. Die Anleitung `docs/agent-playbook.md` bekommt eine Zeile: „`attachments` are reference images for that comment: look at them before you fix.“
-- Die bisherige Regel gilt weiter: `ack_feedback` erst, wenn der Fix hochgeladen ist.
+- `ack_feedback` erst, wenn die korrigierte Version hochgeladen ist **und** ihr Review frei ist (`get_review`: `stage: clear`), und zwar auf genau der `asset_id`, für die die Kommentare galten. Das schreibt die Anleitung explizit so.
 
 ### P4 – Für diese Marke merken
 
-- An jedem Bild gibt es für den Owner der Marke die Aktion „Für diese Marke merken“ mit einem optionalen Satz dazu, was das Bild zeigt.
+- **Wer „merken“ darf:** dieselbe Berechtigung, mit der man heute unter Brand rules Vorschläge annimmt (`_project_brand(..., ProjectRole.owner)` in `routers/requests.py:408`). Es kommen keine neuen Rechte dazu. Achtung, das ist dieselbe Falle wie bei #140: Alan ist auf dem Workspace „Aditor“ `editor`, nicht `owner`. Brand rules zeigt ihm deshalb heute nur „Aditor — Telehealth Ads“. Das ist die offene Entscheidung unten.
+- An jedem Bild gibt es für diese Berechtigten die Aktion „Für diese Marke merken“ mit einem optionalen Satz dazu, was das Bild zeigt.
   - FreeFrame kopiert das Bild nach `brand-references/{project_id}/{uuid}`. Löscht jemand den Kommentar, bleibt die Referenz damit erhalten.
   - FreeFrame ruft `POST /insights/rules/reference` auf. `review_bridge` legt im Worker eine aktive Regel an:
     - `kind: "reference"`, `scope: brand`;
@@ -84,7 +92,10 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
   - ein Gast an einem fremden Kommentar oder mit einem Nur-Lesen-Link ergibt 403;
   - `feedback_v1` enthält `attachments`, und zwar nur hochgeladene;
   - `/agent/references/{id}` liefert für eine fremde Marke 404;
-  - ein einzelnes Bild wird nie zur Regel, ohne dass jemand „merken“ wählt oder einen Vorschlag annimmt.
+  - ein einzelnes Bild wird nie zur Regel, ohne dass jemand „merken“ wählt oder einen Vorschlag annimmt;
+  - Backfill: Alt-Anhänge bleiben sichtbar;
+  - Race: Ein Kommentar mit ausstehendem Bild fehlt in `feedback_v1`, und `close_round` antwortet 409. Nach `complete` ist er drin. Nach 15 Minuten ohne Upload geht er mit `attachments_missing` raus. Ein Retry mit demselben `Idempotency-Key` erzeugt keinen zweiten Kommentar;
+  - Brand-Recht: `editor` ohne Workspace-Manager-Rolle ergibt 403 beim Merken.
 - [ ] vitest:
   - der Hook nimmt Drop, Einfügen und Auswahl an;
   - ein gescheiterter Upload zeigt „Erneut versuchen“, und der Text bleibt erhalten;
@@ -103,9 +114,17 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
 - Der Regel-Store im Worker (Airtable) kann `kind: "reference"` nicht ablegen: Stopp, Schema-Entscheidung.
 - Eine Share-Session lässt sich keinem Gastautor zuordnen: Gastanhänge bleiben gesperrt, eingeloggt geht es weiter.
 
-## Offene Frage an Alan (eine)
+## Nicht in diesem Umfang (Codex-Default zu Umfang und Kosten)
 
-Soll die **automatische Prüfung** gemerkte Referenzbilder beim Review mit ansehen, also das Video mit „so soll es aussehen“ vergleichen? Das kostet pro Review etwas mehr Vision-Tokens. Empfehlung: ja, nur für gemerkte Referenzen und höchstens 3 pro Marke.
+Dass die automatische Prüfung gemerkte Referenzbilder beim Review mit ansieht, ist eine Erweiterung über „droppen und merken“ hinaus. Es kostet pro Review zusätzliche Vision-Tokens, und dafür gibt es keine Budget-Freigabe. Standard: **aus**. Referenzen gehen an Editor und Agent, nicht in die automatische Prüfung. Das bedeutet nicht, dass Alan Referenzen abgelehnt hat. Einschalten wäre eine eigene Entscheidung mit Budget.
+
+## Offene Entscheidung an Alan (eine)
+
+Wer darf ein Bild als Marken-Referenz merken? Heute verwaltet nur der `owner` einer Marke deren Brand rules. Alan ist in den meisten Workspaces (auch „Aditor“) `editor` und kann dort also weder Regeln verwalten noch merken.
+- **(a) Empfehlung:** Workspace-Manager, die auf der Marke `editor` sind, dürfen Brand rules verwalten und merken. Das ist dieselbe Regel wie bei Agents (#140). Brand rules und „merken“ bekommen damit auch für Alan alle 48 Marken. Die Rechte wachsen für Workspace-Manager, Freelance-Editoren bleiben ausgeschlossen.
+- **(b)** Nur `owner`. Dann ist Alan Owner in den Marken einzutragen, wo er Referenzen merken will.
+
+Gebaut wird P1–P3 auf jeden Fall. P4 erst nach dieser Entscheidung.
 
 ## Doctrine-Gate
 
@@ -116,6 +135,7 @@ Soll die **automatische Prüfung** gemerkte Referenzbilder beim Review mit anseh
 - [x] 2 SoC: Prüfungen von Typ und Größe und der Vertrag von `feedback_v1` als reine Funktionen.
 - [x] 3 Idempotenz: `Idempotency-Key` am Kommentar, `complete` mehrfach ohne Schaden, `remember` wird über `(attachment_id)` dedupliziert.
 - [x] 4 Coupling: `feedback.v1` erweitert sich nur additiv; die Referenz-ID ist stabil, URLs nie.
+- [x] 3b Race: `attachments_expected` hält unvollständige Kommentare aus Runde, Export und ACK heraus; nach 15 Minuten wird der Kommentar mit `attachments_missing` freigegeben.
 - [x] 6 Fehlerklassen: Upload gescheitert (Retry pro Bild), Typ oder Größe (422, kein Retry), Rechte (403, Stopp), Regel-Store nicht erreichbar (503, Anhang bleibt, merken später erneut).
 - [x] 7 Defensive: Ein gescheitertes Bild verliert nie den Kommentar.
 - [x] Tests: reine Funktionen plus pytest gegen ein Wegwerf-Postgres; kein voller Stack nötig.
