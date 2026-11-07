@@ -56,7 +56,7 @@ export interface RuleSuggestion { suggestion_id: string; text: string; comment_i
 export const MCP_URL = process.env.NEXT_PUBLIC_MCP_URL || 'https://review.aditor.ai/mcp'
 export const AGENT_MD_URL = 'https://review.aditor.ai/agent.md'
 
-/** The programs Agent Mode offers, in the order people ask for them. */
+/** The programs the Agents page offers, in the order people ask for them. */
 export const KEY_PROGRAMS: AgentProgram[] = ['claude-code', 'codex', 'chatgpt', 'cursor', 'other']
 
 export const createAgentKey = (projectId: string, program: AgentProgram, scope: AgentScope) =>

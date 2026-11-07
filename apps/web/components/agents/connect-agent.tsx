@@ -46,7 +46,7 @@ function CopyButton({ text, label, primary }: { text: string; label: string; pri
   )
 }
 
-/** Agent Mode (spec C): pick the AI and its rights, get a key once, paste one prompt. */
+/** Agents page (spec C): pick the AI and its rights, get a key once, paste one prompt. */
 function KeyCard({ projectId, onCreated }: { projectId: string; onCreated: () => void }) {
   const [program, setProgram] = React.useState<AgentProgram>('claude-code')
   const [scope, setScope] = React.useState<AgentScope>('deliver')

@@ -70,7 +70,7 @@ describe('ConnectAgent', () => {
     expect(screen.getByRole('button', { name: /create pairing code/i })).toBeInTheDocument()
   })
 
-  it('Agent Mode: creates a read key for ChatGPT, shows it once in the prompt, copies it', async () => {
+  it('Agents page: creates a read key for ChatGPT, shows it once in the prompt, copies it', async () => {
     mock()
     const reply = { agent_key: 'ara_test_0123456789', user_id: 'u9', project_id: 'p1', project_name: 'Brand A', scope: 'read' }
     const post = vi.spyOn(api, 'post').mockResolvedValue(reply)

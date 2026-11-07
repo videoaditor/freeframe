@@ -43,7 +43,7 @@ interface AssetGridProps {
   selectedAssetId?: string | null
   onUpload?: () => void
   uploadLabel?: string
-  /** Agent Mode: an empty project offers "Connect your AI" first (spec 2026-11-05 H). */
+  /** Agents: an empty project offers "Connect your AI" first (spec 2026-11-05 H). */
   onConnectAgent?: () => void
   onAssetSelect?: (asset: Asset, e?: React.MouseEvent) => void
   onAssetOpen?: (asset: Asset) => void
