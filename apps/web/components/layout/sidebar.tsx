@@ -15,6 +15,7 @@ import {
   LogOut,
   User,
   ChevronsLeft,
+  Bot,
 } from 'lucide-react'
 import { partsEnabled } from '@/lib/iterations'
 import { canManageWorkspace } from '@/lib/workspace-access'
@@ -44,6 +45,7 @@ const ownerNavItems: NavItem[] = [
   { href: '/home', label: 'Overview', icon: Home },
   { href: '/rules', label: 'Brand rules', icon: BookOpen },
   { href: '/insights', label: 'Time saved', icon: Timer },
+  { href: '/agent-mode', label: 'Agent Mode', icon: Bot },
   { href: '/projects', label: 'Projects', icon: Layers },
 ]
 
@@ -60,6 +62,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navItems: NavItem[] = manager ? [...ownerNavItems, ...(partsEnabled ? [{ href: '/parts', label: 'Reusable parts', icon: Layers }] : [])] : [
     { href: '/handin', label: 'Hand in', icon: Upload },
     { href: '/home', label: 'Submissions', icon: Home },
+    { href: '/agent-mode', label: 'Agent Mode', icon: Bot },
     { href: '/projects', label: 'Projects', icon: Layers },
   ]
   const { files: uploadFiles, togglePanel, panelOpen } = useUploadStore()
