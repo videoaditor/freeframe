@@ -78,7 +78,7 @@ Wer ein Video reviewt, legt ein Referenzbild (Screenshot, Beispiel) direkt in de
 
 ### P4 – Für diese Marke merken
 
-- **Wer „merken“ darf:** dieselbe Berechtigung, mit der man heute unter Brand rules Vorschläge annimmt (`_project_brand(..., ProjectRole.owner)` in `routers/requests.py:408`). Es kommen keine neuen Rechte dazu. Achtung, das ist dieselbe Falle wie bei #140: Alan ist auf dem Workspace „Aditor“ `editor`, nicht `owner`. Brand rules zeigt ihm deshalb heute nur „Aditor — Telehealth Ads“. Das ist die offene Entscheidung unten.
+- **Wer „merken“ darf:** dieselbe Berechtigung, mit der man heute unter Brand rules Vorschläge annimmt (`_project_brand(..., ProjectRole.owner)` in `routers/requests.py:408`). Es kommen keine neuen Rechte dazu. Achtung, das ist dieselbe Falle wie bei #140: Alan ist auf dem Workspace „Aditor“ `editor`, nicht `owner`. Brand rules zeigt ihm deshalb heute nur „Aditor — Telehealth Ads“. Entschieden: siehe „Entscheidung Brand-Recht“.
 - An jedem Bild gibt es für diese Berechtigten die Aktion „Für diese Marke merken“ mit einem optionalen Satz dazu, was das Bild zeigt.
   - FreeFrame kopiert das Bild nach `brand-references/{project_id}/{uuid}`. Löscht jemand den Kommentar, bleibt die Referenz damit erhalten.
   - FreeFrame ruft `POST /insights/rules/reference` auf. `review_bridge` legt im Worker eine aktive Regel an:
@@ -138,49 +138,6 @@ Ausdrücklich nicht:
 - Freelance-Editoren ohne eigenes Projekt bleiben ausgeschlossen (403).
 - Andere Rechte (Projektverwaltung, Mitglieder, Löschen) ändern sich nicht.
 - Marken bleiben getrennt: Die Prüfung gilt immer für genau die gewählte Marke.
-
-## Fertig heißt (maschinell prüfbar)
-
-- [ ] pytest:
-  - falscher Typ oder zu groß ergibt 422;
-  - ohne `complete` ist der Anhang nicht sichtbar;
-  - ein zweites `complete` ändert nichts;
-  - ein Gast an einem fremden Kommentar oder mit einem Nur-Lesen-Link ergibt 403;
-  - `feedback_v1` enthält `attachments`, und zwar nur hochgeladene;
-  - `/agent/references/{id}` liefert für eine fremde Marke 404;
-  - ein einzelnes Bild wird nie zur Regel, ohne dass jemand „merken“ wählt oder einen Vorschlag annimmt;
-  - Backfill: Alt-Anhänge bleiben sichtbar;
-  - Race: Ein Kommentar mit ausstehendem Bild fehlt in `feedback_v1`, und `close_round` antwortet 409. Nach `complete` ist er drin. Nach 15 Minuten ohne Upload ist er `images_failed`, `close_round` antwortet weiter 409, und `feedback_v1` enthält ihn nicht. Eine späte Bestätigung macht ihn wieder `ready`. `retry` vergibt eine neue URL für denselben Anhang, es entsteht keine neue Zeile. „Ohne Bild senden“ und „Bild entfernen“ geben ihn frei. Ein Retry mit demselben `Idempotency-Key` erzeugt keinen zweiten Kommentar;
-  - Brand-Recht: `editor` ohne Workspace-Manager-Rolle ergibt 403 beim Merken und bei `/insights/rules`. Ein Workspace-Manager als `editor` auf Marke A darf A, aber nicht Marke B, auf der er keine Rolle hat.
-- [ ] vitest:
-  - der Hook nimmt Drop, Einfügen und Auswahl an;
-  - ein gescheiterter Upload zeigt „Erneut versuchen“, und der Text bleibt erhalten;
-  - ein Retry sendet kein zweites POST auf den Kommentar.
-- [ ] Playwright bei 390 px und auf dem Desktop:
-  - Share-Seite: Screenshot einfügen, senden, neu laden, das Bild hängt am selben Kommentar;
-  - Kommentarleiste: dasselbe;
-  - Screenshots liegen in `reviews/`.
-- [ ] Live nach dem Merge:
-  - ein Agent mit Key bekommt das Bild in `get_feedback`;
-  - eine gemerkte Referenz erscheint bei einem späteren Job in `/agent.md`.
-
-## Stop & Eskalation
-
-- `head_object` oder MinIO lehnen den CORS-PUT von der Share-Domain ab: Stopp, weil eine Infrastruktur-Änderung nötig ist. Die macht Alan.
-- Der Regel-Store im Worker (Airtable) kann `kind: "reference"` nicht ablegen: Stopp, Schema-Entscheidung.
-- Eine Share-Session lässt sich keinem Gastautor zuordnen: Gastanhänge bleiben gesperrt, eingeloggt geht es weiter.
-
-## Nicht in diesem Umfang (Codex-Default zu Umfang und Kosten)
-
-Dass die automatische Prüfung gemerkte Referenzbilder beim Review mit ansieht, ist eine Erweiterung über „droppen und merken“ hinaus. Es kostet pro Review zusätzliche Vision-Tokens, und dafür gibt es keine Budget-Freigabe. Standard: **aus**. Referenzen gehen an Editor und Agent, nicht in die automatische Prüfung. Das bedeutet nicht, dass Alan Referenzen abgelehnt hat. Einschalten wäre eine eigene Entscheidung mit Budget.
-
-## Offene Entscheidung an Alan (eine)
-
-Wer darf ein Bild als Marken-Referenz merken? Heute verwaltet nur der `owner` einer Marke deren Brand rules. Alan ist in den meisten Workspaces (auch „Aditor“) `editor` und kann dort also weder Regeln verwalten noch merken.
-- **(a) Empfehlung:** Workspace-Manager, die auf der Marke `editor` sind, dürfen Brand rules verwalten und merken. Das ist dieselbe Regel wie bei Agents (#140). Brand rules und „merken“ bekommen damit auch für Alan alle 48 Marken. Die Rechte wachsen für Workspace-Manager, Freelance-Editoren bleiben ausgeschlossen.
-- **(b)** Nur `owner`. Dann ist Alan Owner in den Marken einzutragen, wo er Referenzen merken will.
-
-
 
 ## Doctrine-Gate
 
