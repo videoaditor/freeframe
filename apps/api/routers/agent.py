@@ -7,6 +7,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -123,11 +124,22 @@ def _owner_brands(db: Session, agent: AgentContext) -> list[Project]:
 
 
 def _ensure_editor(db: Session, project_id: uuid.UUID, agent: AgentContext, owner_id: uuid.UUID) -> None:
-    member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == agent.user.id).first()
+    """Make the agent user an editor of the project; never downgrades, tolerates a concurrent insert."""
+    find = lambda: db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == agent.user.id).first()  # noqa: E731
+    member = find()
     if member is None:
-        db.add(ProjectMember(project_id=project_id, user_id=agent.user.id, role=ProjectRole.editor, invited_by=owner_id))
-    elif member.deleted_at is not None:
+        try:
+            with db.begin_nested():
+                db.add(ProjectMember(project_id=project_id, user_id=agent.user.id, role=ProjectRole.editor, invited_by=owner_id))
+            return
+        except IntegrityError:  # a parallel call added it first
+            member = find()
+    if member is None:
+        return
+    if member.deleted_at is not None:
         member.deleted_at, member.role = None, ProjectRole.editor
+    elif member.role in (ProjectRole.reviewer, ProjectRole.viewer):
+        member.role = ProjectRole.editor
 
 
 @router.get("/brands")
@@ -147,11 +159,13 @@ def create_brand(body: NewBrand, response: Response, agent: AgentContext = Depen
     key = normalize_brand(body.name)
     if not key:
         raise HTTPException(422, "invalid_name")
+    owner_id = _project(db, agent).created_by
+    # A parallel create of the same name waits here, then finds the first project.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"brand:{owner_id}:{key}"})
     for p in _owner_brands(db, agent):
         if normalize_brand(p.name) == key:
             return {"brand_id": str(p.id), "name": p.name, "created": False}
-    owner_id = _project(db, agent).created_by
-    project = Project(name=body.name.strip(), description=(body.website or "").strip() or None, created_by=owner_id)
+    project = Project(name=body.name.strip(), description=(body.website or "").strip() or None, created_by=owner_id, is_workspace=True)
     db.add(project)
     db.flush()
     _ensure_editor(db, project.id, agent, owner_id)

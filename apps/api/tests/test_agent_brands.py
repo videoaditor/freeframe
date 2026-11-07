@@ -79,3 +79,25 @@ def test_request_without_brand_uses_home_project(env):
     from apps.api.models.upload_request import UploadRequest
     with env.Session() as db:
         assert db.get(UploadRequest, uuid.UUID(r.json()["request_id"])).project_id == env.project_a.id
+
+
+def test_parallel_create_makes_one_project(env):
+    from concurrent.futures import ThreadPoolExecutor
+    agent = env.pair_agent(env.project_a)
+    with ThreadPoolExecutor(2) as pool:
+        out = list(pool.map(lambda n: env.client.post("/agent/brands", json={"name": n}, headers=agent.headers), ["Race Brand", "race-brand"]))
+    assert sorted(r.status_code for r in out) == [200, 201]
+    assert out[0].json()["brand_id"] == out[1].json()["brand_id"]
+
+
+def test_new_brand_is_workspace_and_membership_is_upgraded(env):
+    from apps.api.models.project import Project, ProjectMember, ProjectRole
+    agent = env.pair_agent(env.project_a)
+    made = env.client.post("/agent/brands", json={"name": "Visible"}, headers=agent.headers).json()
+    with env.Session() as db:
+        assert db.get(Project, uuid.UUID(made["brand_id"])).is_workspace is True
+        db.add(ProjectMember(project_id=env.project_b.id, user_id=uuid.UUID(agent.user_id), role=ProjectRole.viewer))
+        db.commit()
+    r = env.client.post("/agent/requests", json={"title": "x", "external_ref": "c", "brand_id": str(env.project_b.id)}, headers=agent.headers)
+    assert r.status_code == 200
+    assert (agent.user_id, "editor") in members(env, env.project_b.id)
