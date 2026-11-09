@@ -8,6 +8,8 @@ Applies to all API requests. Uses Redis sliding window counters.
 Separate limits for read (GET/HEAD/OPTIONS) vs write (POST/PUT/PATCH/DELETE).
 """
 
+import hashlib
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -73,6 +75,10 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
             auth_header = f"Bearer {request.headers['x-freeframe-token']}"
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
+            # Agent keys (ara_...) are not JWTs. Without this every MCP agent shares the AutoReview
+            # Worker's egress IP and one busy agent 429s all the others.
+            if token.startswith("ara_"):
+                return "agent:" + hashlib.sha256(token.encode()).hexdigest()[:16]
             try:
                 payload = jwt.decode(
                     token, settings.jwt_secret,

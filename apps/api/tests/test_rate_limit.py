@@ -155,6 +155,19 @@ class TestGlobalRateLimitMiddleware:
         identity = middleware._get_identity(mock_request)
         assert identity == "ip:203.0.113.1"
 
+    def test_get_identity_keys_agent_by_key_not_ip(self):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+
+        middleware = GlobalRateLimitMiddleware(app=MagicMock())
+        mock_request = MagicMock()
+        mock_request.headers.get.side_effect = lambda key, default="": {
+            "authorization": "Bearer ara_examplekey",
+            "x-real-ip": "203.0.113.1",
+        }.get(key, default)
+
+        identity = middleware._get_identity(mock_request)
+        assert identity.startswith("agent:") and "ara_" not in identity and "203.0.113.1" not in identity
+
     @patch("apps.api.middleware.global_rate_limit.get_redis")
     def test_check_allows_under_limit(self, mock_get_redis):
         from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
