@@ -446,9 +446,9 @@ export function FlowView(p: FlowViewProps) {
               </div>
             )}
             <div className="flex w-full max-w-[560px] items-center gap-2 rounded-2xl border border-border bg-bg-secondary p-1.5 transition-colors focus-within:border-text-tertiary shadow-[0_8px_24px_-12px_rgba(0,0,0,.5)]">
-              <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Talk'} title={active ? 'Stop (saves the note)' : 'Talk and draw while it plays'}
+              <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'} title={active ? 'Stop (saves the note)' : 'Comment: talk and draw while it plays'}
                 className="flow-comment inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-text-inverse">
-                {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Talk</>}
+                {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Comment</>}
               </button>
               {active ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2" role="status" aria-label="Recording">
@@ -479,7 +479,7 @@ export function FlowView(p: FlowViewProps) {
         </div>
         <div className="flex min-h-0 flex-1 flex-col [&>ul]:max-h-none [&>ul]:flex-1 [&>ul]:border-t-0">
           {notes.some(n => n.status !== 'recording') ? notesList : (
-            <p className="m-auto max-w-[240px] text-center text-sm leading-relaxed text-text-tertiary">Press <span className="font-semibold text-text-secondary">Talk</span> and say what to change while it plays. Draw on the video to point. Or type below the video.</p>
+            <p className="m-auto max-w-[240px] text-center text-sm leading-relaxed text-text-tertiary">Press <span className="font-semibold text-text-secondary">Comment</span> and say what to change while it plays. Draw on the video to point. Or type below the video.</p>
           )}
         </div>
         {statusArea}
