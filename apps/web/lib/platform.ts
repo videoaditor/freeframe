@@ -320,6 +320,18 @@ export const objectToNote = (token: string, body: { asset_id: string; version_id
 const CHUNK = 10 * 1024 * 1024
 
 /** Remove a file whose transfer never completed, so the editor can start it over. */
+export interface DeliveryNoteState {
+  available: boolean
+  reachable: boolean
+  accepts: boolean
+  status: 'open' | 'saved' | 'cleared' | 'too_late' | 'unavailable' | 'unreachable'
+  window?: 'until_delivery' | 'later_version' | 'closed'
+  note: string | null
+  sent_note: string | null
+  sent_at: string | null
+}
+export const readDeliveryNote = (token: string) => pub<DeliveryNoteState>('GET', `/r/${token}/note`)
+export const saveDeliveryNote = (token: string, note: string) => pub<DeliveryNoteState>('POST', `/r/${token}/note`, { note })
 export const discardUpload = (token: string, body: { asset_id: string; version_id: string }) =>
   pub<void>('POST', `/r/${token}/upload/discard`, body)
 

@@ -178,6 +178,30 @@ def _post_portal(event: dict) -> None:
     _deliver(url, (getattr(settings, "portal_events_webhook_secret", "") or "").strip(), event)
 
 
+def portal_delivery_note(event: str, card_url: str, note: Optional[str] = None) -> Optional[dict]:
+    """Ask the portal about a card's note to the client, or save one, and return its answer. The portal
+    owns the note and the moment it stops being accepted, so unlike the events above the caller needs
+    the answer. None means no usable answer: unreachable, or a build that does not know this event."""
+    url = (getattr(settings, "portal_events_webhook_url", "") or "").strip()
+    secret = (getattr(settings, "portal_events_webhook_secret", "") or "").strip()
+    if not url:
+        return None
+    payload = {"event": event, "card_url": card_url}
+    if event == "delivery_note_save":
+        payload["note"] = note
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"content-type": "application/json"}
+    if secret:
+        headers["X-Aditor-Signature"] = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    try:
+        response = httpx.post(url, content=body, headers=headers, timeout=10)
+        answer = response.json() if response.status_code == 200 else None
+    except Exception:  # noqa: BLE001 - the page says it could not save; the upload is untouched
+        logger.warning("portal delivery note call failed", exc_info=True)
+        return None
+    return answer if isinstance(answer, dict) and answer.get("status") else None
+
+
 def _comment_author_user(db: Session, comment):
     """The authenticated user who wrote the comment, or None for an anonymous guest."""
     author_id = getattr(comment, "author_id", None)

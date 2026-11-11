@@ -48,6 +48,7 @@ import {
 import { HandinResult, ProcessingFailureNotice } from "@/components/handin/handin-result";
 import { computeStages, isTerminalReview, type FileFacts, type ReviewFacts, type StageView } from "@/lib/stages";
 import { DeliverButton } from "@/components/handin/deliver-button";
+import { DeliveryNote, NoteField, useNoteCopy } from "@/components/handin/delivery-note";
 import { HandinHeld } from "@/components/handin/handin-held";
 import { WorkspacePicker, type WorkspaceChoice } from "@/components/handin/workspace-picker";
 import { UploadZone } from "@/components/upload/upload-zone";
@@ -79,6 +80,10 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
   const [cardUrl, setCardUrl] = React.useState("");
   const [card, setCard] = React.useState<GateCard | null>(null);
   const [lookingUp, setLookingUp] = React.useState(false);
+  // Typed before a request exists; `DeliveryNote` below saves it once the request does.
+  const [note, setNote] = React.useState("");
+  const [requestToken, setRequestToken] = React.useState<string | null>(null);
+  const noteCopy = useNoteCopy();
   // A hand-in can be one cut or every cut for a card at once. They all go into
   // one folder and share one link; the reviewer reviews each on its own.
   const [files, setFiles] = React.useState<File[]>([]);
@@ -440,12 +445,13 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
       // The API binds the existing folder and versions to the native editor.
       // Canonical origins are server-owned: Whop's iframe origin is not a share URL.
       setStep("Getting the review link");
-      const request = await api.post<{ url: string; share_url: string; review_share_token: string }>(
+      const request = await api.post<{ token: string; url: string; share_url: string; review_share_token: string }>(
         `/folders/${folder.id}/editor-request`, {},
       );
       const token = request.review_share_token;
       const url = request.share_url;
       setEditorUrl(request.url);
+      setRequestToken(request.token);
 
       // 5. Deliver to the Trello card - GATED ON THE REVIEW (Shawn+Saskia, 2026-09-14). This records
       //    the intent to deliver (with the editor's name) and posts the @aditorteam1 comment now IF
@@ -526,6 +532,7 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
               stageView: stageFor(a.id),
             }))}
           />
+          {requestToken && <DeliveryNote token={requestToken} draft={note} className="mt-6" />}
           {/* A way back into FreeFrame itself: open the folder these videos landed in, inside the
               brand workspace. The share link above is for the client; this is for the editor. */}
           {folderHref && delivery?.state !== "held" && (
@@ -688,6 +695,8 @@ function CompleteHandinPage({ onStarted }: { onStarted?: () => void } = {}) {
 
           <UploadZone className="mt-2" onFilesSelected={addFiles} />
           </div>
+
+          <NoteField id="handin-note" value={note} onChange={setNote} hint={noteCopy.hint} disabled={phase === "working"} />
 
           {error && (
             <p role="alert" className="text-sm text-status-error">

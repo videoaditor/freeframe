@@ -10,6 +10,7 @@ import { createUploadQueue } from '@/lib/part-upload-queue'
 import { DropZone } from '@/components/v2/drop-zone'
 import { UploadCard, type UploadPhase } from '@/components/v2/upload-card'
 import { RequestWorkspace, SubmissionSuccess } from '@/components/v2/request-workspace'
+import { DeliveryNote } from '@/components/handin/delivery-note'
 
 interface Who { name: string; email: string }
 interface Job { id: string; file: File; progress: number; phase: UploadPhase; error?: string; assetId?: string }
@@ -119,6 +120,7 @@ function CompleteRequestPage({ params: { token }, onActivity }: { params: { toke
     <main className={`mx-auto px-5 pb-16 pt-8 sm:px-8 sm:pt-10 ${showUpload ? 'max-w-3xl' : 'max-w-[1120px]'}`}>
       {viewError && (!view || [401, 403, 404, 410].includes(viewError.status)) ? <div className="py-20 text-center"><h1 className="text-2xl font-semibold">{viewError.status === 410 ? 'This link is closed' : 'This link could not be opened'}</h1><p className="mt-3 text-text-secondary">{viewError.message}</p></div> : !view ? <p role="status">Opening your project…</p> : <>
       <div className={`mb-7 ${finished ? 'text-center' : ''}`}><p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">{revision && showUpload ? `Next version · v${revision.version + 1}` : finished ? 'Handed in. Nicely done.' : 'Your project'}</p><h1 className="text-balance text-3xl font-semibold tracking-tight">{view.title}</h1></div>
+      <DeliveryNote token={token} className="mx-auto mb-7 max-w-3xl" />
       {error && <div role="alert" className="mb-5 rounded-xl border border-border p-4 text-sm text-status-error">{error}{readyToFinish && !complete && <button className="ml-3 min-h-11 underline" onClick={() => { finishAttempt.current = ''; refresh() }}>Try again</button>}</div>}
       {finished ? <>
         <SubmissionSuccess token={token} brand={view.brand} />
@@ -164,6 +166,7 @@ export default function RequestPage({ params }: { params: { token: string } }) {
     <header className="relative mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-5 py-2 sm:px-8"><div className="flex shrink-0 items-center gap-2.5">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/autoreview-icon.png" alt="" className="h-7 w-7" /><span className="text-[15px] font-semibold tracking-tight">Autoreview</span></div><div className="min-w-0 text-right"><p className="text-xs text-text-secondary">Submitting to</p><span className="block break-words text-sm font-medium">{view.brand}</span></div></header>
     <main className="relative mx-auto max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
       <RequestBrief view={view} />
+      <DeliveryNote token={params.token} className="mb-7" />
       <PartsWorkspace token={params.token} brand={view.brand} />
     </main>
   </div>
