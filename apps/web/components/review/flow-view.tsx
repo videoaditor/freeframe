@@ -212,6 +212,11 @@ export function FlowView(p: FlowViewProps) {
   /** What the video did during each note's recording; kept so Try again maps times the same way. */
   const timelines = React.useRef(new Map<string, TimelinePoint[]>())
 
+  // Speakers: the video's own voice would end up in the comment. While it plays the mic is held (the video keeps its
+  // sound, drawing goes on); pause the video to talk (Alan 2026-11-17).
+  const micHeld = !!active && playing
+  React.useEffect(() => { active?.rec.mute?.(micHeld) }, [active, micHeld])
+
   React.useEffect(() => {
     if (!active) { setElapsed(0); return }
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - active.startedAt) / 1000)), 500)
@@ -490,7 +495,7 @@ export function FlowView(p: FlowViewProps) {
       )}
       {active && !p.wide && (
         <div className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-secondary pl-4 pr-1" role="status" aria-label="Recording">
-          <LevelMeter levelRef={levelRef} />
+          {micHeld ? <span data-testid="mic-held" className="min-w-0 flex-1 truncate text-sm text-text-secondary">Listening when you pause the video</span> : <LevelMeter levelRef={levelRef} />}
           <span data-testid="rec-timer" className="min-w-[3.25rem] text-right font-mono text-[17px] font-semibold leading-[22px] tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
           <button type="button" onClick={cancelRecording} aria-label="Cancel recording" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-secondary hover:bg-bg-hover"><X size={18} /></button>
         </div>
@@ -562,7 +567,7 @@ export function FlowView(p: FlowViewProps) {
               {dropOverlay}
               {active ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2" role="status" aria-label="Recording">
-                  <LevelMeter levelRef={levelRef} />
+                  {micHeld ? <span data-testid="mic-held" className="min-w-0 flex-1 truncate text-sm text-text-secondary">Listening when you pause the video</span> : <LevelMeter levelRef={levelRef} />}
                   <span data-testid="rec-timer" className="min-w-[3.25rem] text-right font-mono text-sm font-semibold tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
                   <button type="button" onClick={cancelRecording} aria-label="Cancel recording" className="press grid h-11 w-11 shrink-0 place-items-center rounded-xl text-text-secondary hover:bg-bg-hover"><X size={18} /></button>
                 </div>
@@ -589,7 +594,7 @@ export function FlowView(p: FlowViewProps) {
         </div>
         <div className="flex min-h-0 flex-1 flex-col [&>ul]:max-h-none [&>ul]:flex-1 [&>ul]:border-t-0">
           {notes.some(n => n.status !== 'recording') ? notesList : (
-            <p className="m-auto max-w-[240px] text-center text-sm leading-relaxed text-text-tertiary">Press <span className="font-semibold text-text-secondary">Comment</span> and say what to change while it plays. Draw on the video to point. Or type below the video.</p>
+            <p className="m-auto max-w-[240px] text-center text-sm leading-relaxed text-text-tertiary">Press <span className="font-semibold text-text-secondary">Comment</span>, pause where something should change and say it. Draw on the video to point. Or type below the video.</p>
           )}
         </div>
         {statusArea}

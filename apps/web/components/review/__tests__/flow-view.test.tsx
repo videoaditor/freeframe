@@ -522,3 +522,24 @@ describe('drop anywhere (spec 2026-11-16)', () => {
     expect(e.defaultPrevented).toBe(true)
   })
 })
+
+describe('speakers (Alan 2026-11-17)', () => {
+  it('while the video plays the mic is held and says so; pausing the video opens it again, the recording keeps running', async () => {
+    let video!: HTMLVideoElement
+    const state = { paused: true }
+    const mute = vi.fn()
+    setup({
+      startRecording: vi.fn().mockResolvedValue({ stop: vi.fn().mockResolvedValue(audio), cancel: vi.fn(), mute }),
+      renderMedia: (o) => <div><video ref={(v) => { if (v) { video = v; Object.defineProperty(v, 'paused', { get: () => state.paused, configurable: true }) } }} />{o}</div>,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    await screen.findByRole('button', { name: /stop/i })
+    state.paused = false; fireEvent(video, new Event('play'))
+    expect(await screen.findByTestId('mic-held')).toHaveTextContent('Listening when you pause the video')
+    expect(mute).toHaveBeenLastCalledWith(true)
+    expect(screen.getByRole('button', { name: /stop/i })).toBeInTheDocument()
+    state.paused = true; fireEvent(video, new Event('pause'))
+    await waitFor(() => expect(mute).toHaveBeenLastCalledWith(false))
+    expect(screen.queryByTestId('mic-held')).toBeNull()
+  })
+})
