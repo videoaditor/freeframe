@@ -32,7 +32,7 @@ def media(e, a):
 
 
 def events(e, agent, cursor=""):
-    return e.client.get(f"/agent/feedback?cursor={cursor}", headers=agent.headers).json()
+    return e.client.get("/agent/feedback", params={"cursor": cursor}, headers=agent.headers).json()
 
 
 def test_approve_creates_one_delivery_and_the_agent_hears_of_it(env):

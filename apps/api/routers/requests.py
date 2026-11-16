@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, EmailStr, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -363,8 +363,9 @@ def list_requests(project_id: Optional[uuid.UUID] = Query(None), db: Session = D
     reviewer = db.query(GuestUser).filter(GuestUser.email == REVIEWER_EMAIL).first()
     bindings = {b.request_id: b for b in db.query(ChecklistBinding).filter(
         ChecklistBinding.request_id.in_([r.id for r in reqs]), ChecklistBinding.deleted_at.is_(None)).all()}
-    delivered = dict(db.query(Delivery.request_id, func.max(Delivery.handed_on_at)).filter(
-        Delivery.request_id.in_([r.id for r in reqs]), Delivery.handed_on_at.isnot(None)).group_by(Delivery.request_id).all())
+    delivered: dict = {}
+    for d in db.query(Delivery).filter(Delivery.request_id.in_([r.id for r in reqs]), Delivery.handed_on_at.isnot(None)).all():
+        delivered[d.request_id] = max(d.handed_on_at, delivered.get(d.request_id, d.handed_on_at))
     out = []
     for r in reqs:
         reviews = _review_assets(db, r, assets[r.id], reviewer, stats, include_media=False)
