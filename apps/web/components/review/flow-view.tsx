@@ -594,7 +594,7 @@ export function FlowView(p: FlowViewProps) {
         </div>
         <div className="flex min-h-0 flex-1 flex-col [&>ul]:max-h-none [&>ul]:flex-1 [&>ul]:border-t-0">
           {notes.some(n => n.status !== 'recording') ? notesList : (
-            <p className="m-auto max-w-[240px] text-center text-sm leading-relaxed text-text-tertiary">Press <span className="font-semibold text-text-secondary">Comment</span> , pause where something should change and say it. Draw on the video to point. Or type below the video.</p>
+            <p className="m-auto max-w-[240px] text-center text-sm leading-relaxed text-text-tertiary">Press <span className="font-semibold text-text-secondary">Comment</span>, pause where something should change and say it. Draw on the video to point. Or type below the video.</p>
           )}
         </div>
         {statusArea}
