@@ -23,3 +23,35 @@ def test_no_module_data_means_no_roles():
     assert part_roles(None, None) == {}
     assert part_roles({"slots": []}, {}) == {}
     assert part_roles({"slots": [{"id": "x"}]}, {"slots": {"x": {"asset_id": "a"}}}) == {}
+
+
+# ── the desk's embed link is not the request's review link ────────────────────────────────────────────────────────
+
+import secrets  # noqa: E402
+
+from .agent_pg import env, needs_pg  # noqa: E402,F401
+
+
+@needs_pg
+def test_a_second_share_link_on_the_folder_still_gets_roles_and_lists_the_parts(env):
+    from apps.api.models.asset import Asset
+    from apps.api.models.share import ShareLink, SharePermission
+    from apps.api.models.upload_request import UploadRequest
+    req = env.request(env.project_a, env.owner, "Glow ad")
+    hooks = [env.asset(req, "Hook a"), env.asset(req, "Hook b")]
+    body = env.asset(req, "Body v1")
+    manifest = {"slots": [{"id": "h1", "role": "hook"}, {"id": "h2", "role": "hook"}, {"id": "b1", "role": "body"}]}
+    with env.Session() as db:
+        for a in (*hooks, body):
+            db.get(Asset, a.id).iteration_source = True            # parts are only listed through links that may see them
+        row = db.get(UploadRequest, req.id)
+        row.iteration_manifest = manifest
+        row.iteration_state = {"slots": {"h1": {"asset_id": str(hooks[0].id)}, "h2": {"asset_id": str(hooks[1].id)}, "b1": {"asset_id": str(body.id)}}}
+        desk = ShareLink(folder_id=req.folder_id, token=secrets.token_urlsafe(16), created_by=env.owner.id, title="Gen review", permission=SharePermission.approve, visibility="public")
+        db.add(desk)
+        db.commit()
+        token = desk.token
+    assert token != req.review_share_token
+    out = env.client.get(f"/share/{token}/assets?page=1&per_page=50&embed=true").json()
+    got = {a["name"]: (a["role"], a["order"]) for a in out["assets"]}
+    assert got == {"Hook a": ("hook", 0), "Hook b": ("hook", 1), "Body v1": ("body", 0)}

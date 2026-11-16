@@ -1212,7 +1212,11 @@ def get_folder_share_assets(
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
     from ..models.upload_request import UploadRequest
-    source_folders=select(UploadRequest.folder_id).where(UploadRequest.review_share_token==token,UploadRequest.revoked_at.is_(None))
+    # The standing review link sees the parts of its request. The embed (the Gen desk's own share link on the same folder) does too:
+    # it previews the parts of the request whose folder it shares.
+    source_folders=select(UploadRequest.folder_id).where(
+        or_(UploadRequest.review_share_token==token,UploadRequest.folder_id==link.folder_id) if embed and link.folder_id else UploadRequest.review_share_token==token,
+        UploadRequest.revoked_at.is_(None))
     visible_iteration=and_(Asset.iteration_pending.is_(False),
         or_(Asset.iteration_source.is_(False),Asset.folder_id.in_(source_folders)),
         or_(Asset.iteration_derived.is_(False),Asset.folder_id==link.folder_id) if link.folder_id else Asset.iteration_derived.is_(False))
@@ -1358,7 +1362,10 @@ def get_folder_share_assets(
     if embed:
         visible_iteration = and_(visible_iteration, Asset.iteration_derived.is_(False))
         total = db.query(sa_func.count(Asset.id)).filter(asset_filter, Asset.deleted_at.is_(None), visible_iteration).scalar() or 0
-    module_req = db.query(UploadRequest).filter(UploadRequest.review_share_token == token, UploadRequest.revoked_at.is_(None)).first()
+    # The request is the one whose folder this is, whichever share link is used (the desk's embed link is not the request's review link).
+    module_req = db.query(UploadRequest).filter(
+        UploadRequest.folder_id == target_folder_id, UploadRequest.revoked_at.is_(None), UploadRequest.iteration_manifest.isnot(None),
+    ).order_by(UploadRequest.created_at.desc()).first() if target_folder_id else None
     roles = part_roles(module_req.iteration_manifest, module_req.iteration_state) if module_req else {}
 
     offset = (page - 1) * per_page
