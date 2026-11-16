@@ -6,6 +6,8 @@ export interface ActiveRecording {
   startedAt?: number
   /** Throw the recording away: nothing is transcribed, nothing is saved. */
   cancel: () => void
+  /** Silence the mic without stopping: the recording keeps its clock (drawings and words stay mapped to the video). */
+  mute?: (on: boolean) => void
 }
 export type StartRecording = (onLevel?: (level: number) => void) => Promise<ActiveRecording>
 
@@ -58,6 +60,7 @@ export const startMicRecording: StartRecording = async (onLevel) => {
       rec.onstop = () => { release(); resolve(new Blob(chunks, { type: rec.mimeType || 'audio/webm' })) }
       rec.stop()
     }),
+    mute: (on) => stream.getAudioTracks().forEach(t => { t.enabled = !on }),
     cancel: () => { rec.onstop = null; try { rec.stop() } catch { /* already stopped */ } release() },
   }
 }
