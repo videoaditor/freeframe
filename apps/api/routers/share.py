@@ -1174,6 +1174,22 @@ def create_multi_share_link(
 
 # ── Folder share public endpoints ─────────────────────────────────────────────
 
+def part_roles(manifest: Optional[dict], state: Optional[dict]) -> dict[str, tuple[str, int]]:
+    """asset id -> (role, order) for the parts of a module request: role from the manifest slot, order = its place among the slots of that role."""
+    seen: dict[str, int] = {}
+    out: dict[str, tuple[str, int]] = {}
+    for slot in (manifest or {}).get("slots", []):
+        role = slot.get("role")
+        if not role:
+            continue
+        n = seen.get(role, 0)
+        seen[role] = n + 1
+        aid = ((state or {}).get("slots", {}).get(slot.get("id")) or {}).get("asset_id")
+        if aid:
+            out[str(aid)] = (role, n)
+    return out
+
+
 @router.get("/share/{token}/assets", response_model=FolderShareAssetsResponse)
 def get_folder_share_assets(
     token: str,
@@ -1181,10 +1197,14 @@ def get_folder_share_assets(
     page: int = 1,
     per_page: int = 50,
     share_session: Optional[str] = Query(None, alias="share_session"),
+    embed: bool = False,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Public endpoint — optional auth. Returns assets and subfolders for a folder or project share link.
+
+    `embed=true` (the iframe preview) leaves out assembled combinations (iteration_derived): the preview shows the separate parts.
+    Items of a module request also carry their `role` (hook/body/cta/...) and `order` within that role.
 
     The authenticated link creator bypasses the passphrase (e.g. the dashboard settings preview),
     matching `/share/{token}/stream/{asset_id}`.
@@ -1335,6 +1355,12 @@ def get_folder_share_assets(
         Asset.deleted_at.is_(None), visible_iteration,
     ).scalar() or 0
 
+    if embed:
+        visible_iteration = and_(visible_iteration, Asset.iteration_derived.is_(False))
+        total = db.query(sa_func.count(Asset.id)).filter(asset_filter, Asset.deleted_at.is_(None), visible_iteration).scalar() or 0
+    module_req = db.query(UploadRequest).filter(UploadRequest.review_share_token == token, UploadRequest.revoked_at.is_(None)).first()
+    roles = part_roles(module_req.iteration_manifest, module_req.iteration_state) if module_req else {}
+
     offset = (page - 1) * per_page
     assets = db.query(Asset).filter(
         asset_filter,
@@ -1369,6 +1395,7 @@ def get_folder_share_assets(
             version_count=(_ready_version_count(db, asset.id) if link.show_versions else 1),
             created_by_name=creator.name if creator else None,
             created_at=asset.created_at,
+            role=roles.get(str(asset.id), (None, None))[0], order=roles.get(str(asset.id), (None, None))[1],
         ))
 
     return FolderShareAssetsResponse(
