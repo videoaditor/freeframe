@@ -504,6 +504,11 @@ describe('drop anywhere (spec 2026-11-16)', () => {
     fireEvent.drop(screen.getByTestId('media'), dt([new File(['x'], 'a.pdf', { type: 'application/pdf' })]))
     expect(screen.getByText(/Only PNG, JPEG, WebP or GIF/)).toBeInTheDocument()
   })
+  it('the phone layout has no drop zone (Alan: no drag and drop on a phone)', () => {
+    setup()
+    fireEvent.dragEnter(screen.getByTestId('media'), dt([png]))
+    expect(screen.queryByTestId('drop-overlay')).toBeNull()
+  })
   it('view-only shows no overlay', () => {
     setup({ wide: true, canComment: false })
     fireEvent.dragEnter(screen.getByTestId('media'), dt([png]))

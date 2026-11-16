@@ -8,7 +8,7 @@ Today an image only attaches when it is dropped on the thin strip around the com
 
 ## What
 
-1. **The whole review is the drop target** (`data-testid="flow-view"` root, both wide and phone layouts): files bar, video, comment bar, notes column.
+1. **The whole review is the drop target** (desktop layout only; on a phone there is no drag and drop, Alan 2026-11-17): files bar, video, comment bar, notes column.
 2. **While a file is dragged over it**: the video pauses, and one overlay covers the review. It has a dashed outline and one line in the middle: "Drop to attach to a comment at 0:12". The time is the playhead.
 3. **On drop**: the images go into the same tray as paste / paperclip today (`addImages`, same rules: PNG/JPEG/WebP/GIF, ≤ 10 MB, max 4, same skip message). Focus moves to the comment input, so the next words or Comment press carry them. Nothing is sent by the drop alone.
 4. **Never navigates away**: a file dropped anywhere on the page (also outside the review, also a non-image) is caught. A non-image shows the existing "Only PNG, JPEG, WebP or GIF images up to 10 MB." line instead of opening the file.
@@ -28,7 +28,7 @@ Dropping videos or PDFs as attachments, multi-page drop zones in the folder grid
 
 - Vitest: dragenter on the video shows the overlay with the playhead time and calls `onPause`; drop of a PNG on the video puts it in the tray; drop of a `.pdf` shows the skip line and adds nothing; `canComment=false` shows no overlay; a drop on `window` calls `preventDefault`.
 - `pnpm test` in `apps/web` green, typecheck clean for the touched files.
-- Screenshot of the overlay at 1440 and 390, opened for Alan before merge.
+- Screenshot of the overlay at 1440, opened for Alan before merge.
 
 ## Stop & escalate
 

@@ -598,8 +598,7 @@ export function FlowView(p: FlowViewProps) {
   )
 
   return (
-    <div ref={rootRef} className="relative flex h-full min-h-0 flex-col bg-bg-primary" style={{ paddingTop: 'env(safe-area-inset-top)' }} data-testid="flow-view" {...dropProps}>
-      {dropOverlay}
+    <div ref={rootRef} className="relative flex h-full min-h-0 flex-col bg-bg-primary" style={{ paddingTop: 'env(safe-area-inset-top)' }} data-testid="flow-view">
       {doneMoment}
       <Confetti burst={burst} />
       {filesBar}
