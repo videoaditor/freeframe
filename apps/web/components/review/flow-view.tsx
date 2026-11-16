@@ -72,6 +72,8 @@ export interface FlowViewProps {
 let seq = 0
 const newId = () => `note-${Date.now()}-${seq++}`
 
+/** Video volume while a comment records (0..1): low enough that speakers do not end up in the transcript. */
+export const DUCK_VOLUME = 0.15
 const stamp = (t: number) => `${timecode(t)}.${Math.floor((t % 1) * 10)}`
 
 /** Clock (waiting) -> spinner (sending) -> check (saved); red Retry when it failed. Never colour alone: each has its own glyph and name. */
@@ -212,6 +214,14 @@ export function FlowView(p: FlowViewProps) {
   /** What the video did during each note's recording; kept so Try again maps times the same way. */
   const timelines = React.useRef(new Map<string, TimelinePoint[]>())
 
+  // Speakers: the video's own voice leaks into the dictation. While a comment records, the video plays on at a whisper.
+  React.useEffect(() => {
+    const v = active ? rootRef.current?.querySelector('video') : null
+    if (!v) return
+    const prev = v.volume
+    v.volume = Math.min(prev, DUCK_VOLUME)
+    return () => { v.volume = prev }
+  }, [active])
   React.useEffect(() => {
     if (!active) { setElapsed(0); return }
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - active.startedAt) / 1000)), 500)

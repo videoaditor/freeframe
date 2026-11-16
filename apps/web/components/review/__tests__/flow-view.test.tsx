@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
-import { FlowView, tabLabels, type FlowViewProps } from '../flow-view'
+import { DUCK_VOLUME, FlowView, tabLabels, type FlowViewProps } from '../flow-view'
 import { createOutbox, memoryStore } from '@/lib/outbox'
 import { resetSession } from '@/lib/flow-session'
 import { beforeEach } from 'vitest'
@@ -520,5 +520,18 @@ describe('drop anywhere (spec 2026-11-16)', () => {
     Object.defineProperty(e, 'dataTransfer', { value: { types: ['Files'] } })
     window.dispatchEvent(e)
     expect(e.defaultPrevented).toBe(true)
+  })
+})
+
+describe('speakers (Alan 2026-11-17)', () => {
+  it('the video plays on at a whisper while a comment records, and gets its volume back after', async () => {
+    let video!: HTMLVideoElement
+    setup({ renderMedia: (o) => <div><video ref={(v) => { if (v) video = v }} />{o}</div> })
+    video.volume = 0.8
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }))
+    await screen.findByRole('button', { name: /stop/i })
+    expect(video.volume).toBe(DUCK_VOLUME)
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }))
+    await waitFor(() => expect(video.volume).toBe(0.8))
   })
 })
