@@ -12,6 +12,7 @@ import { imagesFrom, IMAGE_TYPES, pickImages } from '@/lib/comment-images'
 import type { Outbox } from '@/lib/outbox'
 import { doneLine, markApproved, markFeedback, sentLine, sessionSummary, unmarkApproved } from '@/lib/flow-session'
 import { Confetti } from './confetti'
+import { EmbedControls } from './embed-player'
 import { markHandedOn, type DeliveryRef } from '@/lib/delivery'
 import { InkLayer, type InkReplay } from './ink-layer'
 import { LevelMeter } from './level-meter'
@@ -61,7 +62,7 @@ export interface FlowViewProps {
   startRecording?: StartRecording
   /** Desktop: video left, notes in a right-hand column, talk/type bar under the video (Flask). */
   wide?: boolean
-  /** Iframe mode (share ?embed=1): only the video, with Comment and Send/Approve floating over its top edge. No files bar, no notes list. */
+  /** Iframe mode (share ?embed=1): only the video with the Review Player v1 panel on its bottom edge. No files bar, no notes list. */
   embed?: boolean
   /** A note reached the server (embed: tells the parent page). */
   onNoteSaved?: (t: number) => void
@@ -473,38 +474,44 @@ export function FlowView(p: FlowViewProps) {
     </button>
   )
 
-  // Embed: the page is the video; the two actions float over its top edge so the frame keeps the video's own shape.
-  if (p.embed) return (
-    <div ref={rootRef} className="relative flex h-full min-h-0 flex-col bg-black" data-testid="flow-view" data-layout="embed">
-      {doneMoment}
-      <Confetti burst={burst} />
-      {mediaArea}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-1 bg-gradient-to-b from-black/60 to-transparent p-2">
-        {p.canComment && (
-          <div className="pointer-events-auto flex items-center gap-2">
-            <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'}
-              className="flow-comment inline-flex h-11 min-w-11 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold text-text-inverse">
-              {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Comment</>}
-            </button>
-            {active && <span data-testid="rec-timer" className="font-mono text-sm font-semibold tabular-nums text-white">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>}
-            {active && <button type="button" onClick={cancelRecording} aria-label="Cancel recording" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-black/50 text-white"><X size={18} /></button>}
-            <span className="flex-1" />
-            {!active && finishButton}
-          </div>
-        )}
-        {!active && p.embedNav}
-        {notes.filter(n => n.status === 'failed' && !ob.byId(n.id)).map(n => (
-          <p key={n.id} role="alert" className="pointer-events-auto flex flex-wrap items-center gap-x-3 rounded-lg bg-black/70 px-3 text-xs text-white">
-            <span>{messages[n.id] ?? 'Could not transcribe.'}</span>
-            {n.audio && <button type="button" onClick={() => transcribe(n, n.audio!)} className="press inline-flex min-h-11 items-center gap-1 font-semibold"><RotateCcw size={12} />Try again</button>}
-          </p>
-        ))}
-        {error && <p role="alert" className="rounded-lg bg-black/70 px-3 py-2 text-sm text-status-error">{error}</p>}
-        {ob.summary.failed > 0 && <button type="button" onClick={() => ob.entries.filter(e => e.status === 'failed').forEach(e => ob.retry(e.id))} className="press pointer-events-auto inline-flex min-h-11 items-center gap-1 self-start rounded-full bg-black/70 px-3 text-xs font-semibold text-white"><RotateCcw size={12} />Retry sending notes</button>}
-        {toast && <div role="status" className="pointer-events-auto flex items-center justify-between gap-2 rounded-lg bg-black/70 py-1 pl-3 pr-1"><p className="flex items-center gap-2 text-sm font-medium text-status-success"><Check size={16} aria-hidden="true" />Approved</p>{copyButton}</div>}
+  // Embed (Review Player v1): the page is the video; one control panel sits on its bottom edge, see embed-player.tsx. Same notes, ink, outbox and approve as everywhere else.
+  if (p.embed) {
+    const savedAll = hasNotes && notes.every(n => ob.byId(n.id)?.status === 'saved')
+    const status = notes.some(n => n.status === 'transcribing') ? 'Transcribing…' : ob.summary.pending > 0 ? 'Saving…' : savedAll ? `${notes.length} note${notes.length === 1 ? '' : 's'} saved` : null
+    const toggleVideo = () => { const v = rootRef.current?.querySelector('video'); if (!v || active) return; if (v.paused) v.play().catch(() => {}); else v.pause() }
+    return (
+      <div ref={rootRef} className="relative flex h-full min-h-0 flex-col bg-black" data-testid="flow-view" data-layout="embed">
+        {doneMoment}
+        <Confetti burst={burst} />
+        <div className="flex min-h-0 flex-1 flex-col" onClick={toggleVideo}>{mediaArea}</div>
+        <EmbedControls
+          root={rootRef}
+          playing={playing}
+          time={time ?? p.getPlayhead()}
+          markers={notes.map(n => n.t)}
+          canComment={p.canComment}
+          recording={!!active}
+          elapsed={elapsed}
+          onRecordStart={tapComment}
+          onRecordStop={tapComment}
+          onCancel={cancelRecording}
+          status={status}
+          finish={{ label: hasNotes ? 'Send' : sendLabel, hasNotes, busy: sending, disabled: sending || (hasNotes ? blocked : (!!p.approved || !canApprove)), onClick: finish }}
+          nav={p.embedNav}
+        >
+          {notes.filter(n => n.status === 'failed' && !ob.byId(n.id)).map(n => (
+            <p key={n.id} role="alert" className="pointer-events-auto flex flex-wrap items-center gap-x-3 rounded-lg bg-black/70 px-3 text-xs text-white">
+              <span>{messages[n.id] ?? 'Could not transcribe.'}</span>
+              {n.audio && <button type="button" onClick={() => transcribe(n, n.audio!)} className="press inline-flex min-h-11 items-center gap-1 font-semibold"><RotateCcw size={12} />Try again</button>}
+            </p>
+          ))}
+          {error && <p role="alert" className="pointer-events-auto rounded-lg bg-black/70 px-3 py-2 text-sm text-status-error">{error}</p>}
+          {ob.summary.failed > 0 && <button type="button" onClick={() => ob.entries.filter(e => e.status === 'failed').forEach(e => ob.retry(e.id))} className="press pointer-events-auto inline-flex min-h-11 items-center gap-1 self-start rounded-full bg-black/70 px-3 text-xs font-semibold text-white"><RotateCcw size={12} />Retry sending notes</button>}
+          {toast && <div role="status" className="pointer-events-auto flex items-center justify-between gap-2 rounded-lg bg-black/70 py-1 pl-3 pr-1"><p className="flex items-center gap-2 text-sm font-medium text-status-success"><Check size={16} aria-hidden="true" />Approved</p>{copyButton}</div>}
+        </EmbedControls>
       </div>
-    </div>
-  )
+    )
+  }
 
   // Desktop (Flask): the video takes the room, notes live in a column on the right, talk / type / draw sit right under the video.
   if (p.wide) return (

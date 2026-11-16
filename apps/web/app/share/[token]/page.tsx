@@ -542,9 +542,11 @@ interface ShareMediaViewerProps {
   /** Flow view: the page needs the video element, and mounts the ink layer inside the picture. */
   videoRef?: React.RefObject<HTMLVideoElement>
   overlay?: React.ReactNode
+  /** Embed player: no native controls, the page draws its own (components/review/embed-player.tsx). */
+  bare?: boolean
 }
 
-function ShareMediaViewer({ asset, token, streamUrl, streamLoading, videoRef: externalVideoRef, overlay }: ShareMediaViewerProps) {
+function ShareMediaViewer({ asset, token, streamUrl, streamLoading, videoRef: externalVideoRef, overlay, bare }: ShareMediaViewerProps) {
   const ownVideoRef = React.useRef<HTMLVideoElement>(null)
   const videoRef = externalVideoRef ?? ownVideoRef
   const audioRef = React.useRef<HTMLAudioElement>(null)
@@ -644,7 +646,7 @@ function ShareMediaViewer({ asset, token, streamUrl, streamLoading, videoRef: ex
           ) : streamUrl ? (
             overlay ? (
               <div className="relative h-full w-full">
-                <video ref={videoRef} controls className="absolute inset-0 h-full w-full object-contain" preload="metadata" playsInline>
+                <video ref={videoRef} controls={!bare} className="absolute inset-0 h-full w-full object-contain" preload="metadata" playsInline>
                   Your browser does not support video playback.
                 </video>
                 <VideoFrameConstraint videoRef={videoRef}>{overlay}</VideoFrameConstraint>
@@ -981,7 +983,7 @@ function ShareViewer({
             </div>
           )}
           renderMedia={(ink) => (
-            <ShareMediaViewer asset={asset} token={token} streamUrl={streamUrl} streamLoading={streamLoading} videoRef={videoRef} overlay={ink} />
+            <ShareMediaViewer asset={asset} token={token} streamUrl={streamUrl} streamLoading={streamLoading} videoRef={videoRef} overlay={ink} bare />
           )}
           files={[{ id: asset.id, name: asset.name }]}
           currentFileId={asset.id}

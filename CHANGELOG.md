@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Review UI: the phone Comment button no longer clips its label; touch targets in review, share and approval views are at least 44 px on phones; hover-only download button is reachable on touch.
 
 ### Added
+- Share page `?embed=1`: new playback-first player (Review Player v1) replaces the Comment / Send pills and native video controls: a scrub bar with note ticks, play/pause, press-and-hold "Hold to comment at 0:07" (a quick tap latches it so you can draw while you talk), and Send / Approve at the end. Same notes, dictation, drawing, approve and `ar:*` messages as before; the normal share page is unchanged.
 - Agents as its own sidebar page (Overview · Brand rules · Agents): owners pick a brand and an AI (Claude Code, Codex, ChatGPT, Cursor, other), create a key once and copy one ready prompt. Moved out of Project › Settings; editors keep joining through share links. Empty projects offer "Connect your AI" first.
 - `POST /projects/{id}/agent-keys` creates an agent key straight from the signed-in owner or editor; agent keys carry a scope (`read` or `deliver`, existing keys stay `deliver`) and a per-key rate limit (120 reads / 30 writes per 10 min, `429` with `Retry-After`).
 

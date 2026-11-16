@@ -825,3 +825,54 @@ button:not(:disabled), summary { cursor: pointer; }
   100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 160px)) rotate(calc(var(--r) + 540deg)); }
 }
 @media (prefers-reduced-motion: reduce) { .confetti-piece { display: none; } }
+
+/* Review Player v1 (share ?embed=1): playback first, one panel on the bottom edge of the video. Sizes by the tile (container), not the viewport. */
+.ep { position: absolute; inset: 0; z-index: 30; pointer-events: none; container-type: size; color: #fff; --ep-ink: oklch(0.97 0 0); --ep-panel: oklch(0.18 0.015 300 / 0.85); --ep-btn: oklch(0.32 0.02 300); --ep-mark: oklch(0.78 0.15 60); }
+.ep-top { position: absolute; inset: 0 0 auto 0; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: linear-gradient(to bottom, rgb(0 0 0 / 0.5), transparent); }
+.ep-top:empty { display: none; }
+.ep-status { pointer-events: auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 12px; border-radius: 999px; background: rgb(0 0 0 / 0.6); font-size: 13px; font-weight: 600; }
+.ep-rec { pointer-events: auto; display: flex; align-items: center; gap: 8px; min-height: 44px; padding-left: 12px; border-radius: 999px; background: rgb(0 0 0 / 0.6); font-size: 14px; font-weight: 600; }
+.ep-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: oklch(0.85 0.01 300); }
+.ep-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: ep-pulse 1.1s ease-in-out infinite; }
+.ep-cancel { margin-left: auto; min-height: 44px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #fff; background: rgb(255 255 255 / 0.14); }
+.ep-bigplay { pointer-events: auto; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; display: grid; place-items: center; color: var(--ep-ink); background: oklch(0.15 0.01 300 / 0.6); backdrop-filter: blur(8px); transition: transform 160ms var(--ease-out); }
+.ep-bigplay:active { transform: scale(0.95); }
+.ep-panel { pointer-events: auto; position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); padding: 12px; border-radius: 20px; background: var(--ep-panel); backdrop-filter: blur(14px); display: grid; gap: 12px 8px; align-items: center; grid-template-columns: auto 1fr auto; grid-template-areas: "scrub scrub scrub" "play hold finish"; }
+.ep-scrub { grid-area: scrub; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ep-time { font-size: 12px; font-variant-numeric: tabular-nums; color: oklch(0.85 0.01 300); }
+.ep-track { position: relative; flex: 1; height: 44px; margin: -10px 0; touch-action: none; cursor: pointer; outline-offset: 2px; }
+.ep-rail, .ep-fill { position: absolute; left: 0; top: 20px; height: 4px; border-radius: 2px; }
+.ep-rail { right: 0; background: oklch(0.4 0.02 300); }
+.ep-fill { background: var(--ep-ink); }
+.ep-knob { position: absolute; top: 14px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--ep-ink); box-shadow: 0 1px 4px rgb(0 0 0 / 0.4); }
+.ep-tick { position: absolute; top: 10px; width: 4px; height: 6px; margin-left: -2px; border-radius: 2px; background: var(--ep-mark); }
+.ep-btn { height: 52px; min-width: 52px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0; background: var(--ep-btn); color: var(--ep-ink); font-size: 15px; font-weight: 600; transition: transform 160ms var(--ease-out), opacity 150ms ease; }
+.ep-btn:active, .ep-hold:active { transform: scale(0.97); }
+.ep-btn:disabled { opacity: 0.5; }
+.ep-play { grid-area: play; }
+.ep-finish { grid-area: finish; padding: 0 16px; }
+.ep-hold svg, .ep-btn svg { flex-shrink: 0; }
+.ep-hold { grid-area: hold; height: 52px; min-width: 0; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; white-space: nowrap; font-size: 15px; font-weight: 600; color: oklch(0.18 0.03 300); background: var(--accent); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out); }
+.ep[data-recording] .ep-hold { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9), 0 0 0 7px color-mix(in oklab, var(--accent) 45%, transparent); }
+.ep-mid, .ep-short { display: none; }
+@keyframes ep-pulse { 50% { opacity: 0.35; } }
+/* Narrower tiles: Hold shortens its label step by step; below 360px Send / Approve shrinks to its icon */
+@container (max-width: 519px) {
+  .ep-long { display: none; }
+  .ep-mid { display: inline; }
+}
+@container (max-width: 359px) {
+  .ep-mid, .ep-wide { display: none; }
+  .ep-short { display: inline; }
+  .ep-hint { display: none; }
+  .ep-finish { padding: 0; }
+  .ep-lbl { display: none; }
+  .ep-hold { font-size: 14px; }
+}
+/* Wide tiles: one row, like the horizontal design */
+@container (min-width: 600px) {
+  .ep-panel { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px; grid-template-columns: auto 1fr auto auto; grid-template-areas: "play scrub hold finish"; gap: 12px; }
+  .ep-btn, .ep-hold { height: 48px; }
+}
+@container (max-height: 420px) { .ep-bigplay { width: 52px; height: 52px; margin: -26px 0 0 -26px; } }
+@media (prefers-reduced-motion: reduce) { .ep-dot { animation: none; } .ep-btn, .ep-hold, .ep-bigplay { transition: none; } .ep-btn:active, .ep-hold:active, .ep-bigplay:active { transform: none; } }
