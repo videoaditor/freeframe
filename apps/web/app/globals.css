@@ -885,11 +885,15 @@ button:not(:disabled), summary { cursor: pointer; }
   .ep-type input, .ep-send { height: 36px; }
   .ep-send { width: 36px; }
   .ep-comments-toggle { min-height: 36px; }
-  .ep-pill { height: 32px; }
-  .ep-chain { padding: 8px; gap: 14px; }
-  .ep-col { gap: 6px; }
+  .ep-side .ep-pill { height: 32px; }
+  .ep-side .ep-chain { padding: 8px; gap: 14px; }
+  .ep-side .ep-col { gap: 6px; }
 }
 @container epside (max-width: 240px) {
+  /* the chain must fit the panel: compact nodes, no fixed widths */
+  .ep-side .ep-chain { gap: 8px; padding: 8px 6px; }
+  .ep-side .ep-pill { width: auto !important; padding: 0 6px 0 9px; gap: 4px; font-size: 12px; }
+  .ep-side .ep-count { min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
   .ep-root[data-side] .ep-actions { flex-direction: row; flex-wrap: nowrap; }
   .ep-cta, .ep-approve { min-width: 36px; padding: 0 8px; }
   .ep-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

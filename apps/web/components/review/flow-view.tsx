@@ -653,7 +653,7 @@ export function FlowView(p: FlowViewProps) {
             <form onSubmit={typeNote} className="ep-type glass">
               <input ref={typedRef} value={typed} onChange={e => setTyped(e.target.value)} onFocus={p.onPause} aria-label="Type a note at the current time"
                 onPaste={e => { const f = imagesFrom(e.clipboardData); if (f.length) { e.preventDefault(); addImages(f) } }}
-                placeholder={`Type a note at ${timecode(time ?? p.getPlayhead())}…`} enterKeyHint="send" />
+                placeholder={`Note at ${timecode(time ?? p.getPlayhead())}`} enterKeyHint="send" />
               <button type="submit" disabled={!typed.trim()} aria-label="Add note" className="ep-send"><Send size={16} aria-hidden="true" /></button>
             </form>
           )}
