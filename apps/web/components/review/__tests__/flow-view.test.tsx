@@ -101,6 +101,66 @@ describe('FlowView embed', () => {
   })
 })
 
+describe('FlowView embed: pause = talk, play = silence', () => {
+  const withVideo = (over: Partial<FlowViewProps> = {}) => setup({ embed: true, renderMedia: (overlay) => <div data-testid="media"><video data-testid="vid" />{overlay}</div>, ...over })
+  // jsdom's <video> is always paused: say what it does, then let the event through.
+  const fire = (name: string) => {
+    const v = screen.getByTestId('vid')
+    Object.defineProperty(v, 'paused', { configurable: true, value: name !== 'play' })
+    fireEvent(v, new Event(name))
+  }
+  const now = vi.spyOn(Date, 'now')
+  afterEach(() => now.mockReset())
+
+  it('pausing starts the mic, playing again closes it and saves the spoken note', async () => {
+    let t = 1000
+    now.mockImplementation(() => t)
+    const startRecording = recorder()
+    const { props, send } = withVideo({ startRecording })
+    fire('play')
+    expect(startRecording).not.toHaveBeenCalled() // playing = silence, and no prompt on load
+    fire('pause')
+    expect(await screen.findByRole('status', { name: 'Recording' })).toBeInTheDocument()
+    expect(startRecording).toHaveBeenCalledTimes(1)
+    t += 3000
+    fire('play')
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(props.dictate).toHaveBeenCalledWith(audio)
+    expect(screen.queryByRole('status', { name: 'Recording' })).toBeNull()
+  })
+  it('a pause that nothing was said in saves no note', async () => {
+    now.mockImplementation(() => 1000)
+    const { props, send } = withVideo()
+    fire('play'); fire('pause')
+    await screen.findByRole('status', { name: 'Recording' })
+    fire('play')
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Recording' })).toBeNull())
+    expect(props.dictate).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+  it('Comment while playing pauses the video and starts the mic', async () => {
+    const { props } = withVideo()
+    fire('play')
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(props.onPause).toHaveBeenCalled()
+    expect(await screen.findByRole('status', { name: 'Recording' })).toBeInTheDocument()
+  })
+  it('no microphone: one hint, the comment box is focused, nothing is left half-recording', async () => {
+    withVideo({ startRecording: vi.fn().mockRejectedValue(new Error('denied')) })
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(await screen.findByText(/Microphone not available/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/type a note/i)).toHaveFocus()
+    expect(screen.queryByRole('status', { name: 'Recording' })).toBeNull()
+  })
+  it('typed notes work next to dictation', async () => {
+    const { send } = withVideo()
+    fireEvent.change(screen.getByLabelText(/type a note/i), { target: { value: 'Cut the intro' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0][0]).toMatchObject({ text: 'Cut the intro', t: 3.2 })
+  })
+})
+
 describe('FlowView', () => {
   it('keeps the phone Comment label whole: the button never shrinks below its label and the finish button yields', () => {
     setup({ finishLabel: 'An den Agenten senden' })
