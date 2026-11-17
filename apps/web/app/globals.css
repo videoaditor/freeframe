@@ -847,6 +847,7 @@ button:not(:disabled), summary { cursor: pointer; }
 .ep-comments { display: none; min-height: 0; flex-direction: column; overflow: hidden; }
 .ep-comments[data-open] { display: flex; max-height: 28dvh; }
 .ep-root[data-side] .ep-comments { display: flex; flex: 1 1 auto; max-height: none; }
+.ep-comments-list { mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
 .ep-comments-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 .ep-comments-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-primary); font-size: 14px; font-weight: 500; }
 .ep-root[data-side] .ep-comments-toggle { display: none; }

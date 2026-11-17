@@ -663,7 +663,7 @@ export function FlowView(p: FlowViewProps) {
               <button type="button" className="ep-comments-toggle" aria-expanded={commentsOpen} onClick={() => setCommentsOpen(o => !o)}>Comments<span className="text-text-secondary">{commentsOpen ? '⌃' : '›'}</span></button>
               <div className="ep-comments" data-open={commentsOpen ? '' : undefined}>
                 <div className="ep-comments-head"><span>All comments</span></div>
-                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">{p.embedComments(showComment)}</div>
+                <div className="ep-comments-list flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">{p.embedComments(showComment)}</div>
               </div>
             </>
           )}
