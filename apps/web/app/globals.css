@@ -834,7 +834,9 @@ button:not(:disabled), summary { cursor: pointer; }
 .ep-video { position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; background: #000; container-type: inline-size; }
 .ep-root[data-side] .ep-video { flex: none; height: 100%; }
 .ep-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
-.ep-root[data-side] .ep-side { flex: 1 1 0; min-width: 0; max-width: 440px; padding: 16px 20px; gap: 14px; }
+.ep-root[data-side] .ep-side { flex: 1 1 0; min-width: 0; padding: 16px 20px; gap: 14px; container-type: inline-size; }
+/* a Desk tile: the column keeps only the stepper and the two buttons */
+@container (max-width: 300px) { .ep-root[data-side] .ep-side { padding: 10px 12px; gap: 10px; } .ep-root[data-side] .ep-comments { display: none; } }
 .ep-comments { display: none; min-height: 0; flex-direction: column; overflow: hidden; }
 .ep-comments[data-open] { display: flex; max-height: 28dvh; }
 .ep-root[data-side] .ep-comments { display: flex; flex: 1 1 0; max-height: none; }
@@ -896,6 +898,11 @@ button:not(:disabled), summary { cursor: pointer; }
   .ep-bar .ep-time { grid-area: time; }
   .ep-bar .ep-mute { grid-area: mute; }
   .ep-bar .ep-fs { grid-area: fs; }
+}
+/* a video this narrow keeps play and the track */
+@container (max-width: 200px) {
+  .ep-bar { grid-template-columns: auto 1fr; grid-template-areas: "play trk"; left: 6px; right: 6px; bottom: 6px; padding: 0 4px; }
+  .ep-bar .ep-time, .ep-bar .ep-mute, .ep-bar .ep-fs { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .ep-rec-dot { animation: none; } .ep-bar, .ep-knob, .ep-pill, .ep-cta, .ep-approve, .ep-ib { transition: none; } }
 .ep-comments .px-4 { padding-left: 0; padding-right: 0; }
