@@ -134,7 +134,7 @@ export function dictationMessage(e: unknown): string {
 }
 
 /** Embed layout: a column beside the video when the frame has the room for it (the video keeps its own ratio), else below. */
-export const SIDE_MIN = 300
+export const SIDE_MIN = 180
 export function useEmbedSide(root: React.RefObject<HTMLElement | null>, on: boolean) {
   const [state, setState] = React.useState({ side: false, ratio: 9 / 16 })
   React.useEffect(() => {
