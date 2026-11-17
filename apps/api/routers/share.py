@@ -358,10 +358,14 @@ def validate_share_link_endpoint(
     staff = client_view.viewer_is_staff(current_user)
     created_by_name = client_view.creator_name(creator, staff)
 
+    from ..models.upload_request import UploadRequest
+    request_id = db.query(UploadRequest.id).filter(UploadRequest.review_share_token == token).scalar()
+
     return ShareLinkValidateResponse(
         asset_id=link.asset_id,
         folder_id=link.folder_id,
         project_id=link.project_id,
+        request_id=request_id,
         folder_name=folder_name,
         project_name=project_name,
         title=link.title,
