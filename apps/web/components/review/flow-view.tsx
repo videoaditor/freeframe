@@ -341,16 +341,31 @@ export function FlowView(p: FlowViewProps) {
   // Embed: the mic follows the video (lib/embed-dictation.ts). Paused = talk, playing = silence.
   const dict = React.useRef(dictInitial)
   const [micHint, setMicHint] = React.useState('')
+  // Typing mode (no mic): strokes drawn while paused wait here and become a note on Play, on a typed note, or on Send. Never lost.
+  const [typing, setTyping] = React.useState(false)
+  const [inkPending, setInkPending] = React.useState(false)
+  const flushInk = (text?: string): boolean => {
+    const drawn = marks.current
+    if (!p.embed || active || !drawn.length) return false
+    marks.current = []; setInkPending(false)
+    const id = newId()
+    dispatch({ type: 'add', id, t: p.getPlayhead(), status: 'ready', images })
+    dispatch({ type: 'edit', id, text: text?.trim() || 'Drawing' })
+    dispatch({ type: 'marks', id, marks: drawn })
+    if (images.length) { setImages([]); setImageNote(null) }
+    return true
+  }
   const dictate_ = (e: DictEvent) => {
     const r = dictStep(dict.current, e)
     dict.current = r.state
+    if (e === 'play' && r.state.mic === 'typing') flushInk()
     for (const fx of r.effects) {
       if (fx === 'start') void startSegment().then(ok => { if (!ok) dictate_('denied') })
       else if (fx === 'flush') void stopSegment()
       else if (fx === 'close') void stopSegment(true)
       else if (fx === 'discard') cancelRecording()
       else if (fx === 'pause') p.onPause()
-      else if (fx === 'hint') setMicHint('Microphone not available. Type your note below.')
+      else if (fx === 'hint') { setTyping(true); setMicHint('Microphone not available. Type your note below.') }
       // A phone keyboard would cover the video he is about to draw on: only focus where there is a real keyboard, or when typing is all that is left.
       else if (fx === 'focus' && (r.state.mic === 'typing' || (typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches))) typedRef.current?.focus()
     }
@@ -384,6 +399,7 @@ export function FlowView(p: FlowViewProps) {
   }, [toast, delivery])
 
   const finish = async () => {
+    if (flushInk(typed)) { setTyped(''); return } // a drawing still waiting becomes its note first; the next tap sends
     setSending(true); setError('')
     try {
       if (!hasNotes) {
@@ -426,6 +442,7 @@ export function FlowView(p: FlowViewProps) {
     e.preventDefault()
     const text = typed.trim()
     if (!text) return
+    if (flushInk(text)) { setTyped(''); return }
     const id = newId()
     dispatch({ type: 'add', id, t: p.getPlayhead(), status: 'ready', images })
     dispatch({ type: 'edit', id, text })
@@ -476,12 +493,15 @@ export function FlowView(p: FlowViewProps) {
           <>
           {active && <div className="flow-rec-glow" data-testid="rec-glow" aria-hidden="true" />}
           <InkLayer
-            active={!!active}
+            active={!!active || (!!p.embed && typing && !playing)}
             playing={playing}
             time={time}
             onStart={p.onPause}
             replay={replay}
-            onMark={(k, points, times) => { if (active) marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt }) }}
+            onMark={(k, points, times) => {
+              if (active) marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt })
+              else if (p.embed && typing) { marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: 0 }); setInkPending(true) }
+            }}
           />
           </>,
           { markers: notes.map(n => ({ t: n.t, label: stamp(n.t) })) },
@@ -653,7 +673,7 @@ export function FlowView(p: FlowViewProps) {
             )}
             {!active && (
               <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (!!p.approved || !canApprove))} className="ep-approve glass">
-                {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{hasNotes ? 'Send' : sendLabel}
+                {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes || inkPending ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{hasNotes || inkPending ? 'Send' : sendLabel}
               </button>
             )}
           </div>

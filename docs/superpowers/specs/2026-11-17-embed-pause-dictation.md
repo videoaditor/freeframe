@@ -27,7 +27,7 @@ So the mic runs only while the video is paused.
 - Bei Mikrofon verweigert / nicht unterstuetzt (Telegram-Webview) -> Tipp-Modus fuer die Sitzung: ein Hinweis "Microphone not available. Type your note below.", Kommentarfeld fokussiert, kein erneuter Mic-Versuch.
 - Bei Play waehrend das Mic noch oeffnet -> Aufnahme sofort verworfen, kein Zustand haengt.
 - Bei Transkription fehlgeschlagen -> bestehendes "Try again" (Audio bleibt erhalten).
-- Bei Zeichnen im Tipp-Modus -> Zeichnung wird nicht gespeichert (Ink braucht eine laufende Aufnahme, wie ueberall sonst).
+- Bei Zeichnen im Tipp-Modus (kein Mic) -> Striche warten und werden bei Play, getippter Notiz oder Send als Notiz am Playhead gespeichert (Text = getippt, sonst "Drawing"). Nie verloren.
 
 ## Not changed
 Non-embed views, backend, dictation endpoint, outbox, ink format.

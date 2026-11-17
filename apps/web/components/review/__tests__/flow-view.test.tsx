@@ -152,6 +152,23 @@ describe('FlowView embed: pause = talk, play = silence', () => {
     expect(screen.getByLabelText(/type a note/i)).toHaveFocus()
     expect(screen.queryByRole('status', { name: 'Recording' })).toBeNull()
   })
+  it('typing mode (no mic): strokes drawn while paused are saved as a note when the video plays again', async () => {
+    const { send } = withVideo({ startRecording: vi.fn().mockRejectedValue(new Error('denied')) })
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    await screen.findByText(/Microphone not available/)
+    const ink = screen.getByTestId('ink-layer')
+    ink.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    ink.setPointerCapture = () => {}
+    ink.releasePointerCapture = () => {}
+    fireEvent.pointerDown(ink, { pointerId: 1, clientX: 50, clientY: 50, button: 0 })
+    fireEvent.pointerUp(ink, { pointerId: 1, clientX: 50, clientY: 50 })
+    expect(send).not.toHaveBeenCalled()
+    fire('play')
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    const payload = send.mock.calls[0][0] as { text: string; annotation: { marks: unknown[] } | null }
+    expect(payload.text).toBe('Drawing')
+    expect(payload.annotation?.marks.length).toBeGreaterThan(0)
+  })
   it('typed notes work next to dictation', async () => {
     const { send } = withVideo()
     fireEvent.change(screen.getByLabelText(/type a note/i), { target: { value: 'Cut the intro' } })

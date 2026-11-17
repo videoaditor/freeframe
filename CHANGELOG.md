@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Embed review: the mic follows the video. Paused records dictation, playing is silent and saves the spoken notes with their drawings; Comment pauses and starts. Without a microphone it falls back to typing, and drawings made while paused are still saved. The embed column gets a typed-note field.
+
 ### Fixed
 - Review UI: the phone Comment button no longer clips its label; touch targets in review, share and approval views are at least 44 px on phones; hover-only download button is reachable on touch.
 
