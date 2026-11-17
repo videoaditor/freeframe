@@ -359,7 +359,8 @@ def validate_share_link_endpoint(
     created_by_name = client_view.creator_name(creator, staff)
 
     from ..models.upload_request import UploadRequest
-    request_id = db.query(UploadRequest.id).filter(UploadRequest.review_share_token == token).scalar()
+    found = db.query(UploadRequest.id).filter(UploadRequest.review_share_token == token, UploadRequest.revoked_at.is_(None)).first()
+    request_id = found[0] if found and isinstance(found[0], uuid.UUID) else None
 
     return ShareLinkValidateResponse(
         asset_id=link.asset_id,
