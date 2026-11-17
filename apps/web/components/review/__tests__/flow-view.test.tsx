@@ -182,7 +182,7 @@ describe('FlowView embed: pause = talk, play = silence', () => {
     const { send } = withVideo()
     fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
     await screen.findByRole('status', { name: 'Recording' })
-    fireEvent.click(screen.getByRole('button', { name: 'Type a note instead' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Type instead' }))
     const field = await screen.findByLabelText(/type a note/i)
     await waitFor(() => expect(field).toHaveFocus())
     expect(screen.queryByRole('status', { name: 'Recording' })).toBeNull()

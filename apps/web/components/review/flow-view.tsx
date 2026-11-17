@@ -685,7 +685,7 @@ export function FlowView(p: FlowViewProps) {
               <button type="submit" disabled={!typed.trim()} aria-label="Add note" className="ep-send"><Send size={16} aria-hidden="true" /></button>
             </form>
           )}
-          <div className="ep-actions">
+          <div className="ep-actions" data-dictating={active ? '' : undefined}>
             {active && <button type="button" onClick={() => dictate_('stop')} aria-label="Cancel recording" className="ep-cancel press">Cancel</button>}
             {active && (
               <div className="ep-rec" role="status" aria-label="Recording">
@@ -693,7 +693,7 @@ export function FlowView(p: FlowViewProps) {
                 <span data-testid="rec-timer" className="font-mono tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
               </div>
             )}
-            {active && <button type="button" onClick={() => dictate_('type')} aria-label="Type a note instead" className="ep-type-btn press"><Keyboard size={18} aria-hidden="true" />Type</button>}
+            {active && <button type="button" onClick={() => dictate_('type')} aria-label="Type instead" title="Type instead" className="ep-type-btn press"><Keyboard size={20} aria-hidden="true" /></button>}
             {p.canComment && (
               <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'} data-recording={active ? '' : undefined} className="ep-cta">
                 {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Comment</>}

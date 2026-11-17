@@ -41,4 +41,4 @@ Non-embed views, backend, dictation endpoint, outbox, ink format.
 
 ## Type instead (addendum)
 
-While dictating, the one row is Cancel, timer, Type, Stop. Type (keyboard icon, "Type a note instead") flushes what was said into its note and opens the typing field focused (also on phones) at the current playhead; ink keeps working. Typing lasts until the next Play, which saves the typed note and plays; the next pause dictates again. A denied mic stays in typing mode (sticky). State machine: event `type`, flag `typeOnce`.
+While dictating, the one row is Cancel, timer, Type, Stop. Type (round keyboard icon button, "Type instead") flushes what was said into its note and opens the typing field focused (also on phones) at the current playhead; ink keeps working. Typing lasts until the next Play, which saves the typed note and plays; the next pause dictates again. A denied mic stays in typing mode (sticky). State machine: event `type`, flag `typeOnce`.
