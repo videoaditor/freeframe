@@ -135,7 +135,7 @@ export function dictationMessage(e: unknown): string {
 }
 
 /** Embed layout: a column beside the video when the frame has the room for it (the video keeps its own ratio), else below. */
-export const SIDE_MIN = 300
+export const SIDE_MIN = 200
 export function useEmbedSide(root: React.RefObject<HTMLElement | null>, on: boolean) {
   const [state, setState] = React.useState({ side: false, ratio: 9 / 16 })
   React.useEffect(() => {
@@ -667,12 +667,12 @@ export function FlowView(p: FlowViewProps) {
             )}
             {p.canComment && (
               <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'} data-recording={active ? '' : undefined} className="ep-cta">
-                {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Comment</>}
+                {active ? <><Square size={16} aria-hidden="true" /><span className="ep-lbl">Stop</span></> : <><Mic size={18} aria-hidden="true" /><span className="ep-lbl">Comment</span></>}
               </button>
             )}
             {!active && (
-              <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (!!p.approved || !canApprove))} className="ep-approve glass">
-                {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes || inkPending ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{hasNotes || inkPending ? 'Send' : sendLabel}
+              <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (!!p.approved || !canApprove))} aria-label={hasNotes || inkPending ? 'Send' : sendLabel} className="ep-approve glass">
+                {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes || inkPending ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}<span className="ep-lbl">{hasNotes || inkPending ? 'Send' : sendLabel}</span>
               </button>
             )}
           </div>
