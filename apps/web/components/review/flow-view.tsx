@@ -648,16 +648,8 @@ export function FlowView(p: FlowViewProps) {
           {error && <p role="alert" className="rounded-lg bg-bg-secondary px-3 py-2 text-sm text-status-error">{error}</p>}
           {ob.summary.failed > 0 && <button type="button" onClick={() => ob.entries.filter(e => e.status === 'failed').forEach(e => ob.retry(e.id))} className="press inline-flex min-h-11 items-center gap-1 self-start rounded-full bg-bg-secondary px-3 text-xs font-semibold"><RotateCcw size={12} />Retry sending notes</button>}
           {toast && <div role="status" className="flex items-center justify-between gap-2 rounded-lg bg-bg-secondary py-1 pl-3 pr-1"><p className="flex items-center gap-2 text-sm font-medium text-status-success"><Check size={16} aria-hidden="true" />Approved</p>{copyButton}</div>}
-          {active && (
-            <div className="ep-rec" role="status" aria-label="Recording">
-              <span className="ep-rec-dot" aria-hidden="true" />
-              <span data-testid="rec-timer" className="font-mono tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
-              <span className="min-w-0 truncate">Listening. Play saves it.</span>
-              <button type="button" onClick={() => dictate_('stop')} aria-label="Cancel recording" className="ep-cancel press">Cancel</button>
-            </div>
-          )}
           {micHint && !active && <p role="status" className="ep-hint">{micHint}</p>}
-          {p.canComment && (
+          {p.canComment && !active && (
             <form onSubmit={typeNote} className="ep-type glass">
               <input ref={typedRef} value={typed} onChange={e => setTyped(e.target.value)} onFocus={p.onPause} aria-label="Type a note at the current time"
                 onPaste={e => { const f = imagesFrom(e.clipboardData); if (f.length) { e.preventDefault(); addImages(f) } }}
@@ -666,6 +658,13 @@ export function FlowView(p: FlowViewProps) {
             </form>
           )}
           <div className="ep-actions">
+            {active && <button type="button" onClick={() => dictate_('stop')} aria-label="Cancel recording" className="ep-cancel press">Cancel</button>}
+            {active && (
+              <div className="ep-rec" role="status" aria-label="Recording">
+                <span className="ep-rec-dot" aria-hidden="true" />
+                <span data-testid="rec-timer" className="font-mono tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
+              </div>
+            )}
             {p.canComment && (
               <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'} data-recording={active ? '' : undefined} className="ep-cta">
                 {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Comment</>}

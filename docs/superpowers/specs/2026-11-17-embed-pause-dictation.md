@@ -21,7 +21,9 @@ So the mic runs only while the video is paused.
 | Play again | playing | closes segment, off | one note per sentence + its ink; segment under 0.7 s with no ink = no note |
 | Comment while listening ("Stop") | paused | closes, stays off until next Play | notes as above |
 | Cancel | unchanged | discards | nothing; stays off until next Play |
-| Type + send | any | unchanged | typed note at current playhead |
+| Type + send | not dictating | unchanged | typed note at current playhead |
+
+While the mic is on, the column is one row only: Cancel (left), red dot + timer, Stop (right). No typing field, no status line; the video gets the freed height. The typing field returns when not dictating (stopped, typing mode).
 
 ## Errors
 - Bei Mikrofon verweigert / nicht unterstuetzt (Telegram-Webview) -> Tipp-Modus fuer die Sitzung: ein Hinweis "Microphone not available. Type your note below.", Kommentarfeld fokussiert, kein erneuter Mic-Versuch.

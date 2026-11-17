@@ -169,7 +169,16 @@ describe('FlowView embed: pause = talk, play = silence', () => {
     expect(payload.text).toBe('Drawing')
     expect(payload.annotation?.marks.length).toBeGreaterThan(0)
   })
-  it('typed notes work next to dictation', async () => {
+  it('while dictating the column is one row, Cancel and Stop: no typing field; Cancel brings the field back', async () => {
+    withVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    await screen.findByRole('status', { name: 'Recording' })
+    expect(screen.queryByLabelText(/type a note/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel recording' }))
+    expect(await screen.findByLabelText(/type a note/i)).toBeInTheDocument()
+  })
+  it('typed notes work when not dictating', async () => {
     const { send } = withVideo()
     fireEvent.change(screen.getByLabelText(/type a note/i), { target: { value: 'Cut the intro' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
