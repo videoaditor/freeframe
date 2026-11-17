@@ -8,8 +8,8 @@ a slug set by hand always wins.
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'ap09_link_six_client_brands'
-down_revision = 'ap08_link_veda_naturals_brand'
+revision = 'ap10_link_six_client_brands'
+down_revision = 'ap09_handin_signs'
 branch_labels = None
 depends_on = None
 
