@@ -169,14 +169,15 @@ describe('FlowView embed: pause = talk, play = silence', () => {
     expect(payload.text).toBe('Drawing')
     expect(payload.annotation?.marks.length).toBeGreaterThan(0)
   })
-  it('while dictating the column is one row, Cancel and Stop: no typing field; Cancel brings the field back', async () => {
+  it('while dictating the column is one row, Cancel and Stop: no typing field; Cancel leaves the idle row without one', async () => {
     withVideo()
     fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
     await screen.findByRole('status', { name: 'Recording' })
     expect(screen.queryByLabelText(/type a note at/i)).toBeNull()
     expect(screen.getByRole('button', { name: 'Stop recording' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel recording' }))
-    expect(await screen.findByLabelText(/type a note at/i)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Type a note' })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/type a note at/i)).toBeNull() // the field only exists in typing mode
   })
   it('idle: a round keyboard button sits between Comment and Approve; dictating shows none', async () => {
     withVideo()
@@ -207,7 +208,9 @@ describe('FlowView embed: pause = talk, play = silence', () => {
   })
   it('typed notes work when not dictating', async () => {
     const { send } = withVideo()
-    fireEvent.change(screen.getByLabelText(/type a note at/i), { target: { value: 'Cut the intro' } })
+    expect(screen.queryByLabelText(/type a note at/i)).toBeNull() // idle: no field until the keyboard button
+    fireEvent.click(screen.getByRole('button', { name: 'Type a note' }))
+    fireEvent.change(await screen.findByLabelText(/type a note at/i), { target: { value: 'Cut the intro' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0][0]).toMatchObject({ text: 'Cut the intro', t: 3.2 })

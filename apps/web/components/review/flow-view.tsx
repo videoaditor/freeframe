@@ -373,7 +373,7 @@ export function FlowView(p: FlowViewProps) {
     return true
   }
   const focusTyped = React.useRef(false)
-  React.useEffect(() => { if (!active && focusTyped.current) { focusTyped.current = false; typedRef.current?.focus() } }, [active])
+  React.useEffect(() => { if (!active && typing && focusTyped.current) { focusTyped.current = false; typedRef.current?.focus() } }, [active, typing])
   const dictate_ = (e: DictEvent) => {
     const r = dictStep(dict.current, e)
     dict.current = r.state
@@ -391,7 +391,7 @@ export function FlowView(p: FlowViewProps) {
       else if (fx === 'pause') p.onPause()
       else if (fx === 'hint') { setMicHint('Microphone not available. Type your note below.') }
       // A phone keyboard would cover the video he is about to draw on: only focus where there is a real keyboard, or when typing is all that is left.
-      else if (fx === 'focus' && e === 'type' && activeRef.current) focusTyped.current = true // the field mounts once the recording row is gone
+      else if (fx === 'focus' && r.state.mic === 'typing') { if (typedRef.current && !activeRef.current) typedRef.current.focus(); else focusTyped.current = true } // the field only exists in typing mode, once the recording row is gone
       else if (fx === 'focus' && (r.state.mic === 'typing' || (typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches))) typedRef.current?.focus()
     }
   }
@@ -685,7 +685,7 @@ export function FlowView(p: FlowViewProps) {
               ))}
             </ul>
           )}
-          {p.canComment && !active && (
+          {p.canComment && !active && typing && (
             <form onSubmit={typeNote} className="ep-type glass">
               <input ref={typedRef} value={typed} onChange={e => setTyped(e.target.value)} onFocus={p.onPause} aria-label="Type a note at the current time"
                 onPaste={e => { const f = imagesFrom(e.clipboardData); if (f.length) { e.preventDefault(); addImages(f) } }}

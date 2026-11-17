@@ -853,10 +853,11 @@ button:not(:disabled), summary { cursor: pointer; }
 .ep-root[data-side] .ep-comments-toggle { display: none; }
 .ep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .ep-root[data-side] .ep-actions { flex-direction: column; gap: 10px; }
-.ep-actions[data-dictating], .ep-root[data-side] .ep-actions[data-dictating] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 12px; row-gap: 6px; }
+.ep-actions[data-dictating], .ep-root[data-side] .ep-actions[data-dictating] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 14rem) minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 12px; row-gap: 6px; }
 .ep-root[data-side] .ep-actions:not([data-dictating]) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
 .ep-root[data-side] .ep-actions:not([data-dictating]) > .ep-approve { grid-column: 1 / -1; }
-.ep-actions[data-dictating] > .ep-cancel { grid-area: 1 / 1; }
+.ep-actions[data-dictating] > * { min-width: 0; }
+.ep-actions[data-dictating] > .ep-cancel { grid-area: 1 / 1; justify-self: start; }
 .ep-actions[data-dictating] > .ep-cta { grid-area: 1 / 2; min-height: 64px; font-size: 17px; animation: ep-rec-glow 1.6s ease-in-out infinite; }
 .ep-actions[data-dictating] > .ep-rec { grid-area: 2 / 2; justify-content: center; min-height: 28px; }
 .ep-actions > * { flex: 1 1 auto; min-width: max-content; }
