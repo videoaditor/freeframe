@@ -1,11 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { Check, Clock, Link2, Loader2, Mic, Paperclip, RotateCcw, Send, Square, X } from 'lucide-react'
+import { Check, Clock, Keyboard, Link2, Loader2, Mic, Paperclip, RotateCcw, Send, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timecode } from '@/lib/platform'
 import { dictate as dictateApi, type DictationResult } from '@/lib/agents'
 import { notesFromDictation, notesReducer, sendBlocked, sendable, type FlowNote } from '@/lib/flow-notes'
+import { drawnFrameFile, nearestShot, snapshotVideo, type FrameShot } from '@/lib/drawn-frame'
 import { buildDrawingData, isInk, splitDeictic, type InkMark } from '@/lib/ink'
 import { getNoteOutbox, useNoteOutbox, type NoteBody, type NotePayload } from '@/lib/note-outbox'
 import { imagesFrom, IMAGE_TYPES, pickImages } from '@/lib/comment-images'
@@ -211,6 +212,14 @@ export function FlowView(p: FlowViewProps) {
   )
   const [messages, setMessages] = React.useState<Record<string, string>>({})
   const marks = React.useRef<InkMark[]>([])
+  /** The picture under each stroke when it was drawn: the drawn frame is built from these when the note is saved. */
+  const shots = React.useRef<FrameShot[]>([])
+  const snap = (t: number) => {
+    const canvas = snapshotVideo(rootRef.current?.querySelector('video'))
+    if (canvas) shots.current = [...shots.current.slice(-11), { t, canvas }]
+  }
+  const framing = React.useRef(new Set<string>())
+  const queueChain = React.useRef<Promise<unknown>>(Promise.resolve())
   const [replay, setReplay] = React.useState<InkReplay | null>(null)
   const replayKey = React.useRef(0)
   const rootRef = React.useRef<HTMLDivElement>(null)
@@ -264,7 +273,15 @@ export function FlowView(p: FlowViewProps) {
     for (const n of notes) {
       if (n.status !== 'ready' || !n.text.trim() || ob.byId(n.id)) continue
       if (!canSave) { onNeedSave.current?.(); continue }
-      void ob.enqueue(n.id, payloadRef.current({ text: n.text.trim(), t: n.t, annotation: buildDrawingData(n.marks ?? []), ...(n.images?.length ? { images: n.images } : {}) }))
+      const note = { text: n.text.trim(), t: n.t, annotation: buildDrawingData(n.marks ?? []), ...(n.images?.length ? { images: n.images } : {}) }
+      if (framing.current.has(n.id)) continue
+      framing.current.add(n.id)
+      // Ink: render the drawn frame first (milliseconds), then queue; no frame (tainted, no video) = ink only. One chain keeps note order.
+      const marksOfNote = n.marks ?? []
+      queueChain.current = queueChain.current
+        .then(() => (marksOfNote.length ? drawnFrameFile(nearestShot(shots.current, marksOfNote[0].t), marksOfNote) : null))
+        .then(drawnFrame => ob.enqueue(n.id, payloadRef.current({ ...note, ...(drawnFrame ? { drawnFrame } : {}) })))
+        .catch(() => undefined)
     }
   }, [notes, canSave, ob.entries]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -355,18 +372,28 @@ export function FlowView(p: FlowViewProps) {
     if (images.length) { setImages([]); setImageNote(null) }
     return true
   }
+  const typedPause = React.useRef(false)
+  const focusTyped = React.useRef(false)
+  React.useEffect(() => { if (!active && focusTyped.current) { focusTyped.current = false; typedRef.current?.focus() } }, [active])
   const dictate_ = (e: DictEvent) => {
     const r = dictStep(dict.current, e)
     dict.current = r.state
-    if (e === 'play' && r.state.mic === 'typing') flushInk()
+    if (e === 'play' && (r.state.mic === 'typing' || typedPause.current)) {
+      // Typing session ends on Play: the typed note (with any ink) is saved, then the video plays.
+      const text = typed.trim()
+      if (text) { if (!flushInk(text)) typeNote(); setTyped('') } else flushInk()
+      typedPause.current = false
+    }
+    if (e === 'type') typedPause.current = true
     for (const fx of r.effects) {
       if (fx === 'start') void startSegment().then(ok => { if (!ok) dictate_('denied') })
-      else if (fx === 'flush') void stopSegment()
+      else if (fx === 'flush') void stopSegment(e === 'type')
       else if (fx === 'close') void stopSegment(true)
       else if (fx === 'discard') cancelRecording()
       else if (fx === 'pause') p.onPause()
       else if (fx === 'hint') { setTyping(true); setMicHint('Microphone not available. Type your note below.') }
       // A phone keyboard would cover the video he is about to draw on: only focus where there is a real keyboard, or when typing is all that is left.
+      else if (fx === 'focus' && e === 'type') focusTyped.current = true // the field mounts once the recording row is gone
       else if (fx === 'focus' && (r.state.mic === 'typing' || (typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches))) typedRef.current?.focus()
     }
   }
@@ -438,8 +465,8 @@ export function FlowView(p: FlowViewProps) {
   const canApprove = p.canApprove ?? true
   const sendLabel = hasNotes ? (p.finishLabel ?? (p.onFinishRound ? 'Send to agent' : 'Done')) : !canApprove ? 'Send' : p.approved ? 'Approved ✓' : 'Approve'
 
-  const typeNote = (e: React.FormEvent) => {
-    e.preventDefault()
+  const typeNote = (e?: React.FormEvent) => {
+    e?.preventDefault()
     const text = typed.trim()
     if (!text) return
     if (flushInk(text)) { setTyped(''); return }
@@ -499,6 +526,7 @@ export function FlowView(p: FlowViewProps) {
             onStart={p.onPause}
             replay={replay}
             onMark={(k, points, times) => {
+              snap(p.getPlayhead())
               if (active) marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: Date.now() - active.startedAt })
               else if (p.embed && typing) { marks.current.push({ k, points, times, t: p.getPlayhead(), offset_ms: 0 }); setInkPending(true) }
             }}
@@ -665,6 +693,7 @@ export function FlowView(p: FlowViewProps) {
                 <span data-testid="rec-timer" className="font-mono tabular-nums text-text-primary">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>
               </div>
             )}
+            {active && <button type="button" onClick={() => dictate_('type')} aria-label="Type a note instead" className="ep-type-btn press"><Keyboard size={18} aria-hidden="true" /><span className="ep-lbl">Type</span></button>}
             {p.canComment && (
               <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'} data-recording={active ? '' : undefined} className="ep-cta">
                 {active ? <><Square size={16} aria-hidden="true" /><span className="ep-lbl">Stop</span></> : <><Mic size={18} aria-hidden="true" /><span className="ep-lbl">Comment</span></>}
