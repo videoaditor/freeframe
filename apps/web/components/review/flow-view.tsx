@@ -136,7 +136,7 @@ export function dictationMessage(e: unknown): string {
 }
 
 /** Embed layout: a column beside the video when the frame has the room for it (the video keeps its own ratio), else below. */
-export const SIDE_MIN = 300
+export const SIDE_MIN = 200
 export function useEmbedSide(root: React.RefObject<HTMLElement | null>, on: boolean) {
   const [state, setState] = React.useState({ side: false, ratio: 9 / 16 })
   React.useEffect(() => {
@@ -661,7 +661,7 @@ export function FlowView(p: FlowViewProps) {
               <button type="button" className="ep-comments-toggle" aria-expanded={commentsOpen} onClick={() => setCommentsOpen(o => !o)}>Comments<span className="text-text-secondary">{commentsOpen ? '⌃' : '›'}</span></button>
               <div className="ep-comments" data-open={commentsOpen ? '' : undefined}>
                 <div className="ep-comments-head"><span>All comments</span></div>
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{p.embedComments(showComment)}</div>
+                <div className="ep-comments-list flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">{p.embedComments(showComment)}</div>
               </div>
             </>
           )}
@@ -689,7 +689,7 @@ export function FlowView(p: FlowViewProps) {
             <form onSubmit={typeNote} className="ep-type glass">
               <input ref={typedRef} value={typed} onChange={e => setTyped(e.target.value)} onFocus={p.onPause} aria-label="Type a note at the current time"
                 onPaste={e => { const f = imagesFrom(e.clipboardData); if (f.length) { e.preventDefault(); addImages(f) } }}
-                placeholder={`Type a note at ${timecode(time ?? p.getPlayhead())}…`} enterKeyHint="send" />
+                placeholder={`Note at ${timecode(time ?? p.getPlayhead())}`} enterKeyHint="send" />
               <button type="submit" disabled={!typed.trim()} aria-label="Add note" className="ep-send"><Send size={16} aria-hidden="true" /></button>
             </form>
           )}
@@ -703,15 +703,15 @@ export function FlowView(p: FlowViewProps) {
             )}
             {p.canComment && (
               <button type="button" onClick={tapComment} aria-label={active ? 'Stop recording' : 'Comment'} data-recording={active ? '' : undefined} className="ep-cta">
-                {active ? <><Square size={16} aria-hidden="true" />Stop</> : <><Mic size={18} aria-hidden="true" />Comment</>}
+                {active ? <><Square size={16} aria-hidden="true" /><span className="ep-lbl">Stop</span></> : <><Mic size={18} aria-hidden="true" /><span className="ep-lbl">Comment</span></>}
               </button>
             )}
             {p.canComment && !active && (
               <button type="button" onClick={() => dictate_('type')} aria-label="Type a note" aria-pressed={typing} title="Type a note" className="ep-type-btn press"><Keyboard size={20} aria-hidden="true" /></button>
             )}
             {!active && (
-              <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (!!p.approved || !canApprove))} className="ep-approve glass">
-                {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes || inkPending ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{hasNotes || inkPending ? 'Send' : sendLabel}
+              <button type="button" onClick={finish} disabled={sending || (hasNotes ? blocked : (!!p.approved || !canApprove))} aria-label={hasNotes || inkPending ? 'Send' : sendLabel} className="ep-approve glass">
+                {sending ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : hasNotes || inkPending ? <Send size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}<span className="ep-lbl">{hasNotes || inkPending ? 'Send' : sendLabel}</span>
               </button>
             )}
           </div>
