@@ -30,6 +30,28 @@ export function saveIdentity(identity: GuestIdentity) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
 }
 
+/**
+ * Host-provided identity (Gen embed): `#reviewer_name=…&reviewer_email=…` in the URL fragment.
+ * Fragment, not query, so it never reaches server logs or referrers. Same checks as IdentityForm.
+ */
+export function identityFromHash(hash: string): GuestIdentity | null {
+  const p = new URLSearchParams(hash.replace(/^#/, ''))
+  const name = (p.get('reviewer_name') ?? '').trim().slice(0, 100)
+  const email = (p.get('reviewer_email') ?? '').trim().slice(0, 254)
+  if (!name || !/\S+@\S+\.\S+/.test(email)) return null
+  return { name, email }
+}
+
+/** Reads the host identity, saves it (it wins over a stored one) and strips the fragment from the address bar. */
+export function consumeHostIdentity(): GuestIdentity | null {
+  if (typeof window === 'undefined') return null
+  const id = identityFromHash(window.location.hash)
+  if (!id) return null
+  saveIdentity(id)
+  try { history.replaceState(null, '', window.location.pathname + window.location.search) } catch {}
+  return id
+}
+
 function clearIdentity() {
   if (typeof window === 'undefined') return
   localStorage.removeItem(STORAGE_KEY)
@@ -120,7 +142,7 @@ export function GuestCommentInput({ token, onCommentPosted, className }: GuestCo
 
   // Load identity from localStorage on mount
   React.useEffect(() => {
-    setIdentity(loadIdentity())
+    setIdentity(consumeHostIdentity() ?? loadIdentity())
   }, [])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
