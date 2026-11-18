@@ -3,6 +3,7 @@
 Dictation v2 (docs/superpowers/specs/2026-11-09-review-dictation-v2.md): a fixed language (German unless told otherwise),
 a vocabulary prompt built from the lexicon (Gen's lexicon.json), and word + segment timestamps for sentence anchoring.
 """
+import difflib
 import json
 from pathlib import Path
 
@@ -52,6 +53,23 @@ def fix_terms(text: str) -> str:
     return fixed if fixed and 0.7 <= len(fixed) / len(text) <= 1.4 else text
 
 
+def apply_fixes(raw: str, fixed: str, segments: list) -> list:
+    """Carry the fix-up into the segments (the embed builds notes from them): each 'replace' between raw and fixed tokens is applied
+    to a segment's text when its whole token sequence sits inside that segment. Timings are untouched."""
+    a, b = raw.split(), fixed.split()
+    swaps = [(a[i1:i2], b[j1:j2]) for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if op == "replace"]
+    for seg in segments:
+        toks = seg["text"].split()
+        for src, dst in swaps:
+            n = len(src)
+            for i in range(len(toks) - n + 1):
+                if toks[i:i + n] == src:
+                    toks[i:i + n] = dst
+                    break
+        seg["text"] = " ".join(toks)
+    return segments
+
+
 def transcribe(audio: bytes, filename: str, content_type: str, lang: str = "de") -> dict:
     lang = (lang or "de").lower()
     if lang not in LANGS:
@@ -80,6 +98,8 @@ def transcribe(audio: bytes, filename: str, content_type: str, lang: str = "de")
         raw = str(body.get("text", "")).strip()
         text = fix_terms(raw)
         result = {"text": text, "segments": segments}
+        if text != raw:
+            apply_fixes(raw, text, segments)
         if text != raw:  # the raw Whisper text stays available; absent when nothing was fixed
             result["raw_text"] = raw
         if words:  # absent when the provider sent none, so the response shape of v1 clients is unchanged

@@ -47,3 +47,19 @@ def test_transcribe_returns_fixed_text_and_keeps_the_raw(monkeypatch):
         out = dictation.transcribe(b"1", "a.webm", "audio/webm")
     assert out["text"] == "ChatGPT ist gut" and out["raw_text"] == "Chatsuki ist gut"
     assert "ChatGPT" in post.call_args.kwargs["data"]["prompt"]
+
+
+def test_fix_reaches_the_segments_and_timings_stay(monkeypatch):
+    monkeypatch.setattr(dictation.settings, "groq_api_key", "gsk_test")
+    whisper = MagicMock(status_code=200)
+    whisper.json.return_value = {"text": " Chatsuki ist gut. Der Rice Mushroom Hook sitzt.", "segments": [
+        {"start": 0.0, "end": 1.5, "text": " Chatsuki ist gut."}, {"start": 1.5, "end": 3.0, "text": " Der Rice Mushroom Hook sitzt."}]}
+    with patch("apps.api.services.dictation.httpx.post", return_value=whisper), \
+         patch("apps.api.services.dictation.httpx.request", return_value=_chat("ChatGPT ist gut. Der Ryze Hook sitzt.")):
+        out = dictation.transcribe(b"1", "a.webm", "audio/webm")
+    assert out["segments"] == [{"start": 0.0, "end": 1.5, "text": "ChatGPT ist gut."}, {"start": 1.5, "end": 3.0, "text": "Der Ryze Hook sitzt."}]
+
+
+def test_a_replacement_spanning_two_segments_is_skipped():
+    segs = [{"start": 0, "end": 1, "text": "Rice"}, {"start": 1, "end": 2, "text": "Mushroom ist gut"}]
+    assert dictation.apply_fixes("Rice Mushroom ist gut", "Ryze ist gut", segs) == segs
