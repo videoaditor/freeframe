@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { GuestCommentInput, identityFromHash, consumeHostIdentity, loadIdentity } from './guest-comment-input'
 
@@ -25,5 +25,16 @@ describe('host identity from URL fragment', () => {
     history.replaceState(null, '', '/share/tok#reviewer_name=Ana&reviewer_email=a%40b.co')
     render(<GuestCommentInput token="tok" />)
     expect(screen.queryByText('Who are you?')).toBeNull()
+  })
+})
+
+describe('consumeHostIdentity with blocked storage', () => {
+  it('a second caller still gets the identity after the fragment is stripped', () => {
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked') })
+    window.history.replaceState(null, '', '/share/t?embed=1#reviewer_name=Alan%20Simon&reviewer_email=alan%40aditor.ai')
+    expect(consumeHostIdentity()).toEqual({ name: 'Alan Simon', email: 'alan@aditor.ai' })
+    expect(window.location.hash).toBe('')
+    expect(consumeHostIdentity()).toEqual({ name: 'Alan Simon', email: 'alan@aditor.ai' })
+    set.mockRestore()
   })
 })

@@ -42,12 +42,16 @@ export function identityFromHash(hash: string): GuestIdentity | null {
   return { name, email }
 }
 
+// The first caller strips the fragment; later callers on the same page get it from here (storage may be blocked in the Telegram iframe).
+let hostIdentity: GuestIdentity | null = null
+
 /** Reads the host identity, saves it (it wins over a stored one) and strips the fragment from the address bar. */
 export function consumeHostIdentity(): GuestIdentity | null {
   if (typeof window === 'undefined') return null
   const id = identityFromHash(window.location.hash)
-  if (!id) return null
-  saveIdentity(id)
+  if (!id) return hostIdentity
+  hostIdentity = id
+  try { saveIdentity(id) } catch {}
   try { history.replaceState(null, '', window.location.pathname + window.location.search) } catch {}
   return id
 }
