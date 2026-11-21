@@ -1,0 +1,626 @@
+{
+  "schema_version": "autoreview.h4.acceptance.v1",
+  "as_of": "2026-10-07 Asia/Tokyo",
+  "overall": "blocked",
+  "handoff_complete": false,
+  "verification_levels": {
+    "code_verified": "baseline gates and opt-in bridge only",
+    "integration_verified": false,
+    "live_verified": false,
+    "live_readonly_verified": [
+      "owner entry shell",
+      "existing empty request branding"
+    ]
+  },
+  "rows": [
+    {
+      "id": "inventory.main",
+      "status": "passed",
+      "scope": "code",
+      "environment": "GitHub + isolated checkouts",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/environment.json",
+        "evidence/freeframe-prs.json",
+        "evidence/pr56.json"
+      ],
+      "claim": "Both main SHAs freshly checked; PR56 merged; reserved engine branches untouched.",
+      "requires": []
+    },
+    {
+      "id": "inventory.production-image",
+      "status": "pending",
+      "scope": "live",
+      "environment": "production",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/environment.json",
+        "evidence/github-deployments.json"
+      ],
+      "claim": "No current immutable FreeFrame image or Worker deployment identity available. No code/live equivalence claimed.",
+      "requires": [
+        "Ops image/commit export; documented credential file absent"
+      ]
+    },
+    {
+      "id": "live.owner-entry",
+      "status": "passed",
+      "scope": "live-readonly",
+      "environment": "review.aditor.ai/o",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/live-readonly.json",
+        "evidence/live-login.jpg"
+      ],
+      "claim": "302 to independent FreeFrame login; login shell HTTP200 and Google enabled. This does not prove authentication.",
+      "requires": []
+    },
+    {
+      "id": "live.existing-request-brand",
+      "status": "passed",
+      "scope": "live-readonly",
+      "environment": "existing Alan/Aditor request",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/live-readonly.json",
+        "evidence/live-existing-request.jpg",
+        "evidence/live-existing-request-mobile.jpg"
+      ],
+      "claim": "Existing request has brand Aditor, zero assets; desktop and 390px empty entry inspected. No upload or comment was sent.",
+      "requires": []
+    },
+    {
+      "id": "gate.backend",
+      "status": "passed",
+      "scope": "code",
+      "environment": "Python 3.12; mocked DB",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/api-tests.txt"
+      ],
+      "claim": "461 passed, 51 skipped; real DB checks remain skipped.",
+      "requires": []
+    },
+    {
+      "id": "gate.web-build",
+      "status": "passed",
+      "scope": "code",
+      "environment": "local production build",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/web-build.txt"
+      ],
+      "claim": "Next production build succeeds against local H4 endpoint configuration.",
+      "requires": []
+    },
+    {
+      "id": "gate.web-tests-initial-node25",
+      "status": "failed",
+      "scope": "code",
+      "environment": "Node25.4.0 default shell",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/web-tests-node25-initial.txt"
+      ],
+      "claim": "44 failures; localStorage implementation mismatch. Runtime mismatch, not a product fix.",
+      "requires": []
+    },
+    {
+      "id": "gate.web-tests-node22-initial",
+      "status": "failed",
+      "scope": "code",
+      "environment": "Node22.22.3 default parallelism",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/web-tests-node22-initial.txt"
+      ],
+      "claim": "One dynamic-import/loading timeout and teardown error under concurrent load; targeted run passes.",
+      "requires": []
+    },
+    {
+      "id": "gate.web-tests",
+      "status": "passed",
+      "scope": "code",
+      "environment": "Node22.22.3; --maxWorkers=2",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/web-tests-final.txt",
+        "evidence/web-mobile-targeted.txt"
+      ],
+      "claim": "80 files / 535 tests passed; no production code/test change to obtain this result.",
+      "requires": []
+    },
+    {
+      "id": "gate.web-typecheck",
+      "status": "passed",
+      "scope": "code",
+      "environment": "local",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/web-typecheck.txt"
+      ],
+      "claim": "tsc --noEmit exit0.",
+      "requires": []
+    },
+    {
+      "id": "gate.web-lint",
+      "status": "passed",
+      "scope": "code",
+      "environment": "local",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/web-lint.txt"
+      ],
+      "claim": "Lint exit0 with existing warnings.",
+      "requires": []
+    },
+    {
+      "id": "gate.worker-tests",
+      "status": "passed",
+      "scope": "code",
+      "environment": "local Vitest",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/worker-tests.txt"
+      ],
+      "claim": "125 files / 1393 tests pass, opt-in H4 test skipped in normal suite.",
+      "requires": []
+    },
+    {
+      "id": "gate.worker-typecheck",
+      "status": "passed",
+      "scope": "code",
+      "environment": "same unchanged baseline",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/worker-typecheck-comparison.json"
+      ],
+      "claim": "Not tsc-clean: same 161 baseline diagnostics; no new diagnostics.",
+      "requires": []
+    },
+    {
+      "id": "fixture.bridge-auth-replay-trello",
+      "status": "passed",
+      "scope": "code",
+      "environment": "local HTTP bridge; in-memory KV; injected Trello/provider",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/bridge-smoke.txt",
+        "evidence/bridge-state.json",
+        "evidence/bridge-smoke.json"
+      ],
+      "claim": "Real Worker router rejects bad secret, deduplicates registration, resolves synthetic card/brand/brief and handles invalid link. No real FreeFrame persistence.",
+      "requires": []
+    },
+    {
+      "id": "fixture.version-isolation-failures",
+      "status": "passed",
+      "scope": "code",
+      "environment": "existing mock/API tests",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/api-tests.txt",
+        "evidence/worker-tests.txt",
+        "evidence/web-tests-final.txt"
+      ],
+      "claim": "Existing current-version, foreign-folder, tenant, missing-evidence, failed-provider and request journey regressions pass. No real-stack result implied.",
+      "requires": []
+    },
+    {
+      "id": "stack.compose-config",
+      "status": "passed",
+      "scope": "configuration",
+      "environment": "isolated autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/compose-config.txt",
+        "compose.json"
+      ],
+      "claim": "Compose syntax validates offline. Own ports and named volumes; no foreign stack command executed.",
+      "requires": []
+    },
+    {
+      "id": "stack.start",
+      "status": "failed",
+      "scope": "integration",
+      "environment": "local Docker29.4.0",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "evidence/docker-build-failed.txt",
+        "evidence/compose-start-failed.txt",
+        "evidence/environment.json"
+      ],
+      "claim": "Image build ended with daemon EOF; socket disappeared; ENOSPC observed. H4 stack never started.",
+      "requires": []
+    },
+    {
+      "id": "standalone.login-no-whop",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Existing authorized owner must authenticate in a clean browser without Whop; prove /auth/me identity and workspace.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "customer.request-upload",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Brief -> authenticated request -> real guest multipart PUT -> complete -> RequestUpload.submitted_at and unique asset/version.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "customer.processing",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Real FFmpeg quick pass, proxy/poster/HLS generated, database ready, ready-hook accepted and cron consumes exact version.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "customer.current-comments",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Stored Worker comments and current-version stats agree after API and browser reload.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "internal.card-workspace-upload",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Synthetic Trello metadata -> authorized workspace selection -> folder binding -> real member upload -> current feedback.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "versions.v2",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "V2 uses same asset with new version; V1 pass/comment never counts for V2; history retained.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "retry.upload-publication",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Repeated accepted complete/review event yields no second upload/version/comment; resolve ambiguous outcome by reads first.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "errors.provider-network",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Injected provider/network failure is unavailable, no success; confirmed retry recovers current version.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "tenant.isolation",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Existing authorized tenant B cannot read/comment/upload tenant A asset via member or request/standing-share mismatch.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "browser.player-comments-seek-mobile",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Real synthetic asset player, timestamp seek, simultaneous mobile split, comments and reload inspected.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "database.persistence-migrations",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "planned autoreview-h4",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "compose.json",
+        "journeys.json",
+        "RUNBOOK.md"
+      ],
+      "claim": "Current Alembic head applied in own Postgres; opt-in request editor DB tests and restart persistence checked.",
+      "requires": [
+        "Restore local Docker availability and sufficient disk capacity without shared cleanup/restart by this task",
+        "Approved existing-account fixture + isolated Postgres/MinIO/Redis/API/Celery and bridge"
+      ]
+    },
+    {
+      "id": "h1.checklist",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "future combined stack",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "RUNBOOK.md"
+      ],
+      "claim": "Verified H1 FreeFrame/Worker commits + Engine plan API; V1/V2 same plan_id/content_sha256",
+      "requires": [
+        "Verified H1 FreeFrame/Worker commits + Engine plan API; V1/V2 same plan_id/content_sha256"
+      ]
+    },
+    {
+      "id": "h2.comment-source",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "future combined stack",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "RUNBOOK.md"
+      ],
+      "claim": "Verified H2 migration/service/Worker/UI commits; source persisted and authorized, no spoof/leak",
+      "requires": [
+        "Verified H2 migration/service/Worker/UI commits; source persisted and authorized, no spoof/leak"
+      ]
+    },
+    {
+      "id": "h3.wait-timing",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "future combined stack",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "RUNBOOK.md"
+      ],
+      "claim": "Verified H3 commits; phase timing, retries/cache classes, no invented total countdown",
+      "requires": [
+        "Verified H3 commits; phase timing, retries/cache classes, no invented total countdown"
+      ]
+    },
+    {
+      "id": "engine.qualification",
+      "status": "pending",
+      "scope": "integration",
+      "environment": "future combined stack",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "RUNBOOK.md"
+      ],
+      "claim": "Original session reserved PR150/79/51 qualification, model/Compiler/A-B decision and approved exact versions",
+      "requires": [
+        "Original session reserved PR150/79/51 qualification, model/Compiler/A-B decision and approved exact versions"
+      ]
+    },
+    {
+      "id": "live.end-to-end",
+      "status": "pending",
+      "scope": "live",
+      "environment": "production",
+      "commits": {
+        "freeframe": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+        "worker_base": "2e7e5e2460e8defedc4b24bbe1457b10b4b3a5ad",
+        "worker_fixture": "a30aa30eb516bd4d4b541f86ae3deb11ddaf2d37"
+      },
+      "evidence": [
+        "RUNBOOK.md"
+      ],
+      "claim": "No write qualification, paid provider test, deploy or release authorized in H4.",
+      "requires": [
+        "Separate concrete execution authorization after isolated acceptance and all dependency evidence"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+ WARN  The "workspaces" field in package.json is not supported by pnpm. Create a "pnpm-workspace.yaml" file instead.
+
+> web@0.1.0 test /Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web
+> vitest run components/share/__tests__/share-mobile-review.test.tsx
+
+
+ RUN  v4.1.10 /Users/alansimon/.codex/worktrees/autoreview-h4-acceptance/freeframe/apps/web
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  12:25:37
+   Duration  1.37s (transform 388ms, setup 93ms, import 268ms, tests 283ms, environment 621ms)
