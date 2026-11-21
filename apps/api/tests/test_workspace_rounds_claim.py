@@ -122,3 +122,13 @@ def test_asking_for_one_request_never_claims_another_requests_round(scene):
     assert r.status_code == 200 and r.json()["rounds"] == []
     [rnd] = rounds(e)
     assert rnd.claimed_by is None
+
+
+def test_peek_reads_the_round_without_claiming_it(scene):
+    e = scene
+    comment(e, e.scene.asset)
+    done(e)
+    r = e.client.get("/agent/feedback?peek=true", headers=e.scene.agent.headers)
+    assert r.status_code == 200 and len(r.json()["rounds"]) == 1
+    [rnd] = rounds(e)
+    assert rnd.claimed_by is None

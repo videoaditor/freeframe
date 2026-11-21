@@ -539,15 +539,17 @@ def agent_round_json(db: Session, rnd: FeedbackRound, agent_user: User) -> dict:
 
 
 def agent_rounds(db: Session, agent_user: User, project_id, cursor: Optional[datetime],
-                 request_id: Optional[uuid.UUID] = None) -> list[FeedbackRound]:
+                 request_id: Optional[uuid.UUID] = None, peek: bool = False) -> list[FeedbackRound]:
     """Closed, unacknowledged rounds the agent may see, oldest first. Each is claimed for this key unless another key
     holds a live claim (it is still returned, flagged). `request_id` narrows it first, so waiting on one job never
-    claims another job's rounds."""
+    claims another job's rounds. `peek` reads without claiming (status readers such as Gen's bridge, never a worker)."""
     q = _mine(db, project_id).filter(FeedbackRound.closed_at.isnot(None), FeedbackRound.acked_at.is_(None))
     if request_id is not None:
         q = q.filter(FeedbackRound.request_id == request_id)
     if cursor is not None:
         q = q.filter(FeedbackRound.closed_at > cursor)
+    if peek:
+        return q.order_by(FeedbackRound.closed_at).all()
     rows = q.with_for_update(of=FeedbackRound).order_by(FeedbackRound.closed_at).all()
     now = datetime.now(timezone.utc)
     for r in rows:
