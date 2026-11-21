@@ -53,4 +53,6 @@ class FeedbackRound(Base):
     closed_by: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # button | idle | left | all_reviewed
     last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     acked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # the agent key's user working on it
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     rule_suggestions: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")

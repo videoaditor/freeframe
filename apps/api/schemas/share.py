@@ -151,6 +151,7 @@ class FolderShareAssetItem(BaseModel):
     # Embed: this file's comments of the open round (no Send yet), and of closed rounds the agent has not acked yet.
     open_notes: int = 0
     sent_notes: int = 0
+    working_notes: int = 0
 
 
 class FolderShareSubfolder(BaseModel):

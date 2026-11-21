@@ -497,23 +497,81 @@ def close_if_all_reviewed(db: Session, req: UploadRequest, now: datetime) -> boo
 
 # ── What the agent may collect ─────────────────────────────────────────────────
 
-def _mine(db: Session, agent_user: User, project_ids):
-    """Rounds of requests in these projects (one id or the key's workspace) that this agent handed versions in to."""
-    handed_in = db.query(RequestUpload.request_id).filter(RequestUpload.uploader_email == agent_user.email)
+CLAIM_TTL = timedelta(minutes=30)
+
+
+def _mine(db: Session, project_ids):
+    """Rounds of every request in these projects (one id or the key's workspace). Not scoped to the key that handed
+    the versions in: every agent key of the workspace acts for the same person and sees the same rounds."""
     return db.query(FeedbackRound).join(UploadRequest, UploadRequest.id == FeedbackRound.request_id).filter(
-        UploadRequest.project_id.in_([project_ids] if isinstance(project_ids, uuid.UUID) else list(project_ids)), UploadRequest.id.in_(handed_in))
+        UploadRequest.project_id.in_([project_ids] if isinstance(project_ids, uuid.UUID) else list(project_ids)))
 
 
-def agent_rounds(db: Session, agent_user: User, project_id, cursor: Optional[datetime]) -> list[FeedbackRound]:
-    """Closed, unacknowledged rounds the agent may collect, oldest first."""
-    q = _mine(db, agent_user, project_id).filter(FeedbackRound.closed_at.isnot(None), FeedbackRound.acked_at.is_(None))
+def uploaded_since(db: Session, request_id: uuid.UUID, since: datetime) -> bool:
+    return db.query(RequestUpload.id).filter(RequestUpload.request_id == request_id, RequestUpload.submitted_at > since).first() is not None
+
+
+def claim_is_live(db: Session, rnd: FeedbackRound, now: datetime) -> bool:
+    """Someone is on this round: claimed, not acked, and either fresh (CLAIM_TTL) or a version came in after the claim."""
+    if rnd.claimed_by is None or rnd.claimed_at is None or rnd.acked_at is not None:
+        return False
+    return now - rnd.claimed_at < CLAIM_TTL or uploaded_since(db, rnd.request_id, rnd.claimed_at)
+
+
+def claim_round(db: Session, rnd: FeedbackRound, agent_user: User, now: datetime) -> bool:
+    """Hand the round to this key when nobody holds a live claim. Returns claimed_by_me. A repeat fetch by the holder
+    keeps the original claimed_at (so the 30 minutes run from the claim, not from the last poll)."""
+    if rnd.claimed_by == agent_user.id:
+        return True
+    if rnd.claimed_by is None or not claim_is_live(db, rnd, now):
+        rnd.claimed_by, rnd.claimed_at = agent_user.id, now
+        db.flush()
+        return True
+    return False
+
+
+def agent_round_json(db: Session, rnd: FeedbackRound, agent_user: User) -> dict:
+    out = feedback_v1(db, rnd)
+    holder = db.get(User, rnd.claimed_by) if rnd.claimed_by else None
+    out["claimed_by"] = {"id": str(holder.id), "name": holder.name} if holder else None
+    out["claimed_by_me"] = rnd.claimed_by == agent_user.id
+    return out
+
+
+def agent_rounds(db: Session, agent_user: User, project_id, cursor: Optional[datetime],
+                 request_id: Optional[uuid.UUID] = None, peek: bool = False) -> list[FeedbackRound]:
+    """Closed, unacknowledged rounds the agent may see, oldest first. Each is claimed for this key unless another key
+    holds a live claim (it is still returned, flagged). `request_id` narrows it first, so waiting on one job never
+    claims another job's rounds. `peek` reads without claiming (status readers such as Gen's bridge, never a worker)."""
+    q = _mine(db, project_id).filter(FeedbackRound.closed_at.isnot(None), FeedbackRound.acked_at.is_(None))
+    if request_id is not None:
+        q = q.filter(FeedbackRound.request_id == request_id)
     if cursor is not None:
         q = q.filter(FeedbackRound.closed_at > cursor)
-    return q.order_by(FeedbackRound.closed_at).all()
+    if peek:
+        return q.order_by(FeedbackRound.closed_at).all()
+    rows = q.with_for_update(of=FeedbackRound).order_by(FeedbackRound.closed_at).all()
+    now = datetime.now(timezone.utc)
+    for r in rows:
+        claim_round(db, r, agent_user, now)
+    db.commit()
+    return rows
 
 
 def agent_round(db: Session, agent_user: User, project_id, round_id: uuid.UUID) -> Optional[FeedbackRound]:
-    return _mine(db, agent_user, project_id).filter(FeedbackRound.id == round_id).first()
+    return _mine(db, project_id).filter(FeedbackRound.id == round_id).first()
+
+
+def working_comment_ids(db: Session, req: Optional[UploadRequest]) -> set[str]:
+    """Comments of sent, unacked rounds that a key has claimed and is live on (the embed says "working on it")."""
+    if req is None:
+        return set()
+    now = datetime.now(timezone.utc)
+    out: set[str] = set()
+    for rnd in db.query(FeedbackRound).filter(FeedbackRound.request_id == req.id, FeedbackRound.closed_at.isnot(None), FeedbackRound.acked_at.is_(None)).all():
+        if claim_is_live(db, rnd, now):
+            out.update(str(c.id) for c in round_comments(db, rnd, req))
+    return out
 
 
 def request_agents(db: Session, request_id: uuid.UUID) -> list[dict]:

@@ -244,16 +244,15 @@ def test_agent_polls_with_cursor_and_acks_idempotently(scene):
 
 
 @needs_pg
-def test_other_agents_and_other_projects_never_see_a_round(scene):
+def test_another_workspace_never_sees_a_round(scene):
     e = scene
     comment(e, e.scene.asset)
     e.client.post(f"/requests/{e.scene.req.id}/feedback-rounds/close", json={}, headers=e.headers(e.owner))
     rid = rounds(e)[0].id
-    sibling = e.pair_agent(e.project_a, "Other")             # same project, did not hand in
-    foreign = e.pair_agent(e.project_b, "Cutter")
-    for who in (sibling, foreign):
-        assert e.client.get("/agent/feedback", headers=who.headers).json()["rounds"] == []
-        assert e.client.post(f"/agent/feedback/{rid}/ack", headers=who.headers).status_code == 404
+    from .test_workspace_rounds_claim import foreign_key
+    foreign = foreign_key(e)
+    assert e.client.get("/agent/feedback", headers=foreign).json()["rounds"] == []
+    assert e.client.post(f"/agent/feedback/{rid}/ack", headers=foreign).status_code == 404
 
 
 @needs_pg
