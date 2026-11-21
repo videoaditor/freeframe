@@ -1,5 +1,6 @@
 """Workspace rounds: every key of the workspace sees rounds and approvals; the first fetch claims a round."""
 from datetime import datetime, timedelta, timezone
+import uuid
 
 from .agent_pg import env, needs_pg  # noqa: F401
 from .test_feedback_rounds import comment, rounds, scene  # noqa: F401
@@ -110,3 +111,14 @@ def test_embed_says_working_only_while_a_claim_is_live(scene):
     assert (get()["sent_notes"], get()["working_notes"]) == (1, 1)    # claimed: working
     age_claim(e, rid)
     assert (get()["sent_notes"], get()["working_notes"]) == (1, 0)    # stale: waiting again
+
+
+def test_asking_for_one_request_never_claims_another_requests_round(scene):
+    e = scene
+    comment(e, e.scene.asset)
+    done(e)
+    other = uuid.uuid4()
+    r = e.client.get(f"/agent/feedback?request_id={other}", headers=e.scene.agent.headers)
+    assert r.status_code == 200 and r.json()["rounds"] == []
+    [rnd] = rounds(e)
+    assert rnd.claimed_by is None

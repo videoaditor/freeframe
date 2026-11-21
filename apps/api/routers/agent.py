@@ -93,7 +93,7 @@ def suggest_rule(body: RuleSuggestion, agent: AgentContext = Depends(get_agent),
 
 
 @router.get("/feedback")
-def feedback(cursor: str = "", agent: AgentContext = Depends(get_agent), db: Session = Depends(get_db)):
+def feedback(cursor: str = "", request_id: Optional[uuid.UUID] = None, agent: AgentContext = Depends(get_agent), db: Session = Depends(get_db)):
     """Closed, unacknowledged rounds and settled approvals (a delivery each) after `cursor` (an ISO timestamp, or empty), oldest first."""
     try:
         after = datetime.fromisoformat(cursor) if cursor else None
@@ -102,7 +102,7 @@ def feedback(cursor: str = "", agent: AgentContext = Depends(get_agent), db: Ses
     if after is not None and after.tzinfo is None:
         after = after.replace(tzinfo=timezone.utc)
     project_id = _workspace_ids(db, agent)
-    rows = feedback_rounds.agent_rounds(db, agent.user, project_id, after)
+    rows = feedback_rounds.agent_rounds(db, agent.user, project_id, after, request_id)
     approved = deliveries.agent_events(db, agent.user, project_id, after, datetime.now(timezone.utc))
     stamps = [r.closed_at for r in rows] + [deliveries.event_at(d) for d in approved]
     return {"rounds": [feedback_rounds.agent_round_json(db, r, agent.user) for r in rows], "approvals": [deliveries.event(d) for d in approved],

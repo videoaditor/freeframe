@@ -538,10 +538,14 @@ def agent_round_json(db: Session, rnd: FeedbackRound, agent_user: User) -> dict:
     return out
 
 
-def agent_rounds(db: Session, agent_user: User, project_id, cursor: Optional[datetime]) -> list[FeedbackRound]:
+def agent_rounds(db: Session, agent_user: User, project_id, cursor: Optional[datetime],
+                 request_id: Optional[uuid.UUID] = None) -> list[FeedbackRound]:
     """Closed, unacknowledged rounds the agent may see, oldest first. Each is claimed for this key unless another key
-    holds a live claim (it is still returned, flagged)."""
+    holds a live claim (it is still returned, flagged). `request_id` narrows it first, so waiting on one job never
+    claims another job's rounds."""
     q = _mine(db, project_id).filter(FeedbackRound.closed_at.isnot(None), FeedbackRound.acked_at.is_(None))
+    if request_id is not None:
+        q = q.filter(FeedbackRound.request_id == request_id)
     if cursor is not None:
         q = q.filter(FeedbackRound.closed_at > cursor)
     rows = q.with_for_update(of=FeedbackRound).order_by(FeedbackRound.closed_at).all()
