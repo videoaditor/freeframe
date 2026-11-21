@@ -92,6 +92,18 @@ def test_round_sync_never_closes_a_round_of_a_single_part_request(scene):
     assert rnd.closed_at is None
 
 
+def test_round_sync_treats_one_open_part_among_approved_ones_as_a_single_part(scene):
+    e = scene                                                                # Hook 2 approved before any note: Hook 1 is the only part in play
+    b = e.asset(e.scene.req, "Hook 2")
+    tok = link(e, e.scene.req.folder_id, "approve")
+    assert e.client.post(f"/share/{tok}/assets/{b.id}/approve", json={}).status_code == 200
+    comment(e, e.scene.asset)
+    comment(e, e.scene.asset, "And the logo", 5.0)
+    assert e.client.post(f"/share/{tok}/assets/{e.scene.asset.id}/round-sync").json() == {"notes": 2, "closed_by": None}
+    [rnd] = rounds(e)
+    assert rnd.closed_at is None
+
+
 def test_folder_assets_report_the_open_round_notes_not_the_comment_total(scene):
     e = scene
     tok = link(e, e.scene.req.folder_id, "comment")

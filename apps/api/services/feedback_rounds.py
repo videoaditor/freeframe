@@ -470,11 +470,17 @@ def close_left(db: Session, req: UploadRequest, now: datetime) -> bool:
 
 def all_reviewed(db: Session, rnd: FeedbackRound, req: UploadRequest) -> bool:
     """Every part (deliveries.request_parts) has a comment in this round or is approved, and the round has a comment.
-    Never for a single part: its first note would close the round while the reviewer is still typing (Send or leaving closes it)."""
+    Never for a single part: its first note would close the round while the reviewer is still typing (Send or leaving closes it).
+    Parts approved before the round opened are not in play: four approved parts + one under review is a single part too
+    (Hiring Ads 21.11.: every CTA note closed its own round)."""
     from . import deliveries
     commented = {c.asset_id for c in round_comments(db, rnd, req)}
     parts = deliveries.request_parts(db, req)
-    return bool(commented) and len(parts) >= 2 and all(approved or a_id in commented for a_id, _v, approved in parts)
+    before = {v for (v,) in db.query(Approval.version_id).filter(
+        Approval.version_id.in_([v for _a, v, ok in parts if ok] or [uuid.uuid4()]), Approval.status == ApprovalStatus.approved,
+        Approval.deleted_at.is_(None), Approval.created_at < rnd.opened_at)}
+    live = [p for p in parts if p[1] not in before]
+    return bool(commented) and len(live) >= 2 and all(approved or a_id in commented for a_id, _v, approved in live)
 
 
 def close_if_all_reviewed(db: Session, req: UploadRequest, now: datetime) -> bool:
