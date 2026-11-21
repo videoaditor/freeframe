@@ -821,7 +821,7 @@ interface ShareViewerProps {
   /** The upload request behind this share link; the embed names it in its hand-off events. */
   requestId?: string | null
   /** Folder embed: this asset's place in the folder, the stepper, and what the approve acts on. */
-  folder?: { index: number; count: number; approved: boolean; shareSession: string | null; onStep: (d: -1 | 1) => void; onApproved: (v: boolean) => void; /** Parts approved so far, and the comments no Send has closed yet (all parts). */ approvedCount?: number; partsTotal?: number; onParts?: (p: { approved: number; total: number }) => void; unsent?: number; sent?: number; onNoteSaved?: () => void; onSentAll?: () => void; onRefresh?: () => void; /** The segmented file switcher (components/share/module-tabs.tsx). */ nav?: React.ReactNode }
+  folder?: { index: number; count: number; approved: boolean; shareSession: string | null; onStep: (d: -1 | 1) => void; onApproved: (v: boolean) => void; /** Parts approved so far, and the comments no Send has closed yet (all parts). */ approvedCount?: number; partsTotal?: number; onParts?: (p: { approved: number; total: number }) => void; unsent?: number; sent?: number; working?: number; onNoteSaved?: () => void; onSentAll?: () => void; onRefresh?: () => void; /** The segmented file switcher (components/share/module-tabs.tsx). */ nav?: React.ReactNode }
 }
 
 function ShareViewer({
@@ -984,6 +984,7 @@ function ShareViewer({
           parts={folder ? { approved: folder.approvedCount ?? 0, total: folder.partsTotal ?? folder.count } : undefined}
           unsentFeedback={folder?.unsent}
           sentFeedback={folder?.sent}
+          workingFeedback={folder?.working}
           hasNext={!!folder && folder.index < folder.count - 1}
           onNext={() => folder?.onStep(1)}
           dictate={(audio) => guestDictate(token, audio)}
@@ -1119,7 +1120,7 @@ function FolderEmbed({ token, shareSession, permission, branding, requestId }: {
       .then((data) => {
         if (!data) return
         const by = new Map(data.assets.map((a) => [a.id, a]))
-        setItems((prev) => prev && prev.map((a) => ({ ...a, open_notes: by.get(a.id)?.open_notes ?? 0, sent_notes: by.get(a.id)?.sent_notes ?? 0 })))
+        setItems((prev) => prev && prev.map((a) => ({ ...a, open_notes: by.get(a.id)?.open_notes ?? 0, sent_notes: by.get(a.id)?.sent_notes ?? 0, working_notes: by.get(a.id)?.working_notes ?? 0 })))
       })
       .catch(() => {})
   }, [token, ss])
@@ -1158,10 +1159,10 @@ function FolderEmbed({ token, shareSession, permission, branding, requestId }: {
       permission={permission}
       allowDownload={false}
       branding={branding}
-      folder={{ index, count: items.length, approved: !!current.approved, approvedCount: parts?.approved ?? items.filter((a) => a.approved).length, partsTotal: parts?.total ?? items.length, onParts: setParts, unsent: current.open_notes ?? 0, sent: current.sent_notes ?? 0, onRefresh: refresh,
+      folder={{ index, count: items.length, approved: !!current.approved, approvedCount: parts?.approved ?? items.filter((a) => a.approved).length, partsTotal: parts?.total ?? items.length, onParts: setParts, unsent: current.open_notes ?? 0, sent: current.sent_notes ?? 0, working: current.working_notes ?? 0, onRefresh: refresh,
         onNoteSaved: () => edit((a) => ({ ...a, open_notes: (a.open_notes ?? 0) + 1 })),
         // One Send closes the request's round: every file's open comments are sent now (refresh corrects it if the server says otherwise).
-        onSentAll: () => setItems((prev) => prev && prev.map((a) => ({ ...a, open_notes: 0, sent_notes: (a.sent_notes ?? 0) + (a.open_notes ?? 0) }))), shareSession, onStep: (d) => go(index + d), nav: nav || undefined,
+        onSentAll: () => setItems((prev) => prev && prev.map((a) => ({ ...a, open_notes: 0, sent_notes: (a.sent_notes ?? 0) + (a.open_notes ?? 0), working_notes: 0 }))), shareSession, onStep: (d) => go(index + d), nav: nav || undefined,
         onApproved: (v) => { setItems((prev) => prev && prev.map((a) => (a.id === current.id ? { ...a, approved: v } : a))); if (!v) setParts((p) => p && { ...p, approved: Math.max(0, p.approved - 1) }) } }}
     />
   )

@@ -105,7 +105,7 @@ def feedback(cursor: str = "", agent: AgentContext = Depends(get_agent), db: Ses
     rows = feedback_rounds.agent_rounds(db, agent.user, project_id, after)
     approved = deliveries.agent_events(db, agent.user, project_id, after, datetime.now(timezone.utc))
     stamps = [r.closed_at for r in rows] + [deliveries.event_at(d) for d in approved]
-    return {"rounds": [feedback_rounds.feedback_v1(db, r) for r in rows], "approvals": [deliveries.event(d) for d in approved],
+    return {"rounds": [feedback_rounds.agent_round_json(db, r, agent.user) for r in rows], "approvals": [deliveries.event(d) for d in approved],
             "next_cursor": max(stamps).isoformat() if stamps else (cursor or None)}
 
 

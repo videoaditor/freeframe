@@ -80,13 +80,14 @@ def test_an_approval_is_not_announced_inside_the_undo_window(env, monkeypatch):
     assert events(env, agent)["approvals"] == []
 
 
-def test_another_agents_key_never_sees_the_approval(env):
-    mine, other = env.pair_agent(env.project_a), env.pair_agent(env.project_b, "Other")
+def test_another_workspace_never_sees_the_approval_but_a_sibling_key_does(env):
+    from .test_workspace_rounds_claim import foreign_key
+    mine, other = env.pair_agent(env.project_a), type("K", (), {"headers": foreign_key(env, "Other")})
     approve(env, env.asset(env.request(env.project_a, env.owner), "Hook 1", by=mine.who))
     assert len(events(env, mine)["approvals"]) == 1
     assert events(env, other)["approvals"] == []
-    second = env.pair_agent(env.project_a, "Second")                    # same project, never handed a version in
-    assert events(env, second)["approvals"] == []
+    second = env.pair_agent(env.project_a, "Second")                    # same workspace, never handed a version in: sees it too
+    assert len(events(env, second)["approvals"]) == 1
 
 
 def test_the_public_page_and_delivery_v1(env):
@@ -202,3 +203,10 @@ def test_iteration_copies_are_not_parts(env):
         db.commit()
     r = _approve_raw(env, h1)
     assert (r["parts"]["approved"], r["parts"]["total"]) == (1, 3)
+
+
+def test_a_sibling_key_gets_the_approval_event_too(env):
+    mine, sibling = env.pair_agent(env.project_a), env.pair_agent(env.project_a, "Sibling")
+    a = env.asset(env.request(env.project_a, env.owner), "Hook 1", by=mine.who)
+    approve(env, a)
+    assert [e["version_id"] for e in events(env, sibling)["approvals"]] == [str(a.versions[0].id)]

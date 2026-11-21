@@ -785,6 +785,11 @@ describe('FlowView embed: per-part approve, share link only when every part is a
     expect(screen.queryByTestId('send-first')).toBeNull()
   })
 
+  it('a claimed round says Claude is working on it', () => {
+    embed({ parts: { approved: 1, total: 5 }, unsentFeedback: 0, sentFeedback: 3, workingFeedback: 2 })
+    expect(screen.getByTestId('sent-status')).toHaveTextContent('Sent · Claude is working on it')
+  })
+
   it('an approved part reads "Approved" with one check, not two', () => {
     embed({ parts: { approved: 1, total: 5 }, approved: true })
     expect(screen.getByRole('button', { name: 'Approved' }).textContent).not.toContain('✓')

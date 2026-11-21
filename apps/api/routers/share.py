@@ -1395,6 +1395,7 @@ def get_folder_share_assets(
     ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
 
     states = feedback_rounds.comment_states(db, module_req or request_row) if embed else {}
+    working = feedback_rounds.working_comment_ids(db, module_req or request_row) if embed else set()
     asset_items = []
     for asset in assets:
         thumbnail_url = None
@@ -1426,6 +1427,7 @@ def get_folder_share_assets(
             role=roles.get(str(asset.id), (None, None))[0], order=roles.get(str(asset.id), (None, None))[1],
             open_notes=sum(1 for a, st in states.values() if a == asset.id and st == "open"),
             sent_notes=sum(1 for a, st in states.values() if a == asset.id and st == "sent"),
+            working_notes=sum(1 for cid, (a, st) in states.items() if a == asset.id and st == "sent" and cid in working),
         ))
 
     return FolderShareAssetsResponse(
