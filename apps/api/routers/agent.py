@@ -185,14 +185,33 @@ def create_brand(body: NewBrand, response: Response, agent: AgentContext = Depen
     return {"brand_id": str(project.id), "name": project.name, "created": True}
 
 
+class Directive(BaseModel):
+    id: str = Field(min_length=1, max_length=100)
+    text: str = Field(min_length=1, max_length=500)
+    by: str = Field(default="", max_length=200)
+    at: str = Field(default="", max_length=40)
+
+
 class NewRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     external_ref: str = Field(min_length=1, max_length=200)
     brand_id: Optional[uuid.UUID] = None
+    directives: Optional[list[Directive]] = Field(default=None, max_length=20)
 
 
 def _request_reply(req: UploadRequest, created: bool) -> dict:
-    return {"request_id": str(req.id), "folder_id": str(req.folder_id), "upload_token": req.token, "review_url": agent_queue.review_url(req), "created": created}
+    return {"request_id": str(req.id), "folder_id": str(req.folder_id), "upload_token": req.token, "review_url": agent_queue.review_url(req), "created": created,
+            "directives": req.directives or []}
+
+
+def _apply_directives(db: Session, req: UploadRequest, body: NewRequest) -> None:
+    """Directives given: the list REPLACES the stored one ([] removes it) and goes to the review, fail-open
+    (the next call with the same list retries). Directives omitted: nothing changes."""
+    if body.directives is None:
+        return
+    req.directives = [d.model_dump() for d in body.directives] or None
+    db.commit()
+    review_bridge.set_directives(req.review_share_token, req.directives or [])
 
 
 @router.post("/requests")
@@ -211,6 +230,7 @@ def create_request(body: NewRequest, agent: AgentContext = Depends(get_agent), d
     found = lambda: db.query(UploadRequest).filter(UploadRequest.project_id == project.id, UploadRequest.external_ref == ref).first()  # noqa: E731
     existing = found()
     if existing:
+        _apply_directives(db, existing, body)
         return _request_reply(existing, False)
     # The binding behind a normal request is idempotent on this key, so a retry after a crash finds the same request.
     made = create_normal_request(RequestCreate(project_id=project.id, title=body.title.strip(),
@@ -222,4 +242,5 @@ def create_request(body: NewRequest, agent: AgentContext = Depends(get_agent), d
     except IntegrityError:  # a concurrent call attached the ref first
         db.rollback()
         return _request_reply(found(), False)
+    _apply_directives(db, req, body)
     return _request_reply(req, True)

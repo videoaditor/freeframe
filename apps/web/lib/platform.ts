@@ -268,6 +268,7 @@ export interface RequestView {
   brand: string
   logo_url?: string | null
   brief_excerpt: string | null
+  directives?: { id: string; text: string; by: string; at: string }[]
   brief_text?: string | null
   brief_url?: string | null
   review_share_token: string

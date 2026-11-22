@@ -152,6 +152,10 @@ function RequestBrief({ view }: { view: RequestView }) {
       <summary className={`${linkClass} cursor-pointer list-none`}>{full ? 'View full brief' : 'View briefing preview'}</summary>
       <div className="mt-3 rounded-xl bg-bg-secondary p-5 text-left"><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">{full || brief}</p>{view.brief_url && <a className={`${linkClass} mt-3`} href={view.brief_url} target="_blank" rel="noopener noreferrer">Open briefing source</a>}</div>
     </details> : view.brief_url ? <a className={`${linkClass} mt-1`} href={view.brief_url} target="_blank" rel="noopener noreferrer">View full brief</a> : null}
+    {!!view.directives?.length && <div aria-label="Directives for this job" className="mx-auto mt-4 max-w-xl rounded-xl bg-bg-secondary p-5 text-left">
+      <h2 className="text-sm font-semibold">Directives for this job</h2>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-text-secondary">{view.directives.map((d) => <li key={d.id}>{d.text}</li>)}</ul>
+    </div>}
   </section>
 }
 

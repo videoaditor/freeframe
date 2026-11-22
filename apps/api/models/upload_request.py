@@ -33,6 +33,8 @@ class UploadRequest(Base):
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     external_ref: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Card directives [{id, text, by, at}]: said about this job, appended to the briefing the review reads.
+    directives: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     brand_slug: Mapped[str] = mapped_column(String(120), nullable=False, server_default="")
     review_share_token: Mapped[str] = mapped_column(String(64), nullable=False)
     brief_excerpt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
