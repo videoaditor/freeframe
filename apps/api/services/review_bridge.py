@@ -72,6 +72,11 @@ def register_request(share_token: str, brand: str, title: str, brief_text: str =
     }, timeout=60)
 
 
+def set_directives(share_token: str, directives: list[dict]) -> Optional[dict]:
+    """Replace the directives the review appends to this request's briefing; [] removes them."""
+    return _call("POST", "/api/v1/requests/directives", json={"share_token": share_token, "directives": directives})
+
+
 def request_status(share_tokens: list[str]) -> dict[str, dict]:
     if not share_tokens:
         return {}
