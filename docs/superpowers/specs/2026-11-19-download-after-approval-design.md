@@ -1,5 +1,7 @@
 # S2 · Download erst nach Freigabe
 
+> **Zurückgenommen 2026-11-23.** Alan: die Sperre war ein Bug, Kunden werden nie blockiert. Gate, Aufrufer und Web-Hinweis sind entfernt; jeder FreeFrame-Link lädt wieder ohne Freigabe herunter.
+
 Stand 2026-11-19 · Quelle: Handoff `admixer-autoreview-handoff-2026-11-19.md` (L1, L11), Entscheidungen E1/E5 (Alan).
 
 ## Purpose

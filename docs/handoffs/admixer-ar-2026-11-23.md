@@ -6,7 +6,7 @@ Spec-Reihenfolge laut Handoff: E5 → S2 → S0 → S1 → S3 → S4, fertig ers
 
 ## Stand
 
-- **S2 Download erst nach Freigabe: LIVE** (#210, 8c7cc0f, deployt 19.11.). Spec `docs/superpowers/specs/2026-11-19-download-after-approval-design.md`.
+- **S2 Download erst nach Freigabe: ZURÜCKGENOMMEN 2026-11-23** (Alan: Bug, Kunden nie blockieren; Gate entfernt). War #210, 8c7cc0f, deployt 19.11. Spec `docs/superpowers/specs/2026-11-19-download-after-approval-design.md`.
   Live geprüft: unfreigegeben `?download=true` → 403 `not_released` (Review-Link, Parts-Request, frische Datei),
   Abspielen 200, freigegeben (Agentic Workflows EN_Body) liefert Original, Engine reviewt weiter
   (Test-Request `test(ignore) · S2 Download-Gate Check`, Projekt Aditor).
