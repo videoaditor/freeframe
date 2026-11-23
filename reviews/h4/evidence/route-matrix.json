@@ -1,0 +1,103 @@
+{
+  "observed_at": "2026-10-07",
+  "live_base": "2e720a39f66142533e2b2de70894cd8ada89bcec",
+  "candidate": "a6cf68c6b53a6648e5be1bc95975c98f85c65bff",
+  "routes": [
+    {
+      "route": "review.aditor.ai/o",
+      "role": "owner",
+      "component": "Worker owner redirect",
+      "target": "login?from=/home",
+      "evidence": "live302 \u2192200",
+      "qualification": "Owner login target already correct"
+    },
+    {
+      "route": "review.aditor.ai/d/{brand}",
+      "role": "public brand-scoped legacy",
+      "component": "Worker serveShell \u2192 public/app.js",
+      "target": "legacy upload/check UI",
+      "evidence": "live200 on /d/aditor",
+      "qualification": "Not converted by frozen release; no blind privilege-changing redirect"
+    },
+    {
+      "route": "review.aditor.ai/u/{token}",
+      "role": "legacy scoped token",
+      "component": "Worker serveShell \u2192 public/app.js",
+      "target": "legacy upload/check UI",
+      "evidence": "shell200 for invalid token only",
+      "qualification": "Valid legacy token/session not qualified"
+    },
+    {
+      "route": "review.aditor.ai/review/{id}",
+      "role": "legacy saved report",
+      "component": "Worker reviewpage",
+      "target": "legacy saved review",
+      "evidence": "invalid ID404",
+      "qualification": "No actual valid report journey claimed"
+    },
+    {
+      "route": "review.aditor.ai/share/{token}",
+      "role": "none",
+      "component": "no Worker share route",
+      "target": "404",
+      "evidence": "live404 invalid token",
+      "qualification": "Canonical customer shares use feedback domain"
+    },
+    {
+      "route": "feedback.aditor.ai/r/{token}",
+      "role": "public request capability, editor identity at upload",
+      "component": "app/r \u2192 RequestWorkspace \u2192 VideoPlayer",
+      "target": "native editor upload, comments, revisions, completion",
+      "evidence": "live existing player seek3s; candidate actual generated link + V1/V2 pass",
+      "qualification": "Canonical newly generated Owner request href; H2 labels render only from persisted metadata"
+    },
+    {
+      "route": "feedback.aditor.ai/s/{token}",
+      "role": "not a supported public share route",
+      "component": "auth middleware, no app/s route",
+      "target": "login then no route",
+      "evidence": "live307 to login; runtime manifest has no /s",
+      "qualification": "Existing /s handoff link is invalid; never blanket redirect to editor"
+    },
+    {
+      "route": "feedback.aditor.ai/share/{token}",
+      "role": "share-scoped customer viewer/commenter",
+      "component": "SharePage \u2192 FolderShareViewer \u2192 VideoPlayer",
+      "target": "customer delivery/review",
+      "evidence": "candidate actual completed share browser verified",
+      "qualification": "No upload-v2/finish controls; internal automation comments hidden from public reads"
+    },
+    {
+      "route": "feedback.aditor.ai/handin",
+      "role": "authenticated staff / Whop",
+      "component": "HandinPage \u2192 HandinResult",
+      "target": "internal Trello intake produces /share delivery link",
+      "evidence": "live307 to login unauthenticated",
+      "qualification": "Internal editor /r checks path still open; no blanket /share\u2192/r redirect"
+    },
+    {
+      "route": "feedback.aditor.ai/whop",
+      "role": "Whop identity + Suite grant",
+      "component": "WhopEmbed",
+      "target": "existing workspace + same RequestSheet",
+      "evidence": "live shell200; app ID verified by coordinator",
+      "qualification": "Actual customer Whop session/configured iframe href not observed"
+    },
+    {
+      "route": "feedback.aditor.ai/o",
+      "role": "owner",
+      "component": "Next redirect",
+      "target": "/whop",
+      "evidence": "runtime route manifest",
+      "qualification": "Different from review-domain /o; preserve intended auth contexts"
+    },
+    {
+      "route": "feedback.aditor.ai/parts",
+      "role": "flagged internal component flow",
+      "component": "PR46 PartsWorkspace \u2192 RequestWorkspace",
+      "target": "Hook\u2192Bridge\u2192Body\u2192CTA",
+      "evidence": "not in frozen candidate",
+      "qualification": "Requires separate PR46 integration and build/server flags; H3 adapter42fa42c is follow-up"
+    }
+  ]
+}

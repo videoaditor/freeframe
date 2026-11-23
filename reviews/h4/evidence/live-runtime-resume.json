@@ -1,0 +1,243 @@
+{
+  "web_build_id": "P3Y4Yty2XQoEi5nRnSvr7",
+  "web_routes": {
+    "version": 3,
+    "pages404": true,
+    "caseSensitive": false,
+    "basePath": "",
+    "redirects": [
+      {
+        "source": "/:path+/",
+        "destination": "/:path+",
+        "internal": true,
+        "statusCode": 308,
+        "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+      },
+      {
+        "source": "/o",
+        "destination": "/whop",
+        "statusCode": 307,
+        "regex": "^(?!/_next)/o(?:/)?$"
+      }
+    ],
+    "headers": [],
+    "dynamicRoutes": [
+      {
+        "page": "/invite/[token]",
+        "regex": "^/invite/([^/]+?)(?:/)?$",
+        "routeKeys": {
+          "nxtPtoken": "nxtPtoken"
+        },
+        "namedRegex": "^/invite/(?<nxtPtoken>[^/]+?)(?:/)?$"
+      },
+      {
+        "page": "/projects/[id]",
+        "regex": "^/projects/([^/]+?)(?:/)?$",
+        "routeKeys": {
+          "nxtPid": "nxtPid"
+        },
+        "namedRegex": "^/projects/(?<nxtPid>[^/]+?)(?:/)?$"
+      },
+      {
+        "page": "/projects/[id]/assets/[assetId]",
+        "regex": "^/projects/([^/]+?)/assets/([^/]+?)(?:/)?$",
+        "routeKeys": {
+          "nxtPid": "nxtPid",
+          "nxtPassetId": "nxtPassetId"
+        },
+        "namedRegex": "^/projects/(?<nxtPid>[^/]+?)/assets/(?<nxtPassetId>[^/]+?)(?:/)?$"
+      },
+      {
+        "page": "/projects/[id]/collections",
+        "regex": "^/projects/([^/]+?)/collections(?:/)?$",
+        "routeKeys": {
+          "nxtPid": "nxtPid"
+        },
+        "namedRegex": "^/projects/(?<nxtPid>[^/]+?)/collections(?:/)?$"
+      },
+      {
+        "page": "/projects/[id]/settings",
+        "regex": "^/projects/([^/]+?)/settings(?:/)?$",
+        "routeKeys": {
+          "nxtPid": "nxtPid"
+        },
+        "namedRegex": "^/projects/(?<nxtPid>[^/]+?)/settings(?:/)?$"
+      },
+      {
+        "page": "/r/[token]",
+        "regex": "^/r/([^/]+?)(?:/)?$",
+        "routeKeys": {
+          "nxtPtoken": "nxtPtoken"
+        },
+        "namedRegex": "^/r/(?<nxtPtoken>[^/]+?)(?:/)?$"
+      },
+      {
+        "page": "/share/[token]",
+        "regex": "^/share/([^/]+?)(?:/)?$",
+        "routeKeys": {
+          "nxtPtoken": "nxtPtoken"
+        },
+        "namedRegex": "^/share/(?<nxtPtoken>[^/]+?)(?:/)?$"
+      }
+    ],
+    "staticRoutes": [
+      {
+        "page": "/",
+        "regex": "^/(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/(?:/)?$"
+      },
+      {
+        "page": "/_not-found",
+        "regex": "^/_not\\-found(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/_not\\-found(?:/)?$"
+      },
+      {
+        "page": "/apple-icon.png",
+        "regex": "^/apple\\-icon\\.png(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/apple\\-icon\\.png(?:/)?$"
+      },
+      {
+        "page": "/assets",
+        "regex": "^/assets(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/assets(?:/)?$"
+      },
+      {
+        "page": "/favicon.ico",
+        "regex": "^/favicon\\.ico(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/favicon\\.ico(?:/)?$"
+      },
+      {
+        "page": "/feedback",
+        "regex": "^/feedback(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/feedback(?:/)?$"
+      },
+      {
+        "page": "/handin",
+        "regex": "^/handin(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/handin(?:/)?$"
+      },
+      {
+        "page": "/home",
+        "regex": "^/home(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/home(?:/)?$"
+      },
+      {
+        "page": "/icon.png",
+        "regex": "^/icon\\.png(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/icon\\.png(?:/)?$"
+      },
+      {
+        "page": "/insights",
+        "regex": "^/insights(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/insights(?:/)?$"
+      },
+      {
+        "page": "/login",
+        "regex": "^/login(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/login(?:/)?$"
+      },
+      {
+        "page": "/login/google",
+        "regex": "^/login/google(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/login/google(?:/)?$"
+      },
+      {
+        "page": "/notifications",
+        "regex": "^/notifications(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/notifications(?:/)?$"
+      },
+      {
+        "page": "/projects",
+        "regex": "^/projects(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/projects(?:/)?$"
+      },
+      {
+        "page": "/rules",
+        "regex": "^/rules(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/rules(?:/)?$"
+      },
+      {
+        "page": "/settings",
+        "regex": "^/settings(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/settings(?:/)?$"
+      },
+      {
+        "page": "/settings/admin",
+        "regex": "^/settings/admin(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/settings/admin(?:/)?$"
+      },
+      {
+        "page": "/settings/appearance",
+        "regex": "^/settings/appearance(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/settings/appearance(?:/)?$"
+      },
+      {
+        "page": "/settings/branding",
+        "regex": "^/settings/branding(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/settings/branding(?:/)?$"
+      },
+      {
+        "page": "/settings/notifications",
+        "regex": "^/settings/notifications(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/settings/notifications(?:/)?$"
+      },
+      {
+        "page": "/settings/profile",
+        "regex": "^/settings/profile(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/settings/profile(?:/)?$"
+      },
+      {
+        "page": "/setup",
+        "regex": "^/setup(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/setup(?:/)?$"
+      },
+      {
+        "page": "/whop",
+        "regex": "^/whop(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/whop(?:/)?$"
+      },
+      {
+        "page": "/whop/session",
+        "regex": "^/whop/session(?:/)?$",
+        "routeKeys": {},
+        "namedRegex": "^/whop/session(?:/)?$"
+      }
+    ],
+    "dataRoutes": [],
+    "rsc": {
+      "header": "RSC",
+      "varyHeader": "RSC, Next-Router-State-Tree, Next-Router-Prefetch",
+      "prefetchHeader": "Next-Router-Prefetch",
+      "didPostponeHeader": "x-nextjs-postponed",
+      "contentTypeHeader": "text/x-component",
+      "suffix": ".rsc",
+      "prefetchSuffix": ".prefetch.rsc"
+    },
+    "rewrites": []
+  },
+  "api_python_files": 181,
+  "api_differences_from_main": []
+}

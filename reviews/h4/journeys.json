@@ -1,0 +1,181 @@
+{
+  "schema_version": "autoreview.h4.journeys.v1",
+  "status": "pending",
+  "environment": "isolated autoreview-h4 only",
+  "provider": "injected at runCraftAuditSource",
+  "not_executed_reason": "Docker daemon unavailable; no real DB/storage/API started",
+  "record_every_step": [
+    "HTTP status",
+    "asset_id + version_id",
+    "request_id + folder_id + project_id",
+    "stored comment id/version/timecode",
+    "UTC observation time + tested commit/image"
+  ],
+  "journeys": [
+    {
+      "name": "customer",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/api/auth/verify-magic-code",
+          "assert": "clean-session existing account; local email sink; no Whop cookie"
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me",
+          "assert": "expected existing user id, staff flag and authorized project roles"
+        },
+        {
+          "method": "POST",
+          "path": "/api/requests",
+          "body_fields": [
+            "project_id",
+            "title",
+            "brief_text"
+          ],
+          "assert": "201; then GET /api/requests to record durable request/folder/share identity before any retry"
+        },
+        {
+          "method": "POST",
+          "path": "/api/r/{token}/upload/initiate",
+          "body_fields": [
+            "original_filename",
+            "mime_type",
+            "file_size_bytes"
+          ],
+          "assert": "record asset_id/version_id/s3_key/upload_id exactly once"
+        },
+        {
+          "method": "POST",
+          "path": "/api/r/{token}/upload/presign-part",
+          "assert": "PUT actual synthetic bytes to returned local MinIO URL; save ETag"
+        },
+        {
+          "method": "POST",
+          "path": "/api/r/{token}/upload/complete",
+          "body_fields": [
+            "s3_key",
+            "upload_id",
+            "parts",
+            "name",
+            "email"
+          ],
+          "assert": "same version id; repeat complete only after GET confirms accepted outcome"
+        },
+        {
+          "method": "GET",
+          "path": "/api/r/{token}/review",
+          "assert": "real processing -> ready; no old pass for a new version; actual media objects readable"
+        },
+        {
+          "method": "POST",
+          "path": "http://localhost:18744/__h4/tick",
+          "assert": "run real Worker cron against actual API/storage; provider reply injected, no external sends"
+        },
+        {
+          "method": "GET",
+          "path": "/api/r/{token}/review",
+          "assert": "exact current version + stored comment id/timecode; reload browser; seek comment; compare owner API comments"
+        },
+        {
+          "method": "POST",
+          "path": "/api/r/{token}/upload/initiate",
+          "body_fields": [
+            "asset_id",
+            "original_filename",
+            "mime_type",
+            "file_size_bytes"
+          ],
+          "assert": "V2 same asset, different version; repeat upload/processing/comment checks; V1 untouched"
+        }
+      ]
+    },
+    {
+      "name": "internal",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "http://localhost:18744/api/gate/card",
+          "body": {
+            "url": "https://trello.com/c/H4Card01"
+          },
+          "assert": "synthetic valid card, h4-brand, readable briefing; metadata-only; missing/broken reads visible"
+        },
+        {
+          "method": "GET",
+          "path": "/api/projects",
+          "assert": "only authorized is_workspace projects; ambiguous selection explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/projects/{project_id}/folders",
+          "body_fields": [
+            "name",
+            "description"
+          ],
+          "assert": "no folder solely from paste; folder description canonical card ref; standing Auto Review link registered once"
+        },
+        {
+          "method": "POST",
+          "path": "/api/upload/initiate",
+          "body_fields": [
+            "project_id",
+            "folder_id",
+            "asset_name",
+            "original_filename",
+            "mime_type",
+            "file_size_bytes"
+          ],
+          "assert": "same authorized project/folder; record version before storage"
+        },
+        {
+          "method": "POST",
+          "path": "/api/upload/presign-part",
+          "assert": "real MinIO multipart PUT and ETag"
+        },
+        {
+          "method": "POST",
+          "path": "/api/upload/complete",
+          "body_fields": [
+            "s3_key",
+            "upload_id",
+            "asset_id",
+            "version_id",
+            "parts"
+          ],
+          "assert": "real Celery/FFmpeg -> ready hook -> cron current-version result"
+        },
+        {
+          "method": "GET",
+          "path": "/api/assets/{asset_id}/comments?version_id={version_id}",
+          "assert": "stored exact-version feedback; reload/seek/mobile split; no /api/gate/deliver or external sends"
+        }
+      ]
+    },
+    {
+      "name": "failure-replay-isolation",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "http://localhost:18744/__h4/provider/fail",
+          "assert": "next fresh version fails visibly; old clean feedback cannot clear it"
+        },
+        {
+          "method": "POST",
+          "path": "http://localhost:18744/__h4/provider/ok",
+          "assert": "confirmed eligible retry via existing scheduler; dedup stable IDs; no repeated comment"
+        },
+        {
+          "method": "GET",
+          "path": "/api/assets/{tenant_a_asset}/comments",
+          "assert": "tenant B existing account denied; foreign request token/folder/version denied"
+        },
+        {
+          "method": "GET",
+          "path": "/api/r/{token}/review",
+          "assert": "API/Worker restart with retained own volumes preserves comments/version history; memory KV reset is not a persistence pass"
+        }
+      ]
+    }
+  ]
+}
