@@ -16,6 +16,9 @@ Share, Embed, `stream?download=true`, Iterations-Outputs. Das schließt das Leck
 3. oder der Aufrufer der Service-Key der Review-Engine ist (`SERVICE_API_KEY_EMAIL`). Sonst bricht die Auto-Prüfung,
    die das Original über `/share/{token}/stream/{id}?download=1` liest (feedback-agent `index.ts` `resolve`).
 
+4. oder die Version vor dem Livegang des Gates hochgeladen wurde (`GATE_LIVE_AT`, Merge von #210, 2026-11-19 20:43 UTC).
+   Diese Links gingen schon als fertige Abgaben an Kunden raus (audibene, 2026-11-23).
+
 Nie `AssetStatus.approved`: das setzt der Iteration-Runner automatisch (L11).
 
 Iterations-Outputs (`/r/{token}/…/download`, `/requests/{id}/…/download`): zusätzlich zu `delivered` müssen alle

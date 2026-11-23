@@ -2,24 +2,32 @@
 
 The gate is a Delivery row: only the human approve path (`deliveries.on_approved`) creates one, and a request with
 several parts gets none until every part is approved. Never AssetStatus: the iteration runner sets `approved` on its own.
+A version uploaded before the gate went live counts as released: those links were already sent to clients as finished
+deliveries without an approval (audibene, 2026-11-23).
 Two callers pass without a delivery: the project owner (a draft, E1) and the review engine's service key, which must
 read the original to review it at all."""
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..models.asset import AssetVersion
 from ..models.delivery import Delivery
 from ..models.project import ProjectRole
 from ..models.user import User
 from .permissions import effective_project_role
 
 NOT_RELEASED = "not_released"  # the 403 detail the web shows as "available after approval"
+GATE_LIVE_AT = datetime(2026, 11, 19, 20, 43, 26, tzinfo=timezone.utc)  # #210 merged
 
 
 def released(db: Session, version_id: uuid.UUID) -> bool:
-    return db.query(Delivery.id).filter(Delivery.version_id == version_id).first() is not None
+    if db.query(Delivery.id).filter(Delivery.version_id == version_id).first() is not None:
+        return True
+    created_at = db.query(AssetVersion.created_at).filter(AssetVersion.id == version_id).scalar()
+    return created_at is not None and created_at < GATE_LIVE_AT
 
 
 def is_engine(user: Optional[User]) -> bool:
