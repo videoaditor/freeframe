@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- The download-after-approval gate: share, embed, folder-share, reviewer and iteration-output downloads no longer wait for a human approval (`not_released` and the "Available after approval" button are gone). Alan, 2026-11-23: a client is never blocked from downloading.
+
 ### Changed
-- Downloads: a version uploaded before the approval gate went live (2026-11-19 20:43 UTC) is downloadable without a delivery, so share links sent to clients before the gate keep working.
 - Agent feedback is workspace-wide: `GET /agent/feedback` (rounds and approved events) shows every request in the key's workspace to every agent key, not only the key that handed the versions in. The first key to fetch a closed round claims it (`feedback_rounds.claimed_by`/`claimed_at`, additive migration `ap14`); every round carries `claimed_by` and `claimed_by_me`, a claim older than 30 minutes with no newer upload passes to the next key that asks, and an ack by any key closes the round once. The share assets list gets `working_notes` and the embed reads "Sent · Claude is working on it" while a claim is live. Spec: `docs/superpowers/specs/2026-11-21-workspace-rounds-claim.md`.
 - Embed review: per segment, open comments turn the primary button into "Send feedback (N)" (Approve is hidden, hint "Send or delete comments first"); after a Send the segment reads "Sent · Claude is working on it", and comments of an acked round are muted with a "done" marker. The share assets list gets `open_notes`/`sent_notes` per file and the embed comment list a `round_state`. Double click on Send is one Send.
 - Embed review: the mic follows the video. Paused records dictation, playing is silent and saves the spoken notes with their drawings; Comment pauses and starts. Without a microphone it falls back to typing, and drawings made while paused are still saved. The embed column gets a typed-note field.
